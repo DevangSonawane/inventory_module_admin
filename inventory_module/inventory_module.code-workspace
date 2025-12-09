@@ -1,0 +1,13 @@
+{
+	"folders": [
+		{
+			"name": "inventory_module",
+			"path": "."
+		},
+		{
+			"name": "icons",
+			"path": "../Downloads/icons"
+		}
+	],
+	"settings": {}
+}

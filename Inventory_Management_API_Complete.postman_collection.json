@@ -1,0 +1,2351 @@
+{
+	"info": {
+		"_postman_id": "40c2e582-b7ca-48b4-88ec-479d32785784",
+		"name": "Inventory Management API - Complete",
+		"description": "Complete API collection for Inventory Management System including all endpoints for Materials, Stock Areas, Inward, Material Requests, Material Allocation, Stock Transfers, Consumption, Person Stock, Returns, Reports, Stock Levels, Files, Audit, Notifications, Search, Bulk Operations, Export, Validation, Business Partners, Purchase Requests, and Purchase Orders. Admin-only routes are marked with [ADMIN ONLY].",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Health Check",
+			"item": [
+				{
+					"name": "Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/health",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "health"]
+						},
+						"description": "Check if inventory routes are working"
+					}
+				}
+			]
+		},
+		{
+			"name": "Authentication",
+			"item": [
+				{
+					"name": "Login",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"identifier\": \"user@example.com\",\n  \"password\": \"password123\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/auth/login",
+							"host": ["{{baseUrl}}"],
+							"path": ["auth", "login"]
+						}
+					}
+				},
+				{
+					"name": "Logout",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/auth/logout",
+							"host": ["{{baseUrl}}"],
+							"path": ["auth", "logout"]
+						}
+					}
+				},
+				{
+					"name": "Get Profile",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/auth/profile",
+							"host": ["{{baseUrl}}"],
+							"path": ["auth", "profile"]
+						}
+					}
+				},
+				{
+					"name": "Update Profile",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Updated Name\",\n  \"email\": \"updated@example.com\",\n  \"phoneNumber\": \"1234567890\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/auth/profile",
+							"host": ["{{baseUrl}}"],
+							"path": ["auth", "profile"]
+						}
+					}
+				},
+				{
+					"name": "Change Password",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"oldPassword\": \"oldpassword123\",\n  \"newPassword\": \"newpassword123\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/auth/change-password",
+							"host": ["{{baseUrl}}"],
+							"path": ["auth", "change-password"]
+						}
+					}
+				},
+				{
+					"name": "Forgot Password",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"identifier\": \"user@example.com\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/auth/forgot-password",
+							"host": ["{{baseUrl}}"],
+							"path": ["auth", "forgot-password"]
+						}
+					}
+				},
+				{
+					"name": "Reset Password",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"token\": \"reset_token_here\",\n  \"newPassword\": \"newpassword123\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/auth/reset-password",
+							"host": ["{{baseUrl}}"],
+							"path": ["auth", "reset-password"]
+						}
+					}
+				},
+				{
+					"name": "Refresh Token",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/auth/refresh",
+							"host": ["{{baseUrl}}"],
+							"path": ["auth", "refresh"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Materials",
+			"item": [
+				{
+					"name": "Get All Materials",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/materials?page=1&limit=10",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "materials"],
+							"query": [
+								{"key": "page", "value": "1"},
+								{"key": "limit", "value": "10"}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Material By ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/materials/{{materialId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "materials", "{{materialId}}"]
+						}
+					}
+				},
+				{
+					"name": "Create Material",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"materialName\": \"Fiber Patch Cord\",\n  \"productCode\": \"FPC-001\",\n  \"materialType\": \"COMPONENT\",\n  \"uom\": \"PIECE(S)\",\n  \"description\": \"Fiber patch cord for network connections\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/inventory/materials",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "materials"]
+						}
+					}
+				},
+				{
+					"name": "Update Material",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"materialName\": \"Updated Material Name\",\n  \"productCode\": \"FPC-001-UPDATED\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/inventory/materials/{{materialId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "materials", "{{materialId}}"]
+						}
+					}
+				},
+				{
+					"name": "Delete Material",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/materials/{{materialId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "materials", "{{materialId}}"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Stock Areas",
+			"item": [
+				{
+					"name": "Get All Stock Areas",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/stock-areas",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "stock-areas"]
+						}
+					}
+				},
+				{
+					"name": "Get Stock Area By ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/stock-areas/{{stockAreaId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "stock-areas", "{{stockAreaId}}"]
+						}
+					}
+				},
+				{
+					"name": "Create Stock Area",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"areaName\": \"Central Warehouse\",\n  \"locationCode\": \"WH-001\",\n  \"address\": \"123 Main Street, City\",\n  \"capacity\": 10000\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/inventory/stock-areas",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "stock-areas"]
+						}
+					}
+				},
+				{
+					"name": "Update Stock Area",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"areaName\": \"Updated Warehouse Name\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/inventory/stock-areas/{{stockAreaId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "stock-areas", "{{stockAreaId}}"]
+						}
+					}
+				},
+				{
+					"name": "Delete Stock Area",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/stock-areas/{{stockAreaId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "stock-areas", "{{stockAreaId}}"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Inward",
+			"item": [
+				{
+					"name": "Get All Inwards",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/inward?page=1&limit=10",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "inward"],
+							"query": [
+								{"key": "page", "value": "1"},
+								{"key": "limit", "value": "10"}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Inward By ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/inward/{{inwardId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "inward", "{{inwardId}}"]
+						}
+					}
+				},
+				{
+					"name": "Create Inward Entry",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"date\": \"2025-12-06\",\n  \"invoiceNumber\": \"INV-001\",\n  \"partyName\": \"Supplier ABC\",\n  \"purchaseOrder\": \"PO-001\",\n  \"stockAreaId\": \"{{stockAreaId}}\",\n  \"vehicleNumber\": \"MH-01-AB-1234\",\n  \"remark\": \"Urgent delivery\",\n  \"items\": [\n    {\n      \"materialId\": \"{{materialId}}\",\n      \"quantity\": 100,\n      \"price\": 50.00,\n      \"serialNumber\": \"SN-001\",\n      \"remarks\": \"Good quality\"\n    }\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/inventory/inward",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "inward"]
+						}
+					}
+				},
+				{
+					"name": "Update Inward Entry",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"remark\": \"Updated remarks\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/inventory/inward/{{inwardId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "inward", "{{inwardId}}"]
+						}
+					}
+				},
+				{
+					"name": "Delete Inward Entry",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/inward/{{inwardId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "inward", "{{inwardId}}"]
+						},
+						"description": "Delete inward entry (Admin only)"
+					}
+				},
+				{
+					"name": "Mark Inward as Completed [ADMIN ONLY]",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/inward/{{inwardId}}/complete",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "inward", "{{inwardId}}", "complete"]
+						},
+						"description": "Mark inward entry as completed and create inventory records (Admin only)"
+					}
+				}
+			]
+		},
+		{
+			"name": "Material Requests",
+			"item": [
+				{
+					"name": "Get All Material Requests",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/material-request?page=1&limit=10",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "material-request"],
+							"query": [
+								{"key": "page", "value": "1"},
+								{"key": "limit", "value": "10"}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Material Request By ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/material-request/{{materialRequestId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "material-request", "{{materialRequestId}}"]
+						}
+					}
+				},
+				{
+					"name": "Create Material Request",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"prNumbers\": [\n    {\n      \"prNumber\": \"PR-DEC-2025-01\",\n      \"prDate\": \"2025-12-06\"\n    }\n  ],\n  \"items\": [\n    {\n      \"materialId\": \"{{materialId}}\",\n      \"requestedQuantity\": 50,\n      \"uom\": \"PIECE(S)\",\n      \"remarks\": \"Urgent requirement\"\n    }\n  ],\n  \"remarks\": \"For project completion\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/inventory/material-request",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "material-request"]
+						}
+					}
+				},
+				{
+					"name": "Approve Material Request",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"status\": \"APPROVED\",\n  \"approvedItems\": [\n    {\n      \"item_id\": \"{{itemId}}\",\n      \"materialId\": \"{{materialId}}\",\n      \"approvedQuantity\": 50,\n      \"remarks\": \"Approved as requested\"\n    }\n  ],\n  \"remarks\": \"Approved by manager\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/inventory/material-request/{{materialRequestId}}/approve",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "material-request", "{{materialRequestId}}", "approve"]
+						},
+						"description": "Approve or reject material request (Admin only)"
+					}
+				},
+				{
+					"name": "Update Material Request",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"remarks\": \"Updated remarks\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/inventory/material-request/{{materialRequestId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "material-request", "{{materialRequestId}}"]
+						}
+					}
+				},
+				{
+					"name": "Delete Material Request",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/material-request/{{materialRequestId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "material-request", "{{materialRequestId}}"]
+						}
+					}
+				},
+				{
+					"name": "Get Available Stock for Allocation",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/material-request/{{materialRequestId}}/available-stock?stockAreaId={{stockAreaId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "material-request", "{{materialRequestId}}", "available-stock"],
+							"query": [
+								{"key": "stockAreaId", "value": "{{stockAreaId}}", "disabled": true},
+								{"key": "materialId", "value": "", "disabled": true}
+							]
+						},
+						"description": "Get available inventory items for allocation to a material request"
+					}
+				},
+				{
+					"name": "Get Allocations",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/material-request/{{materialRequestId}}/allocations",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "material-request", "{{materialRequestId}}", "allocations"]
+						},
+						"description": "Get all allocations for a material request"
+					}
+				},
+				{
+					"name": "Allocate Items",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"allocations\": [\n    {\n      \"materialRequestItemId\": \"{{itemId}}\",\n      \"inventoryMasterIds\": [\"{{inventoryMasterId}}\"]\n    }\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/inventory/material-request/{{materialRequestId}}/allocate",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "material-request", "{{materialRequestId}}", "allocate"]
+						},
+						"description": "Allocate specific inventory items (serial numbers) to material request items"
+					}
+				},
+				{
+					"name": "Cancel Allocation",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/material-request/{{materialRequestId}}/allocations/{{allocationId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "material-request", "{{materialRequestId}}", "allocations", "{{allocationId}}"]
+						},
+						"description": "Cancel an allocation and return item to available stock"
+					}
+				}
+			]
+		},
+		{
+			"name": "Stock Transfers",
+			"item": [
+				{
+					"name": "Get All Stock Transfers",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/stock-transfer?page=1&limit=10",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "stock-transfer"],
+							"query": [
+								{"key": "page", "value": "1"},
+								{"key": "limit", "value": "10"}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Stock Transfer By ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/stock-transfer/{{stockTransferId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "stock-transfer", "{{stockTransferId}}"]
+						}
+					}
+				},
+				{
+					"name": "Create Stock Transfer",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"fromStockAreaId\": \"{{fromStockAreaId}}\",\n  \"toStockAreaId\": \"{{toStockAreaId}}\",\n  \"transferDate\": \"2025-12-06\",\n  \"items\": [\n    {\n      \"materialId\": \"{{materialId}}\",\n      \"quantity\": 25,\n      \"serialNumbers\": [\"SN-001\", \"SN-002\"],\n      \"remarks\": \"Transfer to branch\"\n    }\n  ],\n  \"remarks\": \"Regular stock transfer\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/inventory/stock-transfer",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "stock-transfer"]
+						}
+					}
+				},
+				{
+					"name": "Update Stock Transfer",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"remarks\": \"Updated remarks\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/inventory/stock-transfer/{{stockTransferId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "stock-transfer", "{{stockTransferId}}"]
+						}
+					}
+				},
+				{
+					"name": "Delete Stock Transfer",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/stock-transfer/{{stockTransferId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "stock-transfer", "{{stockTransferId}}"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Consumption",
+			"item": [
+				{
+					"name": "Get All Consumption Records",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/consumption?page=1&limit=10",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "consumption"],
+							"query": [
+								{"key": "page", "value": "1"},
+								{"key": "limit", "value": "10"}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Consumption By ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/consumption/{{consumptionId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "consumption", "{{consumptionId}}"]
+						}
+					}
+				},
+				{
+					"name": "Create Consumption Record",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"externalSystemRefId\": \"TKT-463511\",\n  \"customerData\": {\n    \"customerName\": \"Mr. Abhay Bajaj\",\n    \"email\": \"abhaybajaj@gmail.com\",\n    \"mobileNo\": \"9584823999\",\n    \"remark\": \"Base_Down\"\n  },\n  \"consumptionDate\": \"2025-12-06\",\n  \"stockAreaId\": \"{{stockAreaId}}\",\n  \"items\": [\n    {\n      \"materialId\": \"{{materialId}}\",\n      \"quantity\": 10,\n      \"serialNumber\": \"SN-001\",\n      \"remarks\": \"Customer installation\"\n    }\n  ],\n  \"remarks\": \"Field installation\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/inventory/consumption",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "consumption"]
+						}
+					}
+				},
+				{
+					"name": "Update Consumption Record",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"remarks\": \"Updated remarks\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/inventory/consumption/{{consumptionId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "consumption", "{{consumptionId}}"]
+						}
+					}
+				},
+				{
+					"name": "Delete Consumption Record",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/consumption/{{consumptionId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "consumption", "{{consumptionId}}"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Stock Levels",
+			"item": [
+				{
+					"name": "Get Stock Levels",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/stock-levels?materialId={{materialId}}&stockAreaId={{stockAreaId}}&materialType=COMPONENT",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "stock-levels"],
+							"query": [
+								{"key": "materialId", "value": "{{materialId}}", "disabled": true},
+								{"key": "stockAreaId", "value": "{{stockAreaId}}", "disabled": true},
+								{"key": "materialType", "value": "COMPONENT", "disabled": true}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Stock Level By Material",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/stock-levels/{{materialId}}?stockAreaId={{stockAreaId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "stock-levels", "{{materialId}}"],
+							"query": [
+								{"key": "stockAreaId", "value": "{{stockAreaId}}", "disabled": true}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Stock Summary",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/stock-summary?orgId={{orgId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "stock-summary"],
+							"query": [
+								{"key": "orgId", "value": "{{orgId}}", "disabled": true}
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Reports",
+			"item": [
+				{
+					"name": "Transaction History",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/reports/transactions?startDate=2025-01-01&endDate=2025-12-31&type=inward&page=1&limit=50",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "reports", "transactions"],
+							"query": [
+								{"key": "startDate", "value": "2025-01-01"},
+								{"key": "endDate", "value": "2025-12-31"},
+								{"key": "type", "value": "inward", "disabled": true},
+								{"key": "page", "value": "1"},
+								{"key": "limit", "value": "50"}
+							]
+						}
+					}
+				},
+				{
+					"name": "Stock Movement",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/reports/movement?startDate=2025-01-01&endDate=2025-12-31&materialId={{materialId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "reports", "movement"],
+							"query": [
+								{"key": "startDate", "value": "2025-01-01"},
+								{"key": "endDate", "value": "2025-12-31"},
+								{"key": "materialId", "value": "{{materialId}}", "disabled": true}
+							]
+						}
+					}
+				},
+				{
+					"name": "Consumption Analysis",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/reports/consumption?startDate=2025-01-01&endDate=2025-12-31",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "reports", "consumption"],
+							"query": [
+								{"key": "startDate", "value": "2025-01-01"},
+								{"key": "endDate", "value": "2025-12-31"}
+							]
+						}
+					}
+				},
+				{
+					"name": "Stock Valuation",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/reports/valuation?materialId={{materialId}}&stockAreaId={{stockAreaId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "reports", "valuation"],
+							"query": [
+								{"key": "materialId", "value": "{{materialId}}", "disabled": true},
+								{"key": "stockAreaId", "value": "{{stockAreaId}}", "disabled": true}
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Files & Documents",
+			"item": [
+				{
+					"name": "Download Document",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/documents/{{filename}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "documents", "{{filename}}"]
+						}
+					}
+				},
+				{
+					"name": "Delete Document",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/documents/{{filename}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "documents", "{{filename}}"]
+						}
+					}
+				},
+				{
+					"name": "Add Documents to Inward",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "documents",
+									"type": "file",
+									"src": []
+								}
+							]
+						},
+						"url": {
+							"raw": "{{baseUrl}}/inventory/inward/{{inwardId}}/documents",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "inward", "{{inwardId}}", "documents"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Audit Trail",
+			"item": [
+				{
+					"name": "Get Audit Logs",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/audit-logs?entityType=inward&entityId={{entityId}}&userId={{userId}}&startDate=2025-01-01&endDate=2025-12-31&page=1&limit=50",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "audit-logs"],
+							"query": [
+								{"key": "entityType", "value": "inward", "disabled": true},
+								{"key": "entityId", "value": "{{entityId}}", "disabled": true},
+								{"key": "userId", "value": "{{userId}}", "disabled": true},
+								{"key": "startDate", "value": "2025-01-01"},
+								{"key": "endDate", "value": "2025-12-31"},
+								{"key": "page", "value": "1"},
+								{"key": "limit", "value": "50"}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Entity History",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/history/inward/{{entityId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "history", "inward", "{{entityId}}"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Notifications",
+			"item": [
+				{
+					"name": "Get Notifications",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/notifications?read=false&limit=50",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "notifications"],
+							"query": [
+								{"key": "read", "value": "false", "disabled": true},
+								{"key": "limit", "value": "50"}
+							]
+						}
+					}
+				},
+				{
+					"name": "Mark Notification Read",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/notifications/{{notificationId}}/read",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "notifications", "{{notificationId}}", "read"]
+						}
+					}
+				},
+				{
+					"name": "Delete Notification",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/notifications/{{notificationId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "notifications", "{{notificationId}}"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Person Stock",
+			"item": [
+				{
+					"name": "Get Person Stock",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/person-stock?userId={{userId}}&page=1&limit=10",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "person-stock"],
+							"query": [
+								{"key": "userId", "value": "{{userId}}"},
+								{"key": "ticketId", "value": "", "disabled": true},
+								{"key": "materialId", "value": "", "disabled": true},
+								{"key": "status", "value": "", "disabled": true},
+								{"key": "page", "value": "1"},
+								{"key": "limit", "value": "10"}
+							]
+						},
+						"description": "Get inventory items assigned to a technician (person stock)"
+					}
+				},
+				{
+					"name": "Get Person Stock By Ticket",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/person-stock/ticket/{{ticketId}}?userId={{userId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "person-stock", "ticket", "{{ticketId}}"],
+							"query": [
+								{"key": "userId", "value": "{{userId}}"},
+								{"key": "status", "value": "", "disabled": true}
+							]
+						},
+						"description": "Get person stock items for a specific ticket"
+					}
+				},
+				{
+					"name": "Search Person Stock By Serial",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/person-stock/search?serialNumber=SN-001&userId={{userId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "person-stock", "search"],
+							"query": [
+								{"key": "serialNumber", "value": "SN-001"},
+								{"key": "userId", "value": "{{userId}}", "disabled": true},
+								{"key": "ticketId", "value": "", "disabled": true}
+							]
+						},
+						"description": "Search for a specific serial number in person stock"
+					}
+				}
+			]
+		},
+		{
+			"name": "Returns",
+			"item": [
+				{
+					"name": "Get Available Items for Return",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/returns/available-items?technicianId={{userId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "returns", "available-items"],
+							"query": [
+								{"key": "technicianId", "value": "{{userId}}"},
+								{"key": "ticketId", "value": "", "disabled": true},
+								{"key": "materialId", "value": "", "disabled": true}
+							]
+						},
+						"description": "Get items available for return from technician's person stock"
+					}
+				},
+				{
+					"name": "Get All Returns",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/returns?page=1&limit=10",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "returns"],
+							"query": [
+								{"key": "page", "value": "1"},
+								{"key": "limit", "value": "10"},
+								{"key": "technicianId", "value": "", "disabled": true},
+								{"key": "status", "value": "", "disabled": true},
+								{"key": "reason", "value": "", "disabled": true},
+								{"key": "dateFrom", "value": "", "disabled": true},
+								{"key": "dateTo", "value": "", "disabled": true}
+							]
+						},
+						"description": "Get all return records with filtering and pagination"
+					}
+				},
+				{
+					"name": "Get Return By ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/returns/{{returnId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "returns", "{{returnId}}"]
+						},
+						"description": "Get single return record by ID"
+					}
+				},
+				{
+					"name": "Create Return",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"ticketId\": \"TKT-55S\",\n  \"returnDate\": \"2025-12-06\",\n  \"reason\": \"UNUSED\",\n  \"items\": [\n    {\n      \"materialId\": \"{{materialId}}\",\n      \"inventoryMasterId\": \"{{inventoryMasterId}}\",\n      \"serialNumber\": \"SN-001\",\n      \"quantity\": 1,\n      \"remarks\": \"Not needed for this ticket\"\n    }\n  ],\n  \"remarks\": \"Returning unused items\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/inventory/returns",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "returns"]
+						},
+						"description": "Create a new return record for items from person stock"
+					}
+				},
+				{
+					"name": "Approve Return [ADMIN ONLY]",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"stockAreaId\": \"{{stockAreaId}}\",\n  \"remarks\": \"Approved and transferred to warehouse\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/inventory/returns/{{returnId}}/approve",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "returns", "{{returnId}}", "approve"]
+						},
+						"description": "Approve return and transfer items back to warehouse"
+					}
+				},
+				{
+					"name": "Reject Return [ADMIN ONLY]",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"remarks\": \"Rejected - items still needed\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/inventory/returns/{{returnId}}/reject",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "returns", "{{returnId}}", "reject"]
+						},
+						"description": "Reject a return request"
+					}
+				}
+			]
+		},
+		{
+			"name": "Search",
+			"item": [
+				{
+					"name": "Global Search",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/search?q=patch&type=materials&limit=20",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "search"],
+							"query": [
+								{"key": "q", "value": "patch"},
+								{"key": "type", "value": "materials", "disabled": true},
+								{"key": "limit", "value": "20"}
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Bulk Operations",
+			"item": [
+				{
+					"name": "Bulk Materials",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"materials\": [\n    {\n      \"materialName\": \"Material 1\",\n      \"productCode\": \"MAT-001\",\n      \"materialType\": \"COMPONENT\",\n      \"uom\": \"PIECE(S)\"\n    },\n    {\n      \"materialId\": \"{{materialId}}\",\n      \"materialName\": \"Updated Material\",\n      \"productCode\": \"MAT-001-UPDATED\"\n    }\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/inventory/bulk/materials",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "bulk", "materials"]
+						}
+					}
+				},
+				{
+					"name": "Bulk Inward",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"inwardEntries\": [\n    {\n      \"date\": \"2025-12-06\",\n      \"invoiceNumber\": \"INV-001\",\n      \"partyName\": \"Supplier ABC\",\n      \"stockAreaId\": \"{{stockAreaId}}\",\n      \"items\": [\n        {\n          \"materialId\": \"{{materialId}}\",\n          \"quantity\": 100,\n          \"price\": 50.00\n        }\n      ]\n    }\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/inventory/bulk/inward",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "bulk", "inward"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Export",
+			"item": [
+				{
+					"name": "Export Materials",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/export/materials?format=csv",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "export", "materials"],
+							"query": [
+								{"key": "format", "value": "csv"}
+							]
+						}
+					}
+				},
+				{
+					"name": "Export Inward",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/export/inward?format=csv&startDate=2025-01-01&endDate=2025-12-31",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "export", "inward"],
+							"query": [
+								{"key": "format", "value": "csv"},
+								{"key": "startDate", "value": "2025-01-01"},
+								{"key": "endDate", "value": "2025-12-31"}
+							]
+						}
+					}
+				},
+				{
+					"name": "Export Stock Levels",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/export/stock-levels?format=csv",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "export", "stock-levels"],
+							"query": [
+								{"key": "format", "value": "csv"}
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Business Partners",
+			"item": [
+				{
+					"name": "Get All Business Partners",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/business-partners?page=1&limit=10",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "business-partners"],
+							"query": [
+								{"key": "page", "value": "1"},
+								{"key": "limit", "value": "10"},
+								{"key": "partnerType", "value": "", "disabled": true},
+								{"key": "search", "value": "", "disabled": true}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Business Partner By ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/business-partners/{{partnerId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "business-partners", "{{partnerId}}"]
+						}
+					}
+				},
+				{
+					"name": "Create Business Partner",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"partnerName\": \"ABC Suppliers\",\n  \"partnerType\": \"SUPPLIER\",\n  \"email\": \"contact@abcsuppliers.com\",\n  \"phone\": \"+1234567890\",\n  \"address\": \"123 Main St\",\n  \"city\": \"Mumbai\",\n  \"state\": \"Maharashtra\",\n  \"pincode\": \"400001\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/inventory/business-partners",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "business-partners"]
+						}
+					}
+				},
+				{
+					"name": "Update Business Partner",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"partnerName\": \"ABC Suppliers Updated\",\n  \"email\": \"newemail@abcsuppliers.com\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/inventory/business-partners/{{partnerId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "business-partners", "{{partnerId}}"]
+						}
+					}
+				},
+				{
+					"name": "Delete Business Partner [ADMIN ONLY]",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/business-partners/{{partnerId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "business-partners", "{{partnerId}}"]
+						},
+						"description": "Delete business partner (Admin only)"
+					}
+				}
+			]
+		},
+		{
+			"name": "Purchase Requests",
+			"item": [
+				{
+					"name": "Get All Purchase Requests",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/purchase-requests?page=1&limit=10",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "purchase-requests"],
+							"query": [
+								{"key": "page", "value": "1"},
+								{"key": "limit", "value": "10"},
+								{"key": "status", "value": "", "disabled": true},
+								{"key": "search", "value": "", "disabled": true}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Purchase Request By ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/purchase-requests/{{prId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "purchase-requests", "{{prId}}"]
+						}
+					}
+				},
+				{
+					"name": "Create Purchase Request",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"prNumber\": \"PR-2025-001\",\n  \"requestedDate\": \"2025-12-06\",\n  \"items\": [\n    {\n      \"materialId\": \"{{materialId}}\",\n      \"requestedQuantity\": 100,\n      \"remarks\": \"Urgent requirement\"\n    }\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/inventory/purchase-requests",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "purchase-requests"]
+						}
+					}
+				},
+				{
+					"name": "Update Purchase Request",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"requestedDate\": \"2025-12-07\",\n  \"items\": [\n    {\n      \"materialId\": \"{{materialId}}\",\n      \"requestedQuantity\": 150\n    }\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/inventory/purchase-requests/{{prId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "purchase-requests", "{{prId}}"]
+						}
+					}
+				},
+				{
+					"name": "Submit Purchase Request",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/purchase-requests/{{prId}}/submit",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "purchase-requests", "{{prId}}", "submit"]
+						},
+						"description": "Submit purchase request (DRAFT -> SUBMITTED)"
+					}
+				},
+				{
+					"name": "Approve Purchase Request [ADMIN ONLY]",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/purchase-requests/{{prId}}/approve",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "purchase-requests", "{{prId}}", "approve"]
+						},
+						"description": "Approve purchase request (Admin only)"
+					}
+				},
+				{
+					"name": "Reject Purchase Request [ADMIN ONLY]",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"remarks\": \"Rejected due to budget constraints\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/inventory/purchase-requests/{{prId}}/reject",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "purchase-requests", "{{prId}}", "reject"]
+						},
+						"description": "Reject purchase request (Admin only)"
+					}
+				},
+				{
+					"name": "Delete Purchase Request [ADMIN ONLY]",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/purchase-requests/{{prId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "purchase-requests", "{{prId}}"]
+						},
+						"description": "Delete purchase request (Admin only)"
+					}
+				}
+			]
+		},
+		{
+			"name": "Purchase Orders",
+			"item": [
+				{
+					"name": "Get All Purchase Orders",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/purchase-orders?page=1&limit=10",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "purchase-orders"],
+							"query": [
+								{"key": "page", "value": "1"},
+								{"key": "limit", "value": "10"},
+								{"key": "status", "value": "", "disabled": true},
+								{"key": "search", "value": "", "disabled": true}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Purchase Order By ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/purchase-orders/{{poId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "purchase-orders", "{{poId}}"]
+						}
+					}
+				},
+				{
+					"name": "Create Purchase Order from PR",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"poNumber\": \"PO-2025-001\",\n  \"vendorId\": \"{{partnerId}}\",\n  \"poDate\": \"2025-12-06\",\n  \"items\": [\n    {\n      \"materialId\": \"{{materialId}}\",\n      \"quantity\": 100,\n      \"unitPrice\": 50.00\n    }\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/inventory/purchase-orders/from-pr/{{prId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "purchase-orders", "from-pr", "{{prId}}"]
+						},
+						"description": "Create purchase order from purchase request"
+					}
+				},
+				{
+					"name": "Create Purchase Order (Standalone)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"poNumber\": \"PO-2025-002\",\n  \"vendorId\": \"{{partnerId}}\",\n  \"poDate\": \"2025-12-06\",\n  \"items\": [\n    {\n      \"materialId\": \"{{materialId}}\",\n      \"quantity\": 100,\n      \"unitPrice\": 50.00\n    }\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/inventory/purchase-orders",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "purchase-orders"]
+						}
+					}
+				},
+				{
+					"name": "Update Purchase Order",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"poDate\": \"2025-12-07\",\n  \"items\": [\n    {\n      \"materialId\": \"{{materialId}}\",\n      \"quantity\": 150,\n      \"unitPrice\": 55.00\n    }\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/inventory/purchase-orders/{{poId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "purchase-orders", "{{poId}}"]
+						}
+					}
+				},
+				{
+					"name": "Mark Purchase Order as Sent [ADMIN ONLY]",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/purchase-orders/{{poId}}/send",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "purchase-orders", "{{poId}}", "send"]
+						},
+						"description": "Mark purchase order as SENT (DRAFT -> SENT) (Admin only)"
+					}
+				},
+				{
+					"name": "Mark Purchase Order as Received [ADMIN ONLY]",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/purchase-orders/{{poId}}/receive",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "purchase-orders", "{{poId}}", "receive"]
+						},
+						"description": "Mark purchase order as RECEIVED (SENT -> RECEIVED) (Admin only)"
+					}
+				},
+				{
+					"name": "Delete Purchase Order [ADMIN ONLY]",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/purchase-orders/{{poId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "purchase-orders", "{{poId}}"]
+						},
+						"description": "Delete purchase order (Admin only)"
+					}
+				}
+			]
+		},
+		{
+			"name": "Validation",
+			"item": [
+				{
+					"name": "Validate Product Code",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"productCode\": \"FPC-001\",\n  \"orgId\": \"{{orgId}}\",\n  \"excludeMaterialId\": \"{{materialId}}\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/inventory/validate/product-code",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "validate", "product-code"]
+						}
+					}
+				},
+				{
+					"name": "Validate Slip Number",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"slipNumber\": \"GRN-2025-001\",\n  \"type\": \"GRN\",\n  \"excludeId\": \"{{inwardId}}\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/inventory/validate/slip-number",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "validate", "slip-number"]
+						}
+					}
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:3000/api/v1",
+			"type": "string"
+		},
+		{
+			"key": "accessToken",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "refreshToken",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "materialId",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "stockAreaId",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "fromStockAreaId",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "toStockAreaId",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "inwardId",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "materialRequestId",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "stockTransferId",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "consumptionId",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "itemId",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "notificationId",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "entityId",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "userId",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "orgId",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "filename",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "userId",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "inventoryMasterId",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "allocationId",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "returnId",
+			"value": "",
+			"type": "string"
+		},
+				{
+					"key": "ticketId",
+					"value": "",
+					"type": "string"
+				},
+				{
+					"key": "partnerId",
+					"value": "",
+					"type": "string"
+				},
+				{
+					"key": "prId",
+					"value": "",
+					"type": "string"
+				},
+				{
+					"key": "poId",
+					"value": "",
+					"type": "string"
+				}
+			]
+		}
+
+
+
+
+
+
+
+
+
+

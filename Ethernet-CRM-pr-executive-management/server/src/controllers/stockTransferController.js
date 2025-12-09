@@ -1,0 +1,685 @@
+import StockTransfer from '../models/StockTransfer.js';
+import StockTransferItem from '../models/StockTransferItem.js';
+import Material from '../models/Material.js';
+import StockArea from '../models/StockArea.js';
+import MaterialRequest from '../models/MaterialRequest.js';
+import InventoryMaster from '../models/InventoryMaster.js';
+import User from '../models/User.js';
+import { validationResult } from 'express-validator';
+import { Op } from 'sequelize';
+import sequelize from '../config/database.js';
+import { generateST } from '../utils/slipGenerator.js';
+
+/**
+ * Create new stock transfer
+ * POST /api/inventory/stock-transfer
+ */
+export const createStockTransfer = async (req, res) => {
+  const transaction = await sequelize.transaction();
+  
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      await transaction.rollback();
+      return res.status(400).json({ success: false, errors: errors.array() });
+    }
+
+    const {
+      fromStockAreaId,
+      toStockAreaId,
+      toUserId, // New: Transfer to person instead of stock area
+      ticketId, // New: Link to ticket
+      materialRequestId,
+      transferDate,
+      items, // Array of {materialId, quantity, serialNumbers, remarks}
+      remarks
+    } = req.body;
+
+    const userId = req.user?.id || req.user?.user_id;
+
+    // Validate source stock area
+    const fromStockArea = await StockArea.findOne({
+      where: req.withOrg
+        ? req.withOrg({ area_id: fromStockAreaId, is_active: true })
+        : { area_id: fromStockAreaId, is_active: true }
+    });
+
+    if (!fromStockArea) {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid source stock area'
+      });
+    }
+
+    // Validate destination: either toStockAreaId OR toUserId (not both, at least one)
+    let toStockArea = null;
+    let toUser = null;
+    let destinationType = null;
+    let destinationId = null;
+
+    if (toUserId) {
+      // Transferring to a person (technician)
+      toUser = await User.findOne({
+        where: req.withOrg
+          ? req.withOrg({ id: toUserId, is_active: true })
+          : { id: toUserId, is_active: true }
+      });
+
+      if (!toUser) {
+        await transaction.rollback();
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid destination user'
+        });
+      }
+      destinationType = 'PERSON';
+      destinationId = toUserId.toString();
+    } else if (toStockAreaId) {
+      // Transferring to another stock area
+      toStockArea = await StockArea.findOne({
+        where: req.withOrg
+          ? req.withOrg({ area_id: toStockAreaId, is_active: true })
+          : { area_id: toStockAreaId, is_active: true }
+      });
+
+      if (!toStockArea) {
+        await transaction.rollback();
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid destination stock area'
+        });
+      }
+
+      if (fromStockAreaId === toStockAreaId) {
+        await transaction.rollback();
+        return res.status(400).json({
+          success: false,
+          message: 'Source and destination stock areas cannot be the same'
+        });
+      }
+      destinationType = 'WAREHOUSE';
+      destinationId = toStockAreaId;
+    } else {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        message: 'Either destination stock area or destination user must be provided'
+      });
+    }
+
+    // Validate material request if provided
+    if (materialRequestId) {
+      const materialRequest = await MaterialRequest.findOne({
+        where: req.withOrg
+          ? req.withOrg({ request_id: materialRequestId, is_active: true })
+          : { request_id: materialRequestId, is_active: true }
+      });
+
+      if (!materialRequest) {
+        await transaction.rollback();
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid material request'
+        });
+      }
+    }
+
+    // Validate items
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        message: 'At least one item is required'
+      });
+    }
+
+    // Generate unique transfer number
+    let transferNumber = generateST();
+    let isUnique = false;
+    let attempts = 0;
+    
+    while (!isUnique && attempts < 10) {
+      const existing = await StockTransfer.findOne({
+        where: req.withOrg
+          ? req.withOrg({ transfer_number: transferNumber })
+          : { transfer_number: transferNumber }
+      });
+      if (!existing) {
+        isUnique = true;
+      } else {
+        transferNumber = generateST();
+        attempts++;
+      }
+    }
+
+    // Create stock transfer
+    const stockTransfer = await StockTransfer.create({
+      from_stock_area_id: fromStockAreaId,
+      to_stock_area_id: toStockAreaId || null, // Can be null if transferring to person
+      to_user_id: toUserId || null, // Can be null if transferring to stock area
+      ticket_id: ticketId || null,
+      material_request_id: materialRequestId || null,
+      transfer_date: transferDate || new Date().toISOString().split('T')[0],
+      transfer_number: transferNumber,
+      status: 'DRAFT',
+      remarks: remarks || null,
+      org_id: req.orgId || null,
+      created_by: userId,
+      updated_by: userId,
+      is_active: true
+    }, { transaction });
+
+    // Create transfer items and update inventory_master
+    const createdItems = [];
+    for (const item of items) {
+      const { materialId, quantity, serialNumbers, remarks: itemRemarks } = item;
+
+      // Validate material exists
+      const material = await Material.findOne({
+        where: req.withOrg
+          ? req.withOrg({ material_id: materialId, is_active: true })
+          : { material_id: materialId, is_active: true }
+      });
+
+      if (!material) {
+        await transaction.rollback();
+        return res.status(400).json({
+          success: false,
+          message: `Material with ID ${materialId} not found`
+        });
+      }
+
+      const itemQuantity = parseInt(quantity) || 1;
+      const transferItem = await StockTransferItem.create({
+        transfer_id: stockTransfer.transfer_id,
+        material_id: materialId,
+        quantity: itemQuantity,
+        serial_numbers: serialNumbers || null,
+        remarks: itemRemarks || null
+      }, { transaction });
+
+      createdItems.push(transferItem);
+
+      // Update inventory_master records
+      if (serialNumbers && Array.isArray(serialNumbers) && serialNumbers.length > 0) {
+        // Serialized items: Update specific serial numbers
+        for (const serialNumber of serialNumbers) {
+          const inventoryItem = await InventoryMaster.findOne({
+            where: {
+              serial_number: serialNumber,
+              material_id: materialId,
+              current_location_type: 'WAREHOUSE',
+              location_id: fromStockAreaId,
+              status: 'AVAILABLE',
+              is_active: true,
+              ...(req.orgId ? { org_id: req.orgId } : {})
+            },
+            transaction
+          });
+
+          if (!inventoryItem) {
+            await transaction.rollback();
+            return res.status(400).json({
+              success: false,
+              message: `Serial number ${serialNumber} not found in source warehouse or not available`
+            });
+          }
+
+          // Update inventory_master location
+          await inventoryItem.update({
+            current_location_type: destinationType,
+            location_id: destinationId,
+            ticket_id: ticketId || null,
+            status: destinationType === 'PERSON' ? 'IN_TRANSIT' : 'AVAILABLE'
+          }, { transaction });
+        }
+      } else {
+        // Bulk items: Update quantity number of items from source warehouse
+        const availableItems = await InventoryMaster.findAll({
+          where: {
+            material_id: materialId,
+            current_location_type: 'WAREHOUSE',
+            location_id: fromStockAreaId,
+            status: 'AVAILABLE',
+            serial_number: null, // Bulk items don't have serial numbers
+            is_active: true,
+            ...(req.orgId ? { org_id: req.orgId } : {})
+          },
+          limit: itemQuantity,
+          transaction
+        });
+
+        if (availableItems.length < itemQuantity) {
+          await transaction.rollback();
+          return res.status(400).json({
+            success: false,
+            message: `Insufficient stock. Available: ${availableItems.length}, Requested: ${itemQuantity}`
+          });
+        }
+
+        // Update each item
+        for (const inventoryItem of availableItems) {
+          await inventoryItem.update({
+            current_location_type: destinationType,
+            location_id: destinationId,
+            ticket_id: ticketId || null,
+            status: destinationType === 'PERSON' ? 'IN_TRANSIT' : 'AVAILABLE'
+          }, { transaction });
+        }
+      }
+    }
+
+    await transaction.commit();
+
+    // Fetch complete transfer with items
+    const completeTransfer = await StockTransfer.findOne({
+      where: { transfer_id: stockTransfer.transfer_id },
+      include: [
+        {
+          model: StockTransferItem,
+          as: 'items',
+          include: [
+            {
+              model: Material,
+              as: 'material'
+            }
+          ]
+        },
+        {
+          model: StockArea,
+          as: 'fromStockArea',
+          attributes: ['area_id', 'area_name', 'location_code']
+        },
+        {
+          model: StockArea,
+          as: 'toStockArea',
+          attributes: ['area_id', 'area_name', 'location_code']
+        },
+        {
+          model: MaterialRequest,
+          as: 'materialRequest',
+          attributes: ['request_id', 'status']
+        }
+      ]
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: 'Stock transfer created successfully',
+      data: completeTransfer
+    });
+  } catch (error) {
+    await transaction.rollback();
+    console.error('Error creating stock transfer:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to create stock transfer',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Get all stock transfers with filtering and pagination
+ * GET /api/inventory/stock-transfer
+ */
+export const getAllStockTransfers = async (req, res) => {
+  try {
+    const {
+      page = 1,
+      limit = 50,
+      search = '',
+      fromStockAreaId = '',
+      toStockAreaId = '',
+      status = '',
+      dateFrom = '',
+      dateTo = '',
+      showInactive = false
+    } = req.query;
+
+    const pageNumber = Math.max(parseInt(page, 10) || 1, 1);
+    const limitNumber = Math.max(parseInt(limit, 10) || 50, 1);
+    const offset = (pageNumber - 1) * limitNumber;
+
+    const whereClause = req.withOrg ? req.withOrg({}) : {};
+
+    if (!showInactive || showInactive === 'false') {
+      whereClause.is_active = true;
+    }
+
+    if (fromStockAreaId) {
+      whereClause.from_stock_area_id = fromStockAreaId;
+    }
+
+    if (toStockAreaId) {
+      whereClause.to_stock_area_id = toStockAreaId;
+    }
+
+    if (status) {
+      whereClause.status = status;
+    }
+
+    // Date range filter
+    if (dateFrom || dateTo) {
+      whereClause.transfer_date = {};
+      if (dateFrom) {
+        whereClause.transfer_date[Op.gte] = dateFrom;
+      }
+      if (dateTo) {
+        whereClause.transfer_date[Op.lte] = dateTo;
+      }
+    }
+
+    // Search filter
+    if (search) {
+      whereClause[Op.or] = [
+        { transfer_number: { [Op.like]: `%${search}%` } }
+      ];
+    }
+
+    const { count, rows: transfers } = await StockTransfer.findAndCountAll({
+      where: whereClause,
+      limit: limitNumber,
+      offset: offset,
+      order: [['transfer_date', 'DESC'], ['created_at', 'DESC']],
+      include: [
+        {
+          model: StockArea,
+          as: 'fromStockArea',
+          attributes: ['area_id', 'area_name', 'location_code']
+        },
+        {
+          model: StockArea,
+          as: 'toStockArea',
+          attributes: ['area_id', 'area_name', 'location_code']
+        }
+      ],
+      distinct: true,
+    });
+
+    const totalTransfers = typeof count === 'number' ? count : 0;
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        transfers,
+        pagination: {
+          currentPage: pageNumber,
+          totalPages: limitNumber ? Math.max(Math.ceil(totalTransfers / limitNumber), 1) : 1,
+          totalItems: totalTransfers,
+          itemsPerPage: limitNumber
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching stock transfers:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch stock transfers',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Get single stock transfer by ID
+ * GET /api/inventory/stock-transfer/:id
+ */
+export const getStockTransferById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const transfer = await StockTransfer.findOne({
+      where: req.withOrg
+        ? req.withOrg({
+          transfer_id: id,
+          is_active: true
+        })
+        : {
+          transfer_id: id,
+          is_active: true
+        },
+      include: [
+        {
+          model: StockTransferItem,
+          as: 'items',
+          include: [
+            {
+              model: Material,
+              as: 'material'
+            }
+          ]
+        },
+        {
+          model: StockArea,
+          as: 'fromStockArea'
+        },
+        {
+          model: StockArea,
+          as: 'toStockArea'
+        },
+        {
+          model: MaterialRequest,
+          as: 'materialRequest'
+        }
+      ]
+    });
+
+    if (!transfer) {
+      return res.status(404).json({
+        success: false,
+        message: 'Stock transfer not found'
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: transfer
+    });
+  } catch (error) {
+    console.error('Error fetching stock transfer:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch stock transfer',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Update stock transfer
+ * PUT /api/inventory/stock-transfer/:id
+ */
+export const updateStockTransfer = async (req, res) => {
+  const transaction = await sequelize.transaction();
+  
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      await transaction.rollback();
+      return res.status(400).json({ success: false, errors: errors.array() });
+    }
+
+    const { id } = req.params;
+    const {
+      fromStockAreaId,
+      toStockAreaId,
+      materialRequestId,
+      transferDate,
+      status,
+      items,
+      remarks
+    } = req.body;
+
+    const userId = req.user?.id || req.user?.user_id;
+
+    const transfer = await StockTransfer.findOne({
+      where: req.withOrg
+        ? req.withOrg({
+          transfer_id: id,
+          is_active: true
+        })
+        : {
+          transfer_id: id,
+          is_active: true
+        }
+    }, { transaction });
+
+    if (!transfer) {
+      await transaction.rollback();
+      return res.status(404).json({
+        success: false,
+        message: 'Stock transfer not found'
+      });
+    }
+
+    // Validate stock areas if provided
+    if (fromStockAreaId || toStockAreaId) {
+      const finalFromId = fromStockAreaId || transfer.from_stock_area_id;
+      const finalToId = toStockAreaId || transfer.to_stock_area_id;
+
+      if (finalFromId === finalToId) {
+        await transaction.rollback();
+        return res.status(400).json({
+          success: false,
+          message: 'Source and destination stock areas cannot be the same'
+        });
+      }
+    }
+
+    // Update transfer
+    await transfer.update({
+      from_stock_area_id: fromStockAreaId || transfer.from_stock_area_id,
+      to_stock_area_id: toStockAreaId || transfer.to_stock_area_id,
+      material_request_id: materialRequestId !== undefined ? materialRequestId : transfer.material_request_id,
+      transfer_date: transferDate || transfer.transfer_date,
+      status: status || transfer.status,
+      remarks: remarks !== undefined ? remarks : transfer.remarks,
+      updated_by: userId
+    }, { transaction });
+
+    // Update items if provided
+    if (items && Array.isArray(items)) {
+      await StockTransferItem.destroy({
+        where: { transfer_id: id },
+        transaction
+      });
+
+      for (const item of items) {
+        const { materialId, quantity, serialNumbers, remarks: itemRemarks } = item;
+
+        const material = await Material.findOne({
+          where: req.withOrg
+            ? req.withOrg({ material_id: materialId, is_active: true })
+            : { material_id: materialId, is_active: true }
+        });
+
+        if (!material) {
+          await transaction.rollback();
+          return res.status(400).json({
+            success: false,
+            message: `Material with ID ${materialId} not found`
+          });
+        }
+
+        await StockTransferItem.create({
+          transfer_id: id,
+          material_id: materialId,
+          quantity: parseInt(quantity) || 1,
+          serial_numbers: serialNumbers || null,
+          remarks: itemRemarks || null
+        }, { transaction });
+      }
+    }
+
+    await transaction.commit();
+
+    const updatedTransfer = await StockTransfer.findOne({
+      where: { transfer_id: id },
+      include: [
+        {
+          model: StockTransferItem,
+          as: 'items',
+          include: [
+            {
+              model: Material,
+              as: 'material'
+            }
+          ]
+        }
+      ]
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Stock transfer updated successfully',
+      data: updatedTransfer
+    });
+  } catch (error) {
+    await transaction.rollback();
+    console.error('Error updating stock transfer:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to update stock transfer',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Delete stock transfer (soft delete)
+ * DELETE /api/inventory/stock-transfer/:id
+ */
+export const deleteStockTransfer = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user?.id || req.user?.user_id;
+
+    const transfer = await StockTransfer.findOne({
+      where: req.withOrg
+        ? req.withOrg({
+          transfer_id: id,
+          is_active: true
+        })
+        : {
+          transfer_id: id,
+          is_active: true
+        }
+    });
+
+    if (!transfer) {
+      return res.status(404).json({
+        success: false,
+        message: 'Stock transfer not found'
+      });
+    }
+
+    await transfer.update({
+      is_active: false,
+      updated_by: userId
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Stock transfer deleted successfully'
+    });
+  } catch (error) {
+    console.error('Error deleting stock transfer:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to delete stock transfer',
+      error: error.message
+    });
+  }
+};
+
+
+
+
+
+
+
+
+
+
