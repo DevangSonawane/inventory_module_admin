@@ -50,6 +50,12 @@ const User = sequelize.define('User', {
     type: DataTypes.ENUM('user', 'admin'),
     defaultValue: 'user'
   },
+  role_id: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: { model: 'roles', key: 'id' },
+    onDelete: 'SET NULL',
+  },
   isActive: {
     type: DataTypes.BOOLEAN,
     defaultValue: true

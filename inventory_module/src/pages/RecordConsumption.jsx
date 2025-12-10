@@ -125,10 +125,30 @@ const RecordConsumption = () => {
         // Extract customer data from customer_data JSON field
         if (consumption.customer_data) {
           const customer = consumption.customer_data
+          const name =
+            customer.customerName ||
+            customer.customer_name ||
+            customer.name ||
+            customer.fullName ||
+            ''
+          const email =
+            customer.email ||
+            customer.customerEmail ||
+            customer.contact_email ||
+            customer.emailId ||
+            ''
+          const phone =
+            customer.mobileNo ||
+            customer.mobile_no ||
+            customer.phoneNumber ||
+            customer.contact_number ||
+            customer.phone ||
+            ''
+
           setCustomerData({
-            customerName: customer.customerName || customer.customer_name || '',
-            email: customer.email || customer.customerEmail || '',
-            mobileNo: customer.mobileNo || customer.mobile_no || customer.phoneNumber || '',
+            customerName: name,
+            email,
+            mobileNo: phone,
             remark: customer.remark || consumption.remarks || '',
             franchise: customer.franchise || customerData.franchise || '',
           })
@@ -240,25 +260,25 @@ const RecordConsumption = () => {
                 label="Customer Name"
                 value={customerData.customerName}
                 readOnly
-                className="bg-gray-100"
+                className="bg-gray-50"
               />
               <Input
                 label="Email"
                 value={customerData.email}
                 readOnly
-                className="bg-gray-100"
+                className="bg-gray-50"
               />
               <Input
                 label="Mobile No."
                 value={customerData.mobileNo}
                 readOnly
-                className="bg-gray-100"
+                className="bg-gray-50"
               />
               <Input
                 label="Remark"
                 value={customerData.remark}
                 readOnly
-                className="bg-gray-100"
+                className="bg-gray-50"
               />
               <Dropdown
                 label="Franchise"
@@ -289,7 +309,7 @@ const RecordConsumption = () => {
 
             <div className="border-t border-gray-200 pt-6 mb-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Search By</h3>
-              <div className="flex gap-6 items-end">
+              <div className="flex gap-4 items-end">
                 <div className="w-64">
                   <label className="block text-sm font-medium text-gray-700 mb-1">Search By</label>
                   <Dropdown
@@ -322,7 +342,7 @@ const RecordConsumption = () => {
               </div>
             ) : (
               <Table
-                headers={['SELECT', 'ITEM NAME', 'PROPERTIES', 'GRN NO.', 'AASET ID', 'REQUESTED QUANTITY', 'REMARKS']}
+                headers={['SELECT', 'ITEM NAME', 'PROPERTIES', 'GRN NO.', 'ASSET ID', 'REQUESTED QUANTITY', 'REMARKS']}
               >
                 {paginatedData.length > 0 ? (
                 paginatedData.map((item) => (
@@ -368,24 +388,24 @@ const RecordConsumption = () => {
           </>
         )}
 
-        <div className="flex gap-4 justify-end mt-6 pt-6 border-t border-gray-200">
+        <div className="flex gap-3 justify-end mt-6 pt-6 border-t border-gray-200">
           <Button variant="gray" onClick={() => navigate('/record-consumption')}>
             Cancel
           </Button>
           <Button 
-            variant="success"
+            variant="primary"
             onClick={() => {
               if (!externalSystemRefId) {
-                alert('Please select External System Ref. ID')
+                toast.error('Please select External System Ref. ID')
                 return
               }
               const selectedItems = tableData.filter(item => item.selected)
               if (selectedItems.length === 0) {
-                alert('Please select at least one item')
+                toast.error('Please select at least one item')
                 return
               }
               console.log('Saving record consumption:', { externalSystemRefId, customerData, selectedItems })
-              alert('Record consumption saved successfully!')
+              toast.success('Record consumption saved successfully!')
             }}
           >
             Save

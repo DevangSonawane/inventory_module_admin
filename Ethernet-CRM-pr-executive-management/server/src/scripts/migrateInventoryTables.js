@@ -1214,12 +1214,114 @@ const runMigration = async (silent = false) => {
       if (!silent) console.log('   ℹ️  audit_logs table already exists');
     }
 
+    // 14. SYSTEM SETTINGS - Store system-wide configuration
+    if (!(await tableExists('system_settings'))) {
+      if (!silent) console.log('   Creating system_settings table...');
+      
+      try {
+        await sequelize.query(`
+          CREATE TABLE \`system_settings\` (
+            \`setting_id\` CHAR(36) NOT NULL PRIMARY KEY,
+            \`setting_key\` VARCHAR(255) NOT NULL UNIQUE,
+            \`setting_value\` JSON NOT NULL,
+            \`description\` TEXT NULL,
+            \`updated_by\` INT NULL COMMENT 'User ID who last updated this setting',
+            \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX \`idx_setting_key\` (\`setting_key\`)
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        `, { type: QueryTypes.RAW });
+        
+        // Add foreign key for updated_by if users table exists
+        try {
+          await sequelize.query(`
+            ALTER TABLE \`system_settings\`
+            ADD CONSTRAINT \`fk_settings_updated_by\` 
+            FOREIGN KEY (\`updated_by\`) REFERENCES \`users\`(\`id\`) ON DELETE SET NULL;
+          `, { type: QueryTypes.RAW });
+          if (!silent) console.log('   ✅ Added updated_by foreign key');
+        } catch (e) {
+          if (!silent) console.log('   ⚠️  Could not add updated_by foreign key (will use application-level validation)');
+        }
+        
+        if (!silent) console.log('   ✅ system_settings table created');
+      } catch (e) {
+        if (e.message && (e.message.includes('already exists') || e.message.includes('Duplicate'))) {
+          if (!silent) console.log('   ℹ️  system_settings table already exists');
+        } else {
+          throw e;
+        }
+      }
+    } else {
+      if (!silent) console.log('   ℹ️  system_settings table already exists');
+    }
+
+    // 15. ROLE PAGE PERMISSIONS
+    if (!(await tableExists('role_page_permissions'))) {
+      if (!silent) console.log('   Creating role_page_permissions table...');
+      try {
+        await sequelize.query(`
+          CREATE TABLE \`role_page_permissions\` (
+            \`id\` INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+            \`role_id\` INT NOT NULL,
+            \`page_id\` VARCHAR(100) NOT NULL,
+            \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY \`unique_role_page\` (\`role_id\`, \`page_id\`),
+            INDEX \`idx_role_id\` (\`role_id\`),
+            INDEX \`idx_page_id\` (\`page_id\`),
+            CONSTRAINT \`fk_role_page_role\` 
+              FOREIGN KEY (\`role_id\`) REFERENCES \`roles\`(\`id\`) ON DELETE CASCADE
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        `, { type: QueryTypes.RAW });
+        if (!silent) console.log('   ✅ role_page_permissions table created');
+      } catch (e) {
+        if (e.message && (e.message.includes('already exists') || e.message.includes('Duplicate'))) {
+          if (!silent) console.log('   ℹ️  role_page_permissions table already exists');
+        } else {
+          throw e;
+        }
+      }
+    } else {
+      if (!silent) console.log('   ℹ️  role_page_permissions table already exists');
+    }
+
+    // 16. USER PAGE PERMISSIONS
+    if (!(await tableExists('user_page_permissions'))) {
+      if (!silent) console.log('   Creating user_page_permissions table...');
+      try {
+        await sequelize.query(`
+          CREATE TABLE \`user_page_permissions\` (
+            \`id\` INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+            \`user_id\` INT NOT NULL,
+            \`page_id\` VARCHAR(100) NOT NULL,
+            \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY \`unique_user_page\` (\`user_id\`, \`page_id\`),
+            INDEX \`idx_user_id\` (\`user_id\`),
+            INDEX \`idx_page_id\` (\`page_id\`),
+            CONSTRAINT \`fk_user_page_user\` 
+              FOREIGN KEY (\`user_id\`) REFERENCES \`users\`(\`id\`) ON DELETE CASCADE
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        `, { type: QueryTypes.RAW });
+        if (!silent) console.log('   ✅ user_page_permissions table created');
+      } catch (e) {
+        if (e.message && (e.message.includes('already exists') || e.message.includes('Duplicate'))) {
+          if (!silent) console.log('   ℹ️  user_page_permissions table already exists');
+        } else {
+          throw e;
+        }
+      }
+    } else {
+      if (!silent) console.log('   ℹ️  user_page_permissions table already exists');
+    }
+
     if (!silent) {
       console.log('\n' + '='.repeat(60));
       console.log('✅ MIGRATION COMPLETED SUCCESSFULLY!');
       console.log('='.repeat(60));
       console.log('\n📊 Summary:');
-      console.log('   ✅ Created 13 new tables');
+      console.log('   ✅ Created 16 new tables');
       console.log('   ✅ Added missing columns to existing tables');
       console.log('   ✅ All foreign keys and indexes created');
       console.log('   ✅ Added search-performance indexes');

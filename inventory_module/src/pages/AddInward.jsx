@@ -280,12 +280,15 @@ const AddInward = () => {
   const fetchPurchaseOrders = async () => {
     try {
       setLoadingPOs(true)
-      const response = await purchaseOrderService.getAll({ limit: 1000, status: 'SENT' })
+      // Fetch both SENT and RECEIVED status POs (RECEIVED means goods received but inward not created yet)
+      const response = await purchaseOrderService.getAll({ limit: 1000, status: '' })
       if (response.success && (response.data?.purchaseOrders || response.data?.data)) {
         const pos = response.data?.purchaseOrders || response.data?.data || []
+        // Filter to show SENT and RECEIVED status POs
+        const filteredPOs = pos.filter(po => po.status === 'SENT' || po.status === 'RECEIVED')
         const poOptions = [
           { value: '', label: 'Select Purchase Order' },
-          ...pos.map(po => ({
+          ...filteredPOs.map(po => ({
             value: po.po_id || po.id,
             label: `${po.po_number || (po.po_id || po.id)?.substring(0, 8)} - ${po.vendor?.partner_name || po.vendor_name || 'Vendor'}`
           }))
@@ -316,6 +319,98 @@ const AddInward = () => {
       // Don't show error toast, just keep default empty option
     } finally {
       setLoadingPOs(false)
+    }
+  }
+
+  const handlePurchaseOrderChange = async (poId) => {
+    if (!poId || poId === '') {
+      // Clear PO-related data if PO is deselected
+      setBasicDetails(prev => ({ ...prev, purchaseOrder: '' }))
+      return
+    }
+
+    try {
+      setLoading(true)
+      // Fetch PO details
+      const response = await purchaseOrderService.getById(poId)
+      
+      if (response.success) {
+        const po = response.data?.purchaseOrder || response.data?.data
+        
+        if (po) {
+          // Auto-populate party name from PO vendor
+          if (po.vendor?.partner_name || po.vendor_name) {
+            const vendorName = po.vendor?.partner_name || po.vendor_name
+            setBasicDetails(prev => ({
+              ...prev,
+              purchaseOrder: poId,
+              partyName: vendorName
+            }))
+            
+            // Update party name options if vendor not in list
+            setPartyNameOptions(prev => {
+              const exists = prev.some(opt => opt.value === vendorName)
+              if (!exists) {
+                return [
+                  ...prev,
+                  { value: vendorName, label: vendorName }
+                ]
+              }
+              return prev
+            })
+          } else {
+            setBasicDetails(prev => ({ ...prev, purchaseOrder: poId }))
+          }
+
+          // Auto-populate items from PO
+          if (po.items && Array.isArray(po.items) && po.items.length > 0) {
+            const poItems = po.items.map((item, index) => {
+              const material = item.material || {}
+              return {
+                id: `po-item-${index}-${Date.now()}`,
+                materialId: item.material_id,
+                materialName: material.material_name || '-',
+                productCode: material.product_code || '-',
+                properties: material.product_code || '-',
+                serialNumber: null,
+                macId: null,
+                price: parseFloat(item.unit_price || item.price || 0),
+                quantity: parseInt(item.quantity || 0),
+                uom: material.uom || 'PIECE(S)',
+                remarks: item.remarks || null,
+              }
+            })
+            
+            // Ask user if they want to replace existing items or add to them
+            if (inwardItems.length > 0) {
+              const shouldReplace = window.confirm(
+                'Purchase Order has items. Do you want to replace existing items with PO items? (Click OK to replace, Cancel to keep existing items)'
+              )
+              if (shouldReplace) {
+                setInwardItems(poItems)
+                toast.success('Items loaded from Purchase Order')
+              } else {
+                // Add PO items to existing items
+                setInwardItems([...inwardItems, ...poItems])
+                toast.success('PO items added to existing items')
+              }
+            } else {
+              // No existing items, just set PO items
+              setInwardItems(poItems)
+              toast.success('Items loaded from Purchase Order')
+            }
+          } else {
+            toast.info('Purchase Order has no items')
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching purchase order:', error)
+      toast.error('Failed to load Purchase Order details')
+      // Still set the PO ID even if fetch fails
+      setBasicDetails(prev => ({ ...prev, purchaseOrder: poId }))
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -499,6 +594,7 @@ const AddInward = () => {
         stockAreaId: basicDetails.stockArea,
         purchaseOrder: basicDetails.purchaseOrder || undefined,
         poId: basicDetails.purchaseOrder && basicDetails.purchaseOrder.length > 20 ? basicDetails.purchaseOrder : undefined, // UUID if it's a PO ID
+        slipNumber: basicDetails.slipNumber || undefined,
         vehicleNumber: basicDetails.vehicleNumber || undefined,
         remark: basicDetails.remark || undefined,
         items: inwardItems.map(item => ({
@@ -518,12 +614,30 @@ const AddInward = () => {
 
       let response
       if (isEditMode) {
-        // For update, preserve existing documents and add new file URLs if any
+        // For update, preserve existing documents
+        // Note: New files should be uploaded separately using handleAddDocumentsToExisting
+        // or they can be uploaded here before saving
         const existingFiles = uploadedFiles.filter(f => f.isExisting)
-        const existingDocUrls = existingFiles.map(f => f.url || f.file).filter(Boolean)
+        const existingDocUrls = existingFiles.map(f => f.url || f.filename).filter(Boolean)
         
-        // Combine existing documents with any new file paths
-        // Note: New files would need to be uploaded separately via a file upload endpoint
+        // Check if there are new files to upload
+        const newFiles = uploadedFiles.filter(f => !f.isExisting && f.file)
+        if (newFiles.length > 0) {
+          // Upload new files first
+          try {
+            const filesToUpload = newFiles.map(f => f.file)
+            const uploadResponse = await fileService.addToInward(id, filesToUpload)
+            if (uploadResponse.success) {
+              // Refresh to get updated file list with new files
+              await fetchInward()
+              toast.success('New documents uploaded successfully')
+            }
+          } catch (error) {
+            console.error('Error uploading new files:', error)
+            toast.warning('Some files could not be uploaded, but entry will be saved')
+          }
+        }
+        
         const updateData = {
           ...inwardData,
           documents: existingDocUrls.length > 0 ? existingDocUrls : undefined,
@@ -681,8 +795,9 @@ const AddInward = () => {
           />
           <Input
             label="Slip Number"
+            placeholder="Auto-generated if left blank"
             value={basicDetails.slipNumber}
-            readOnly
+            onChange={(e) => setBasicDetails({ ...basicDetails, slipNumber: e.target.value })}
           />
           <Input
             label="Invoice Number"
@@ -715,11 +830,11 @@ const AddInward = () => {
             label="Purchase Order"
             options={purchaseOrderOptions}
             value={basicDetails.purchaseOrder}
-            onChange={(e) => setBasicDetails({ ...basicDetails, purchaseOrder: e.target.value })}
+            onChange={(e) => handlePurchaseOrderChange(e.target.value)}
             showAdd
             showRefresh
-            disabled={loadingPOs}
-            loading={loadingPOs}
+            disabled={loadingPOs || loading}
+            loading={loadingPOs || loading}
             onAdd={() => {
               // Store current page location to refresh when returning
               sessionStorage.setItem('returnToInward', 'true')
@@ -897,15 +1012,16 @@ const AddInward = () => {
               label="Total Inward Amount"
               value={totalAmount.toFixed(2)}
               readOnly
+              className="bg-gray-50"
             />
           </div>
         </div>
 
-        <div className="flex gap-4 justify-end mt-6 pt-6 border-t border-gray-200">
+        <div className="flex gap-3 justify-end mt-6 pt-6 border-t border-gray-200">
           <Button variant="gray" onClick={() => navigate('/inward-list')} disabled={loading}>
             Cancel
           </Button>
-          <Button variant="success" onClick={() => handleSave(false)} disabled={loading}>
+          <Button variant="primary" onClick={() => handleSave(false)} disabled={loading}>
             {loading ? (
               <>
                 <Loader2 className="w-4 h-4 mr-2 inline animate-spin" />
@@ -915,7 +1031,7 @@ const AddInward = () => {
               'Save'
             )}
           </Button>
-          <Button variant="primary" onClick={handleSaveAndExit} disabled={loading}>
+          <Button variant="success" onClick={handleSaveAndExit} disabled={loading}>
             {loading ? (
               <>
                 <Loader2 className="w-4 h-4 mr-2 inline animate-spin" />
@@ -1006,8 +1122,8 @@ const AddInward = () => {
               />
             </div>
           </div>
-          <div className="flex gap-4 justify-end pt-4">
-            <Button variant="danger" onClick={() => {
+          <div className="flex gap-3 justify-end pt-4 border-t border-gray-200 mt-4">
+            <Button variant="gray" onClick={() => {
               setMaterialForm({
                 materialType: '',
                 materialName: '',
@@ -1103,9 +1219,9 @@ const AddInward = () => {
                   onChange={(e) => setExcelForm({ ...excelForm, remarks2: e.target.value })}
                 />
               </div>
-              <div className="flex gap-4">
+              <div className="flex gap-3 justify-end">
                 <Button variant="primary" onClick={handleAddExcelItem}>
-                  Add
+                  Add Item
                 </Button>
               </div>
 
@@ -1126,8 +1242,8 @@ const AddInward = () => {
                 </div>
               )}
 
-              <div className="flex gap-4 justify-end pt-4 border-t border-gray-200">
-                <Button variant="success">
+              <div className="flex gap-3 justify-end pt-4 border-t border-gray-200 mt-4">
+                <Button variant="secondary">
                   <Download className="w-4 h-4 mr-2 inline" />
                   Sample File
                 </Button>
@@ -1147,7 +1263,7 @@ const AddInward = () => {
                   className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                 />
               </div>
-              <div className="flex gap-4 justify-end">
+              <div className="flex gap-3 justify-end pt-4 border-t border-gray-200 mt-4">
                 <Button variant="primary">
                   Upload
                 </Button>

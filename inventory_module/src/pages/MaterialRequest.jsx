@@ -11,9 +11,11 @@ import ConfirmationModal from '../components/common/ConfirmationModal'
 import { materialRequestService } from '../services/materialRequestService.js'
 import { exportService } from '../services/exportService.js'
 import { printDocument } from '../utils/printUtils.js'
+import { useAuth } from '../utils/useAuth.js'
 
 const MaterialRequest = () => {
   const navigate = useNavigate()
+  const { user } = useAuth()
   const [activeTab, setActiveTab] = useState('all-mr')
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage, setItemsPerPage] = useState(10)
@@ -55,7 +57,10 @@ const MaterialRequest = () => {
 
       // Filter by tab if needed
       if (activeTab === 'my-mr') {
-        // TODO: Add requestedBy filter when user context is available
+        // Filter by current user's ID
+        if (user?.id || user?.user_id) {
+          params.requestedBy = user.id || user.user_id
+        }
       } else if (activeTab === 'approval-mr') {
         params.status = 'PENDING'
       }

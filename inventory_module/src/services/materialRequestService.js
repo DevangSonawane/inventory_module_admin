@@ -52,6 +52,15 @@ export const materialRequestService = {
     });
   },
 
+  // Reject material request (uses approve endpoint with REJECTED status)
+  reject: async (id, rejectionData) => {
+    return await post(API_ENDPOINTS.MATERIAL_REQUEST_APPROVE(id), {
+      status: 'REJECTED',
+      approvedItems: [],
+      remarks: rejectionData.reason || rejectionData.remarks || 'Rejected by admin',
+    });
+  },
+
   // Delete material request
   delete: async (id) => {
     return await del(API_ENDPOINTS.MATERIAL_REQUEST_BY_ID(id));

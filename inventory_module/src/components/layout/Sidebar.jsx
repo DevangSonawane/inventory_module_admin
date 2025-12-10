@@ -21,19 +21,27 @@ import {
   Users,
   User,
   RotateCcw,
+  Shield,
+  CheckCircle,
+  Lock,
 } from 'lucide-react'
+import { useAuth } from '../../utils/useAuth'
+import { usePagePermissions } from '../../utils/usePagePermissions'
 
 const Sidebar = () => {
   const navigate = useNavigate()
   const location = useLocation()
+  const { isAdmin } = useAuth()
+  const { hasAccess } = usePagePermissions()
   const [expandedSections, setExpandedSections] = useState({
     inventory: true,
     management: true,
     reports: true,
     other: false,
+    admin: false,
   })
 
-  const inventoryItems = [
+  const allInventoryItems = [
     { id: 'inventory-stock', label: 'Inventory Stock', icon: <Package className="w-4 h-4" />, path: '/inventory-stock' },
     { id: 'add-inward', label: 'Add Inward', icon: <FileText className="w-4 h-4" />, path: '/add-inward' },
     { id: 'inward-list', label: 'Inward List', icon: <FileText className="w-4 h-4" />, path: '/inward-list' },
@@ -44,7 +52,7 @@ const Sidebar = () => {
     { id: 'return-stock', label: 'Return Stock', icon: <RotateCcw className="w-4 h-4" />, path: '/return-stock' },
   ]
 
-  const managementItems = [
+  const allManagementItems = [
     { id: 'purchase-request', label: 'Purchase Requests', icon: <FileCheck className="w-4 h-4" />, path: '/purchase-request' },
     { id: 'purchase-order', label: 'Purchase Orders', icon: <ShoppingBag className="w-4 h-4" />, path: '/purchase-order' },
     { id: 'business-partner', label: 'Business Partners', icon: <Users className="w-4 h-4" />, path: '/business-partner' },
@@ -53,15 +61,30 @@ const Sidebar = () => {
     { id: 'stock-levels', label: 'Stock Levels', icon: <BarChart3 className="w-4 h-4" />, path: '/stock-levels' },
   ]
 
-  const reportsItems = [
+  const allReportsItems = [
     { id: 'reports', label: 'Reports', icon: <FileSearch className="w-4 h-4" />, path: '/reports' },
     { id: 'audit-trail', label: 'Audit Trail', icon: <Activity className="w-4 h-4" />, path: '/audit-trail' },
   ]
 
-  const otherItems = [
+  const allOtherItems = [
     { id: 'notifications', label: 'Notifications', icon: <Bell className="w-4 h-4" />, path: '/notifications' },
     { id: 'bulk-operations', label: 'Bulk Operations', icon: <Upload className="w-4 h-4" />, path: '/bulk-operations' },
   ]
+
+  const allAdminItems = [
+    { id: 'admin-dashboard', label: 'Admin Dashboard', icon: <BarChart3 className="w-4 h-4" />, path: '/admin/dashboard' },
+    { id: 'user-management', label: 'User Management', icon: <Users className="w-4 h-4" />, path: '/admin/users' },
+    { id: 'approval-center', label: 'Approval Center', icon: <CheckCircle className="w-4 h-4" />, path: '/admin/approvals' },
+    { id: 'admin-settings', label: 'System Settings', icon: <Shield className="w-4 h-4" />, path: '/admin/settings' },
+    { id: 'page-permissions', label: 'Page Permissions', icon: <Lock className="w-4 h-4" />, path: '/admin/page-permissions' },
+  ]
+
+  // Filter items based on permissions (admins see all)
+  const inventoryItems = allInventoryItems.filter(item => hasAccess(item.id))
+  const managementItems = allManagementItems.filter(item => hasAccess(item.id))
+  const reportsItems = allReportsItems.filter(item => hasAccess(item.id))
+  const otherItems = allOtherItems.filter(item => hasAccess(item.id))
+  const adminItems = allAdminItems // Admins always see all admin pages
 
   const isActive = (path) => {
     if (!path) return false
@@ -76,6 +99,9 @@ const Sidebar = () => {
   }
 
   const renderSection = (title, items, sectionKey, icon) => {
+    // Don't render section if no items (all filtered out)
+    if (items.length === 0) return null;
+    
     const isExpanded = expandedSections[sectionKey]
     const hasActiveItem = items.some(item => isActive(item.path))
 
@@ -111,8 +137,8 @@ const Sidebar = () => {
                     : 'text-gray-300 hover:bg-blue-700 hover:text-white'
                 }`}
               >
-                {item.icon}
-                <span>{item.label}</span>
+                <span className="flex-shrink-0">{item.icon}</span>
+                <span className="flex-1 text-left">{item.label}</span>
               </button>
             ))}
           </div>
@@ -140,20 +166,29 @@ const Sidebar = () => {
         {/* Other Section */}
         {renderSection('Other', otherItems, 'other', <Settings className="w-5 h-5" />)}
         
-        {/* Settings Link */}
-        <div className="mt-4 pt-4 border-t border-blue-600">
-          <button
-            onClick={() => navigate('/settings')}
-            className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors ${
-              isActive('/settings')
-                ? 'bg-blue-400 text-white font-semibold'
-                : 'text-gray-300 hover:bg-blue-700 hover:text-white'
-            }`}
-          >
-            <Settings className="w-4 h-4" />
-            <span>Settings</span>
-          </button>
-        </div>
+        {/* Admin Section - Only visible to admins */}
+        {isAdmin && (
+          <div className="mt-4 pt-4 border-t border-blue-600">
+            {renderSection('Admin', adminItems, 'admin', <Shield className="w-5 h-5" />)}
+          </div>
+        )}
+        
+        {/* Settings Link - Always visible if user has access */}
+        {hasAccess('settings') && (
+          <div className="mt-4 pt-4 border-t border-blue-600">
+            <button
+              onClick={() => navigate('/settings')}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors ${
+                isActive('/settings')
+                  ? 'bg-blue-400 text-white font-semibold'
+                  : 'text-gray-300 hover:bg-blue-700 hover:text-white'
+              }`}
+            >
+              <Settings className="w-4 h-4" />
+              <span>Settings</span>
+            </button>
+          </div>
+        )}
       </nav>
     </div>
   )

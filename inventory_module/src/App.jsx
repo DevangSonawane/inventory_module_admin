@@ -1,7 +1,9 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom'
 import Layout from './components/layout/Layout'
 import ProtectedRoute from './components/common/ProtectedRoute'
+import AdminRoute from './components/common/AdminRoute'
 import ErrorBoundary from './components/common/ErrorBoundary'
+import { useAuth } from './utils/useAuth'
 import Login from './pages/Login'
 import Settings from './pages/Settings'
 import InventoryStock from './pages/InventoryStock'
@@ -27,6 +29,23 @@ import PurchaseOrderDetails from './pages/PurchaseOrderDetails'
 import BusinessPartnerManagement from './pages/BusinessPartnerManagement'
 import PersonStock from './pages/PersonStock'
 import ReturnStock from './pages/ReturnStock'
+import AdminDashboard from './pages/AdminDashboard'
+import UserManagement from './pages/UserManagement'
+import ApprovalCenter from './pages/ApprovalCenter'
+import AdminSettings from './pages/AdminSettings'
+import PagePermissions from './pages/PagePermissions'
+import PagePermissionGuard from './components/common/PagePermissionGuard'
+
+// Smart redirect component based on user role
+const SmartRedirect = () => {
+  const { isAdmin, loading } = useAuth()
+  
+  if (loading) {
+    return <div>Loading...</div>
+  }
+  
+  return <Navigate to={isAdmin ? '/admin/dashboard' : '/inventory-stock'} replace />
+}
 
 function App() {
   return (
@@ -43,51 +62,62 @@ function App() {
               <ProtectedRoute>
                 <Layout>
                   <Routes>
-                    <Route path="/" element={<InventoryStock />} />
-                    <Route path="/inventory-stock" element={<InventoryStock />} />
-                    <Route path="/add-inward" element={<AddInward />} />
-                    <Route path="/add-inward/:id" element={<AddInward />} />
-                    <Route path="/inward-list" element={<InwardList />} />
-                    <Route path="/material-request" element={<MaterialRequest />} />
-                    <Route path="/material-request/:id" element={<MaterialRequestDetails />} />
-                    <Route path="/material-request/new" element={<MaterialRequestDetails />} />
-                    <Route path="/stock-transfer" element={<StockTransferList />} />
-                    <Route path="/stock-transfer-list" element={<StockTransferList />} />
-                    <Route path="/stock-transfer/:id" element={<StockTransfer />} />
-                    <Route path="/stock-transfer/new" element={<StockTransfer />} />
-                    <Route path="/record-consumption" element={<RecordConsumptionList />} />
-                    <Route path="/record-consumption-list" element={<RecordConsumptionList />} />
-                    <Route path="/record-consumption/:id" element={<RecordConsumption />} />
-                    <Route path="/record-consumption/new" element={<RecordConsumption />} />
-                    <Route path="/material-management" element={<MaterialManagement />} />
-                    <Route path="/material-management/:id" element={<MaterialManagement />} />
-                    <Route path="/material-management/new" element={<MaterialManagement />} />
-                    <Route path="/stock-area-management" element={<StockAreaManagement />} />
-                    <Route path="/stock-area-management/:id" element={<StockAreaManagement />} />
-                    <Route path="/stock-area-management/new" element={<StockAreaManagement />} />
-                    <Route path="/stock-levels" element={<StockLevels />} />
-                    <Route path="/reports" element={<Reports />} />
-                    <Route path="/notifications" element={<Notifications />} />
-                    <Route path="/audit-trail" element={<AuditTrail />} />
-                    <Route path="/bulk-operations" element={<BulkOperations />} />
-                    <Route path="/settings" element={<Settings />} />
+                    <Route path="/" element={<SmartRedirect />} />
+                    
+                    {/* Admin Routes */}
+                    <Route path="/admin/*" element={<AdminRoute><Outlet /></AdminRoute>}>
+                      <Route path="dashboard" element={<AdminDashboard />} />
+                      <Route path="users" element={<UserManagement />} />
+                      <Route path="approvals" element={<ApprovalCenter />} />
+                      <Route path="settings" element={<AdminSettings />} />
+                      <Route path="page-permissions" element={<PagePermissions />} />
+                    </Route>
+                    
+                    {/* Regular Routes - Protected by Page Permissions */}
+                    <Route path="/inventory-stock" element={<PagePermissionGuard><InventoryStock /></PagePermissionGuard>} />
+                    <Route path="/add-inward" element={<PagePermissionGuard><AddInward /></PagePermissionGuard>} />
+                    <Route path="/add-inward/:id" element={<PagePermissionGuard><AddInward /></PagePermissionGuard>} />
+                    <Route path="/inward-list" element={<PagePermissionGuard><InwardList /></PagePermissionGuard>} />
+                    <Route path="/material-request" element={<PagePermissionGuard><MaterialRequest /></PagePermissionGuard>} />
+                    <Route path="/material-request/:id" element={<PagePermissionGuard><MaterialRequestDetails /></PagePermissionGuard>} />
+                    <Route path="/material-request/new" element={<PagePermissionGuard><MaterialRequestDetails /></PagePermissionGuard>} />
+                    <Route path="/stock-transfer" element={<PagePermissionGuard><StockTransferList /></PagePermissionGuard>} />
+                    <Route path="/stock-transfer-list" element={<PagePermissionGuard><StockTransferList /></PagePermissionGuard>} />
+                    <Route path="/stock-transfer/:id" element={<PagePermissionGuard><StockTransfer /></PagePermissionGuard>} />
+                    <Route path="/stock-transfer/new" element={<PagePermissionGuard><StockTransfer /></PagePermissionGuard>} />
+                    <Route path="/record-consumption" element={<PagePermissionGuard><RecordConsumptionList /></PagePermissionGuard>} />
+                    <Route path="/record-consumption-list" element={<PagePermissionGuard><RecordConsumptionList /></PagePermissionGuard>} />
+                    <Route path="/record-consumption/:id" element={<PagePermissionGuard><RecordConsumption /></PagePermissionGuard>} />
+                    <Route path="/record-consumption/new" element={<PagePermissionGuard><RecordConsumption /></PagePermissionGuard>} />
+                    <Route path="/material-management" element={<PagePermissionGuard><MaterialManagement /></PagePermissionGuard>} />
+                    <Route path="/material-management/:id" element={<PagePermissionGuard><MaterialManagement /></PagePermissionGuard>} />
+                    <Route path="/material-management/new" element={<PagePermissionGuard><MaterialManagement /></PagePermissionGuard>} />
+                    <Route path="/stock-area-management" element={<PagePermissionGuard><StockAreaManagement /></PagePermissionGuard>} />
+                    <Route path="/stock-area-management/:id" element={<PagePermissionGuard><StockAreaManagement /></PagePermissionGuard>} />
+                    <Route path="/stock-area-management/new" element={<PagePermissionGuard><StockAreaManagement /></PagePermissionGuard>} />
+                    <Route path="/stock-levels" element={<PagePermissionGuard><StockLevels /></PagePermissionGuard>} />
+                    <Route path="/reports" element={<PagePermissionGuard><Reports /></PagePermissionGuard>} />
+                    <Route path="/notifications" element={<PagePermissionGuard><Notifications /></PagePermissionGuard>} />
+                    <Route path="/audit-trail" element={<PagePermissionGuard><AuditTrail /></PagePermissionGuard>} />
+                    <Route path="/bulk-operations" element={<PagePermissionGuard><BulkOperations /></PagePermissionGuard>} />
+                    <Route path="/settings" element={<PagePermissionGuard><Settings /></PagePermissionGuard>} />
                     {/* Purchase Requests */}
-                    <Route path="/purchase-request" element={<PurchaseRequestList />} />
-                    <Route path="/purchase-request/:id" element={<PurchaseRequestDetails />} />
-                    <Route path="/purchase-request/new" element={<PurchaseRequestDetails />} />
+                    <Route path="/purchase-request" element={<PagePermissionGuard><PurchaseRequestList /></PagePermissionGuard>} />
+                    <Route path="/purchase-request/:id" element={<PagePermissionGuard><PurchaseRequestDetails /></PagePermissionGuard>} />
+                    <Route path="/purchase-request/new" element={<PagePermissionGuard><PurchaseRequestDetails /></PagePermissionGuard>} />
                     {/* Purchase Orders */}
-                    <Route path="/purchase-order" element={<PurchaseOrderList />} />
-                    <Route path="/purchase-order/:id" element={<PurchaseOrderDetails />} />
-                    <Route path="/purchase-order/new" element={<PurchaseOrderDetails />} />
+                    <Route path="/purchase-order" element={<PagePermissionGuard><PurchaseOrderList /></PagePermissionGuard>} />
+                    <Route path="/purchase-order/:id" element={<PagePermissionGuard><PurchaseOrderDetails /></PagePermissionGuard>} />
+                    <Route path="/purchase-order/new" element={<PagePermissionGuard><PurchaseOrderDetails /></PagePermissionGuard>} />
                     {/* Business Partners */}
-                    <Route path="/business-partner" element={<BusinessPartnerManagement />} />
-                    <Route path="/business-partner/:id" element={<BusinessPartnerManagement />} />
-                    <Route path="/business-partner/new" element={<BusinessPartnerManagement />} />
+                    <Route path="/business-partner" element={<PagePermissionGuard><BusinessPartnerManagement /></PagePermissionGuard>} />
+                    <Route path="/business-partner/:id" element={<PagePermissionGuard><BusinessPartnerManagement /></PagePermissionGuard>} />
+                    <Route path="/business-partner/new" element={<PagePermissionGuard><BusinessPartnerManagement /></PagePermissionGuard>} />
                     {/* Person Stock */}
-                    <Route path="/person-stock" element={<PersonStock />} />
+                    <Route path="/person-stock" element={<PagePermissionGuard><PersonStock /></PagePermissionGuard>} />
                     {/* Return Stock */}
-                    <Route path="/return-stock" element={<ReturnStock />} />
-                    <Route path="/return-stock/:id" element={<ReturnStock />} />
+                    <Route path="/return-stock" element={<PagePermissionGuard><ReturnStock /></PagePermissionGuard>} />
+                    <Route path="/return-stock/:id" element={<PagePermissionGuard><ReturnStock /></PagePermissionGuard>} />
                   </Routes>
                 </Layout>
               </ProtectedRoute>

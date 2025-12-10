@@ -49,10 +49,10 @@ export const createMaterialRequest = async (req, res) => {
       });
     }
 
-    // Create material request
+    // Create material request (auto-submit to SUBMITTED status)
     const materialRequest = await MaterialRequest.create({
       pr_numbers: prNumbers,
-      status: 'DRAFT',
+      status: 'SUBMITTED', // Auto-submit on create so it appears in Approval Center
       requested_by: userId,
       remarks: remarks || null,
       ticket_id: ticketId || null,

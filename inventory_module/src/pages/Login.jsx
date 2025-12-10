@@ -47,8 +47,20 @@ const Login = () => {
         localStorage.setItem('accessToken', response.data.accessToken)
         localStorage.setItem('refreshToken', response.data.refreshToken)
         
-        // Store user data
-        localStorage.setItem('user', JSON.stringify(response.data.user))
+        // Store user data with role information
+        // Also check for specific admin email: itechseed1@gmail.com
+        const user = response.data.user
+        const isAdminUser = 
+          response.data.isAdmin || 
+          user?.role === 'admin' || 
+          user?.role_id === 2 ||
+          user?.email === 'itechseed1@gmail.com'
+        
+        const userData = {
+          ...user,
+          isAdmin: isAdminUser
+        }
+        localStorage.setItem('user', JSON.stringify(userData))
         
         // Store remember me preference
         if (formData.rememberMe) {
@@ -58,7 +70,13 @@ const Login = () => {
         }
         
         toast.success('Login successful!')
-        navigate('/inventory-stock')
+        
+        // Redirect based on role
+        if (userData.isAdmin) {
+          navigate('/admin/dashboard')
+        } else {
+          navigate('/inventory-stock')
+        }
       }
     } catch (error) {
       console.error('Login error:', error)

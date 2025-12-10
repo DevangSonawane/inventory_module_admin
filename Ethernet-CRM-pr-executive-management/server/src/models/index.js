@@ -1,5 +1,6 @@
 // Import all models
 import User from './User.js';
+import Role from './Role.js';
 import Asset from './Asset.js';
 import AssetType from './AssetType.js';
 import Company from './Company.js';
@@ -24,6 +25,9 @@ import PurchaseOrder from './PurchaseOrder.js';
 import PurchaseOrderItem from './PurchaseOrderItem.js';
 import Notification from './Notification.js';
 import AuditLog from './AuditLog.js';
+import SystemSettings from './SystemSettings.js';
+import RolePagePermission from './RolePagePermission.js';
+import UserPagePermission from './UserPagePermission.js';
 
 // ==================== INVENTORY MODEL ASSOCIATIONS ====================
 
@@ -175,9 +179,21 @@ User.hasMany(Notification, { foreignKey: 'user_id', as: 'notifications' });
 AuditLog.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 User.hasMany(AuditLog, { foreignKey: 'user_id', as: 'auditLogs' });
 
+// SystemSettings associations
+SystemSettings.belongsTo(User, { foreignKey: 'updated_by', as: 'updatedByUser' });
+User.hasMany(SystemSettings, { foreignKey: 'updated_by', as: 'updatedSettings' });
+
+// Page Permissions associations
+RolePagePermission.belongsTo(Role, { foreignKey: 'role_id', as: 'role' });
+Role.hasMany(RolePagePermission, { foreignKey: 'role_id', as: 'pagePermissions' });
+
+UserPagePermission.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+User.hasMany(UserPagePermission, { foreignKey: 'user_id', as: 'pagePermissions' });
+
 // Export all models
 const models = {
   User,
+  Role,
   Asset,
   AssetType,
   Company,
@@ -202,6 +218,9 @@ const models = {
   PurchaseOrderItem,
   Notification,
   AuditLog,
+  SystemSettings,
+  RolePagePermission,
+  UserPagePermission,
 };
 
 export default models;

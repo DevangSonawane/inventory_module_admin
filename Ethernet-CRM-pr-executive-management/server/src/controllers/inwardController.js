@@ -3,6 +3,7 @@ import InwardItem from '../models/InwardItem.js';
 import Material from '../models/Material.js';
 import StockArea from '../models/StockArea.js';
 import InventoryMaster from '../models/InventoryMaster.js';
+import PurchaseOrder from '../models/PurchaseOrder.js';
 import { validationResult } from 'express-validator';
 import { Op } from 'sequelize';
 import sequelize from '../config/database.js';
@@ -26,6 +27,7 @@ export const createInward = async (req, res) => {
       poId, // Purchase Order UUID
       stockAreaId,
       vehicleNumber,
+      slipNumber,
       remark,
       items, // Array of items (already parsed by middleware)
       documents // Array of document file paths/URLs
@@ -63,22 +65,39 @@ export const createInward = async (req, res) => {
       });
     }
 
-    // Generate unique slip number
-    let slipNumber = generateGRN();
-    let isUnique = false;
-    let attempts = 0;
-    
-    while (!isUnique && attempts < 10) {
-      const existing = await InwardEntry.findOne({
+    // Use provided slip number if given, otherwise generate
+    let slipNumberValue = (slipNumber || '').trim();
+    if (slipNumberValue) {
+      const existingSlip = await InwardEntry.findOne({
         where: req.withOrg
-          ? req.withOrg({ slip_number: slipNumber })
-          : { slip_number: slipNumber }
+          ? req.withOrg({ slip_number: slipNumberValue })
+          : { slip_number: slipNumberValue }
       });
-      if (!existing) {
-        isUnique = true;
-      } else {
-        slipNumber = generateGRN();
-        attempts++;
+      if (existingSlip) {
+        await transaction.rollback();
+        return res.status(400).json({
+          success: false,
+          message: 'Slip number already exists'
+        });
+      }
+    } else {
+      // Generate unique slip number
+      slipNumberValue = generateGRN();
+      let isUnique = false;
+      let attempts = 0;
+      
+      while (!isUnique && attempts < 10) {
+        const existing = await InwardEntry.findOne({
+          where: req.withOrg
+            ? req.withOrg({ slip_number: slipNumberValue })
+            : { slip_number: slipNumberValue }
+        });
+        if (!existing) {
+          isUnique = true;
+        } else {
+          slipNumberValue = generateGRN();
+          attempts++;
+        }
       }
     }
 
@@ -91,7 +110,7 @@ export const createInward = async (req, res) => {
       po_id: poId || null,
       stock_area_id: stockAreaId,
       vehicle_number: vehicleNumber || null,
-      slip_number: slipNumber,
+      slip_number: slipNumberValue,
       status: 'DRAFT', // Start as DRAFT, will be marked COMPLETED after verification
       remark: remark || null,
       documents: documents || null,
@@ -137,6 +156,28 @@ export const createInward = async (req, res) => {
       // Note: Inventory records are NOT created here for DRAFT entries
       // They will be created when the entry is marked as COMPLETED
       // This ensures inventory is only updated after verification
+    }
+
+    // Update Purchase Order status to RECEIVED if poId is provided
+    if (poId) {
+      try {
+        const purchaseOrder = await PurchaseOrder.findOne({
+          where: req.withOrg
+            ? req.withOrg({ po_id: poId, is_active: true })
+            : { po_id: poId, is_active: true },
+          transaction
+        });
+
+        if (purchaseOrder && purchaseOrder.status === 'SENT') {
+          await purchaseOrder.update(
+            { status: 'RECEIVED' },
+            { transaction }
+          );
+        }
+      } catch (poError) {
+        // Log error but don't fail the inward entry creation
+        console.error('Error updating Purchase Order status:', poError);
+      }
     }
 
     await transaction.commit();
@@ -358,6 +399,7 @@ export const updateInward = async (req, res) => {
       purchaseOrder,
       stockAreaId,
       vehicleNumber,
+      slipNumber,
       remark,
       status,
       items, // Optional: update items
@@ -403,6 +445,26 @@ export const updateInward = async (req, res) => {
       }
     }
 
+    // If slip number is provided and changed, ensure uniqueness
+    let newSlipNumber = inward.slip_number;
+    if (slipNumber && slipNumber !== inward.slip_number) {
+      const existingSlip = await InwardEntry.findOne({
+        where: req.withOrg
+          ? req.withOrg({ slip_number: slipNumber })
+          : { slip_number: slipNumber }
+      });
+
+      if (existingSlip) {
+        await transaction.rollback();
+        return res.status(400).json({
+          success: false,
+          message: 'Slip number already exists'
+        });
+      }
+
+      newSlipNumber = slipNumber;
+    }
+
     // Update inward entry
     await inward.update({
       date: date || inward.date,
@@ -411,6 +473,7 @@ export const updateInward = async (req, res) => {
       purchase_order: purchaseOrder !== undefined ? purchaseOrder : inward.purchase_order,
       stock_area_id: stockAreaId || inward.stock_area_id,
       vehicle_number: vehicleNumber !== undefined ? vehicleNumber : inward.vehicle_number,
+      slip_number: newSlipNumber,
       remark: remark !== undefined ? remark : inward.remark,
       status: status || inward.status,
       documents: documents !== undefined ? documents : inward.documents,
