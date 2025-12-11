@@ -40,6 +40,25 @@ const PurchaseOrderDetails = () => {
     remarks: '',
   })
 
+  const getOrgId = () => {
+    const storedUser = localStorage.getItem('user')
+    if (storedUser) {
+      try {
+        const parsed = JSON.parse(storedUser)
+        return (
+          parsed?.org_id ||
+          parsed?.orgId ||
+          parsed?.organization_id ||
+          parsed?.organizationId ||
+          null
+        )
+      } catch (error) {
+        console.error('Failed to parse user for orgId', error)
+      }
+    }
+    return localStorage.getItem('orgId') || null
+  }
+
   useEffect(() => {
     fetchMaterials()
     fetchVendors()
@@ -144,10 +163,15 @@ const PurchaseOrderDetails = () => {
 
   const vendorOptions = [
     { value: '', label: 'Select Vendor' },
-    ...vendors.map(vendor => ({
-      value: vendor.partner_id,
-      label: vendor.partner_name
-    }))
+    ...vendors.map(vendor => {
+      const vendorName = vendor.partner_name || vendor.partnerName || vendor.name || 'Vendor'
+      const vendorType = vendor.partner_type || vendor.partnerType || vendor.type || ''
+      const typeSuffix = vendorType ? ` (${vendorType})` : ''
+      return {
+        value: vendor.partner_id,
+        label: `${vendorName}${typeSuffix}`
+      }
+    })
   ]
 
   const handleAddItem = () => {
@@ -206,6 +230,7 @@ const PurchaseOrderDetails = () => {
         poNumber: formData.poNumber || undefined,
         poDate: formData.poDate,
         vendorId: formData.vendorId,
+        orgId: getOrgId() || undefined,
         items: orderItems.map(item => ({
           materialId: item.materialId,
           quantity: item.quantity,

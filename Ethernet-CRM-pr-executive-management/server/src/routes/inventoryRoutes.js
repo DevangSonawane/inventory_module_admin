@@ -907,6 +907,31 @@ router.post(
       .optional()
       .isInt()
       .withMessage('Invalid destination user ID'),
+    body().custom((value, { req }) => {
+      const rawToStock =
+        value.toStockAreaId ||
+        value.to_stock_area_id ||
+        value.fromStockAreaId ||
+        value.from_stock_area_id;
+      const toUser = value.toUserId || value.to_user_id;
+      if (!rawToStock && !toUser) {
+        throw new Error('Either destination stock area or technician is required');
+      }
+
+      // accept camelCase or snake_case; allow sentinel values
+      if (rawToStock) {
+        const incoming = typeof rawToStock === 'string' ? rawToStock.trim() : rawToStock;
+        const allowed = ['PERSON', 'VAN'];
+        const uuidRegex = /^[0-9a-fA-F-]{36}$/;
+        const upper = typeof incoming === 'string' ? incoming.toUpperCase() : incoming;
+        const ok = allowed.includes(upper) || uuidRegex.test(incoming);
+        if (!ok) {
+          throw new Error('Valid destination stock area ID is required');
+        }
+        req.body.toStockAreaId = allowed.includes(upper) ? upper : incoming;
+      }
+      return true;
+    }),
     body('ticketId')
       .optional()
       .trim()
@@ -926,16 +951,7 @@ router.post(
       .optional()
       .isUUID()
       .withMessage('Invalid material request ID'),
-    body().custom((value) => {
-      // Either toStockAreaId OR toUserId must be provided (not both, at least one)
-      if (!value.toStockAreaId && !value.toUserId) {
-        throw new Error('Either destination stock area ID or destination user ID is required');
-      }
-      if (value.toStockAreaId && value.toUserId) {
-        throw new Error('Cannot specify both destination stock area and destination user');
-      }
-      return true;
-    }),
+    // Destination stock area is mandatory; destination user is optional (can have both)
   ],
   validate,
   createStockTransfer
@@ -983,6 +999,10 @@ router.put(
       .optional()
       .isUUID()
       .withMessage('Invalid destination stock area ID'),
+    body('toUserId')
+      .optional()
+      .isInt()
+      .withMessage('Invalid destination user ID'),
   ],
   validate,
   updateStockTransfer

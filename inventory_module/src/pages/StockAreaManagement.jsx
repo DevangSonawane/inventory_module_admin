@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import { Plus, Search, Edit, Trash2, Loader2, Download } from 'lucide-react'
 import { toast } from 'react-toastify'
 import Button from '../components/common/Button'
@@ -14,8 +14,10 @@ import { exportService } from '../services/exportService.js'
 
 const StockAreaManagement = () => {
   const navigate = useNavigate()
+  const location = useLocation()
   const { id } = useParams()
-  const isEditMode = id && id !== 'new'
+  const isEditMode = Boolean(id && id !== 'new')
+  const isCreateMode = location.pathname.endsWith('/stock-area-management/new')
   
   const [stockAreas, setStockAreas] = useState([])
   const [loading, setLoading] = useState(true)
@@ -44,6 +46,15 @@ const StockAreaManagement = () => {
       resetForm()
     }
   }, [id, isEditMode])
+
+  useEffect(() => {
+    if (isCreateMode && !isEditMode) {
+      resetForm()
+      setShowModal(true)
+    } else if (!isEditMode) {
+      setShowModal(false)
+    }
+  }, [isCreateMode, isEditMode])
 
   useEffect(() => {
     fetchStockAreas()
@@ -275,6 +286,7 @@ const StockAreaManagement = () => {
             if (isEditMode) {
               navigate('/stock-area-management')
             } else {
+              navigate('/stock-area-management')
               setShowModal(false)
               resetForm()
             }

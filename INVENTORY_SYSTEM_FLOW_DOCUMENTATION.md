@@ -593,54 +593,25 @@ CREATE TABLE return_items (
 
 ## Missing Features & Gaps
 
-### Critical Gaps
+### Current Gaps (post-implementation review)
 
-1. **Inventory Master Table**
-   - **Issue**: No centralized tracking of where each item (especially serialized) currently exists
-   - **Impact**: Cannot accurately track item location (WAREHOUSE vs PERSON vs CONSUMED)
-   - **Solution**: Create `inventory_master` table with `current_location_type` and `location_id`
+1. **Ticket/Work Order Integration (External)**  
+   - Ticket fields exist on requests/transfers/consumption, but external system sync is still optional.
 
-2. **Material Allocation Workflow**
-   - **Issue**: Store Keeper cannot select specific serial numbers when allocating MR
-   - **Impact**: Cannot fulfill serialized item requests accurately
-   - **Solution**: Create allocation screen where Store Keeper selects serials from available stock
+2. **Advanced UX/Validation**  
+   - Allocation UI exists and enforces quantity caps; remaining polish: clearer remaining counts and bulk-select safety.
+   - Consumption validates serials against technician stock on UI and backend; autocomplete/search improvements remain optional.
 
-3. **Person Stock Tracking**
-   - **Issue**: No way to view what items a technician currently holds
-   - **Impact**: Cannot verify technician stock before consumption
-   - **Solution**: Create Person Stock view showing technician's assigned items per ticket
+3. **Return Workflow Enhancements**  
+   - Return flow implemented; add richer status transitions/notifications as desired.
 
-4. **Ticket/Work Order Integration**
-   - **Issue**: No ticket system or linking
-   - **Impact**: Cannot track which ticket items are assigned to
-   - **Solution**: Add `ticket_id` to `material_requests` and `stock_transfers`, create ticket integration
+### Medium Priority Enhancements
 
-5. **Return Workflow**
-   - **Issue**: No way to return unused/faulty items from field to warehouse
-   - **Impact**: Cannot handle reverse flow, items stuck in Person Stock
-   - **Solution**: Create return records and transfer workflow
-
-### Medium Priority Gaps
-
-1. **PR → PO Workflow**
-   - Purchase Request approval and PO creation workflow
-   - PO item pre-population in Inward Entry
-
-2. **Store Keeper Mapping**
-   - Assign Store Keepers to Stock Areas
-   - Restrict MR approvals to assigned Store Keepers
-
-3. **Material Properties**
-   - Dynamic attributes system (Brand, Capacity, etc.)
-   - Properties filtering in material selection
-
-4. **Serial Number Validation**
-   - Verify serial exists in technician's Person Stock before consumption
-   - Prevent duplicate serial consumption
-
-5. **Automatic Stock Movement**
-   - Auto-deduct from Person Stock on consumption
-   - Auto-add to Warehouse Stock on return
+1. **PO item pre-population in Inward Entry** (optional UX).
+2. **Store Keeper mapping & approval restriction** (policy enforcement).
+3. **Material Properties dynamic attributes** (nice-to-have).
+4. **Autocomplete for serial selection in consumption**.
+5. **Notifications/advanced reporting** (optional).
 
 ---
 

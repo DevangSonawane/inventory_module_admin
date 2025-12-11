@@ -46,7 +46,7 @@ const StockTransferList = () => {
       })
       
       if (response.success) {
-        const transfersData = (response.data.stockTransfers || []).map((transfer, index) => {
+        const transfersData = (response.data.transfers || []).map((transfer, index) => {
           // Format date
           const date = new Date(transfer.transfer_date)
           const formattedDate = `${String(date.getDate()).padStart(2, '0')}-${String(date.getMonth() + 1).padStart(2, '0')}-${date.getFullYear()}`
@@ -58,7 +58,7 @@ const StockTransferList = () => {
             id: transfer.transfer_id,
             srNo: (currentPage - 1) * itemsPerPage + index + 1,
             date: formattedDate,
-            slipNo: transfer.slip_number || `ST-${transfer.transfer_id?.substring(0, 8).toUpperCase()}`,
+            slipNo: transfer.transfer_number || `ST-${transfer.transfer_id?.substring(0, 8).toUpperCase()}`,
             transferType: transferType,
             fromStockArea: transfer.fromStockArea?.area_name || '-',
             toStockArea: transfer.toStockArea?.area_name || '-',

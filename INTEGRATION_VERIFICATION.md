@@ -325,11 +325,11 @@ body('toStockAreaId')
 - PR → PO → Inward ✅
 - MR → Transfer → Person Stock ✅
 
-### ⚠️ Minor Fix Needed
+### ✅ Minor Fixes Resolved
 
-1. **Stock Transfer Route Validation**: Update backend route to make `toStockAreaId` optional when `toUserId` is provided (backend controller already handles this, just route validation needs update)
+1. **Stock Transfer Route Validation**: Updated to allow `toUserId` OR `toStockAreaId` (route validation now matches controller logic)
 
-2. **Material Request Fields**: Verify backend accepts `ticketId` and `fromStockAreaId` (frontend sends them)
+2. **Material Request Fields**: Backend accepts `ticketId` and `fromStockAreaId`; frontend already sends them
 
 ---
 

@@ -3,7 +3,6 @@ import { CheckCircle, XCircle, FileText, ShoppingBag, Loader2 } from 'lucide-rea
 import { toast } from 'react-toastify'
 import Table from '../components/common/Table'
 import Pagination from '../components/common/Pagination'
-import Button from '../components/common/Button'
 import Badge from '../components/common/Badge'
 import { TableSkeleton } from '../components/common/Skeleton'
 import { materialRequestService } from '../services/materialRequestService.js'
@@ -17,6 +16,7 @@ const ApprovalCenter = () => {
   const [itemsPerPage, setItemsPerPage] = useState(10)
   const [totalItems, setTotalItems] = useState(0)
   const [data, setData] = useState([])
+  const [actionLoading, setActionLoading] = useState({})
 
   useEffect(() => {
     fetchData()
@@ -33,16 +33,18 @@ const ApprovalCenter = () => {
           page: currentPage,
           limit: itemsPerPage,
         })
-        setData(response.data?.purchaseRequests || [])
-        setTotalItems(response.data?.pagination?.totalItems || 0)
+        const payload = response.data || {}
+        setData(payload.purchaseRequests || [])
+        setTotalItems(payload.pagination?.totalItems || 0)
       } else {
         response = await materialRequestService.getAll({
           status: 'SUBMITTED',
           page: currentPage,
           limit: itemsPerPage,
         })
-        setData(response.data?.materialRequests || [])
-        setTotalItems(response.data?.pagination?.totalItems || 0)
+        const payload = response.data || {}
+        setData(payload.materialRequests || [])
+        setTotalItems(payload.pagination?.totalItems || 0)
       }
     } catch (error) {
       console.error('Error fetching approvals:', error)
@@ -53,7 +55,9 @@ const ApprovalCenter = () => {
   }
 
   const handleApprove = async (id, type) => {
+    const actionKey = `${type}-${id}`
     try {
+      setActionLoading((prev) => ({ ...prev, [actionKey]: true }))
       let response
       if (type === 'purchase-request') {
         response = await purchaseRequestService.approve(id)
@@ -73,6 +77,8 @@ const ApprovalCenter = () => {
     } catch (error) {
       console.error('Error approving:', error)
       toast.error(error.message || 'Failed to approve')
+    } finally {
+      setActionLoading((prev) => ({ ...prev, [actionKey]: false }))
     }
   }
 
@@ -84,6 +90,8 @@ const ApprovalCenter = () => {
     }
 
     try {
+      const actionKey = `${type}-${id}`
+      setActionLoading((prev) => ({ ...prev, [actionKey]: true }))
       let response
       if (type === 'purchase-request') {
         // Purchase Request reject expects remarks as string parameter
@@ -104,7 +112,16 @@ const ApprovalCenter = () => {
     } catch (error) {
       console.error('Error rejecting:', error)
       toast.error(error.message || 'Failed to reject')
+    } finally {
+      setActionLoading((prev) => ({ ...prev, [`${type}-${id}`]: false }))
     }
+  }
+
+  const renderStatusBadge = (status) => {
+    const normalized = (status || '').toUpperCase()
+    if (normalized === 'APPROVED') return <Badge variant="success">Approved</Badge>
+    if (normalized === 'REJECTED') return <Badge variant="danger">Rejected</Badge>
+    return <Badge variant="warning">Pending</Badge>
   }
 
   const renderPurchaseRequestTable = () => (
@@ -130,24 +147,34 @@ const ApprovalCenter = () => {
               ₹{pr.total_amount || pr.totalAmount || 0}
             </td>
             <td className="px-6 py-4 whitespace-nowrap text-sm">
-              <Badge variant="warning">Pending</Badge>
+              {renderStatusBadge(pr.status)}
             </td>
             <td className="px-6 py-4 whitespace-nowrap text-sm">
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => handleApprove(pr.id || pr.pr_id, 'purchase-request')}
-                  className="px-3 py-1.5 bg-green-50 text-green-700 hover:bg-green-100 rounded-md flex items-center gap-1.5 text-sm font-medium transition-colors"
+                  disabled={actionLoading[`purchase-request-${pr.id || pr.pr_id}`]}
+                  className="px-3 py-1.5 bg-green-50 text-green-700 hover:bg-green-100 disabled:opacity-60 disabled:cursor-not-allowed rounded-md flex items-center gap-1.5 text-sm font-medium transition-colors"
                   title="Approve"
                 >
-                  <CheckCircle className="w-4 h-4" />
+                  {actionLoading[`purchase-request-${pr.id || pr.pr_id}`] ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <CheckCircle className="w-4 h-4" />
+                  )}
                   Approve
                 </button>
                 <button
                   onClick={() => handleReject(pr.id || pr.pr_id, 'purchase-request')}
-                  className="px-3 py-1.5 bg-red-50 text-red-700 hover:bg-red-100 rounded-md flex items-center gap-1.5 text-sm font-medium transition-colors"
+                  disabled={actionLoading[`purchase-request-${pr.id || pr.pr_id}`]}
+                  className="px-3 py-1.5 bg-red-50 text-red-700 hover:bg-red-100 disabled:opacity-60 disabled:cursor-not-allowed rounded-md flex items-center gap-1.5 text-sm font-medium transition-colors"
                   title="Reject"
                 >
-                  <XCircle className="w-4 h-4" />
+                  {actionLoading[`purchase-request-${pr.id || pr.pr_id}`] ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <XCircle className="w-4 h-4" />
+                  )}
                   Reject
                 </button>
               </div>
@@ -187,24 +214,34 @@ const ApprovalCenter = () => {
               {mr.items?.length || mr.material_request_items?.length || mr.itemCount || 0} items
             </td>
             <td className="px-6 py-4 whitespace-nowrap text-sm">
-              <Badge variant="warning">Pending</Badge>
+              {renderStatusBadge(mr.status)}
             </td>
             <td className="px-6 py-4 whitespace-nowrap text-sm">
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => handleApprove(mr.request_id || mr.id || mr.mr_id, 'material-request')}
-                  className="px-3 py-1.5 bg-green-50 text-green-700 hover:bg-green-100 rounded-md flex items-center gap-1.5 text-sm font-medium transition-colors"
+                  disabled={actionLoading[`material-request-${mr.request_id || mr.id || mr.mr_id}`]}
+                  className="px-3 py-1.5 bg-green-50 text-green-700 hover:bg-green-100 disabled:opacity-60 disabled:cursor-not-allowed rounded-md flex items-center gap-1.5 text-sm font-medium transition-colors"
                   title="Approve"
                 >
-                  <CheckCircle className="w-4 h-4" />
+                  {actionLoading[`material-request-${mr.request_id || mr.id || mr.mr_id}`] ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <CheckCircle className="w-4 h-4" />
+                  )}
                   Approve
                 </button>
                 <button
                   onClick={() => handleReject(mr.request_id || mr.id || mr.mr_id, 'material-request')}
-                  className="px-3 py-1.5 bg-red-50 text-red-700 hover:bg-red-100 rounded-md flex items-center gap-1.5 text-sm font-medium transition-colors"
+                  disabled={actionLoading[`material-request-${mr.request_id || mr.id || mr.mr_id}`]}
+                  className="px-3 py-1.5 bg-red-50 text-red-700 hover:bg-red-100 disabled:opacity-60 disabled:cursor-not-allowed rounded-md flex items-center gap-1.5 text-sm font-medium transition-colors"
                   title="Reject"
                 >
-                  <XCircle className="w-4 h-4" />
+                  {actionLoading[`material-request-${mr.request_id || mr.id || mr.mr_id}`] ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <XCircle className="w-4 h-4" />
+                  )}
                   Reject
                 </button>
               </div>

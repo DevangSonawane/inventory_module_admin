@@ -396,7 +396,7 @@ const ReturnStock = () => {
           resetForm()
         }}
         title="Create Return Request"
-        size="large"
+        size="lg"
       >
         <div className="space-y-4">
           <Input

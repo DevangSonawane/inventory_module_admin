@@ -29,6 +29,8 @@ export const stockTransferService = {
   // Create stock transfer
   create: async (transferData) => {
     return await post(API_ENDPOINTS.STOCK_TRANSFER, {
+      transferNumber: transferData.transferNumber,
+      slipNumber: transferData.slipNumber,
       fromStockAreaId: transferData.fromStockAreaId,
       toStockAreaId: transferData.toStockAreaId,
       toUserId: transferData.toUserId,
@@ -44,6 +46,8 @@ export const stockTransferService = {
   // Update stock transfer
   update: async (id, transferData) => {
     return await put(API_ENDPOINTS.STOCK_TRANSFER_BY_ID(id), {
+      transferNumber: transferData.transferNumber,
+      slipNumber: transferData.slipNumber,
       fromStockAreaId: transferData.fromStockAreaId,
       toStockAreaId: transferData.toStockAreaId,
       toUserId: transferData.toUserId,

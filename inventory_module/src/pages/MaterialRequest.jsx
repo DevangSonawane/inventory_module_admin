@@ -15,7 +15,7 @@ import { useAuth } from '../utils/useAuth.js'
 
 const MaterialRequest = () => {
   const navigate = useNavigate()
-  const { user } = useAuth()
+  const { user, isAdmin } = useAuth()
   const [activeTab, setActiveTab] = useState('all-mr')
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage, setItemsPerPage] = useState(10)
@@ -48,11 +48,20 @@ const MaterialRequest = () => {
   const fetchMaterialRequests = async () => {
     try {
       setLoading(true)
+      const orgId =
+        user?.org_id ||
+        user?.orgId ||
+        user?.organization_id ||
+        user?.organizationId ||
+        localStorage.getItem('orgId') ||
+        undefined
+
       const params = {
         page: currentPage,
         limit: itemsPerPage,
         search: searchTerm || undefined,
         status: approvalStatusFilter || undefined,
+        orgId,
       }
 
       // Filter by tab if needed
@@ -62,42 +71,94 @@ const MaterialRequest = () => {
           params.requestedBy = user.id || user.user_id
         }
       } else if (activeTab === 'approval-mr') {
-        params.status = 'PENDING'
+        // Only approved MRs for this tab
+        params.status = 'APPROVED'
       }
 
       const response = await materialRequestService.getAll(params)
       
-      if (response.success) {
-        const requestsData = (response.data.materialRequests || []).map((request, index) => {
-          // Format date
-          const date = new Date(request.created_at || request.updated_at)
+      if (response?.success) {
+        const raw = response?.data ?? response ?? []
+        const dataSource = (() => {
+          if (Array.isArray(raw?.materialRequests)) return raw.materialRequests
+          if (Array.isArray(raw?.data?.materialRequests)) return raw.data.materialRequests
+          if (Array.isArray(raw?.requests)) return raw.requests
+          if (Array.isArray(raw?.data?.requests)) return raw.data.requests
+          if (Array.isArray(raw?.data)) return raw.data
+          if (Array.isArray(raw?.material_requests)) return raw.material_requests
+          if (Array.isArray(raw?.data?.material_requests)) return raw.data.material_requests
+          if (Array.isArray(response?.materialRequests)) return response.materialRequests
+          if (Array.isArray(response)) return response
+          return []
+        })()
+
+        const paginationTotal =
+          response.data?.pagination?.totalItems ||
+          response.data?.data?.pagination?.totalItems ||
+          raw?.pagination?.totalItems ||
+          dataSource.length
+
+        const statusMap = {
+          PENDING: 'Requested',
+          APPROVED: 'Approved',
+          REJECTED: 'Rejected',
+          REQUESTED: 'Requested',
+          SUBMITTED: 'Requested',
+          DRAFT: 'Requested',
+        }
+
+        // Filter per tab view client-side to ensure "Approval MR" only shows pending
+        const filteredByTab = dataSource.filter((request) => {
+          const statusRaw = request.status || request.request_status || 'REQUESTED'
+          if (activeTab === 'approval-mr') {
+            return statusRaw === 'APPROVED'
+          }
+          if (activeTab === 'my-mr') {
+            const uid = user?.id || user?.user_id
+            return uid ? request.requested_by === uid : true
+          }
+          return true // all-mr
+        })
+
+        const requestsData = filteredByTab.map((request, index) => {
+          const created =
+            request.created_at ||
+            request.updated_at ||
+            request.createdAt ||
+            request.updatedAt ||
+            new Date().toISOString()
+
+          const date = new Date(created)
           const formattedDate = `${String(date.getDate()).padStart(2, '0')}-${String(date.getMonth() + 1).padStart(2, '0')}-${date.getFullYear()} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')} ${date.getHours() >= 12 ? 'PM' : 'AM'}`
 
-          // Get MR number from slip_number or generate from ID
-          const mrNo = request.slip_number || `MR-${request.request_id?.substring(0, 8).toUpperCase()}`
+          const mrNo =
+            request.slip_number ||
+            request.mr_number ||
+            request.mrNo ||
+            `MR-${(request.request_id || request.id || 'XXXXXX').substring(0, 8).toUpperCase()}`
 
-          // Map status
-          const statusMap = {
-            'PENDING': 'Requested',
-            'APPROVED': 'Approved',
-            'REJECTED': 'Rejected',
-            'REQUESTED': 'Requested',
-          }
-          const approvalStatus = statusMap[request.status] || request.status || 'Requested'
+          const statusRaw = request.status || request.request_status || 'REQUESTED'
+          const approvalStatus = statusMap[statusRaw] || statusRaw
+
+          const fromStockArea =
+            request.from_stock_area ||
+            request.fromStockArea?.area_name ||
+            request.from_stock_area_name ||
+            '-'
 
           return {
-            id: request.request_id,
+            id: request.request_id || request.id,
             srNo: (currentPage - 1) * itemsPerPage + index + 1,
             approvalAction: request.approved_by ? 'Approved' : '-',
             date: formattedDate,
-            mrNo: mrNo,
-            approvalStatus: approvalStatus,
-            fromStockArea: request.from_stock_area || '-',
+            mrNo,
+            approvalStatus,
+            fromStockArea,
           }
         })
         
         setMaterialRequests(requestsData)
-        setTotalItems(response.data.pagination?.totalItems || 0)
+        setTotalItems(paginationTotal)
       }
     } catch (error) {
       console.error('Error fetching material requests:', error)
@@ -159,17 +220,23 @@ const MaterialRequest = () => {
         return
       }
 
-      const request = requestResponse.data.materialRequest
+      const request =
+        requestResponse.data?.materialRequest ||
+        requestResponse.data?.data?.materialRequest ||
+        requestResponse.data?.data ||
+        requestResponse.data
       
       // Approve all items with requested quantities
-      const approvedItems = (request.items || []).map(item => ({
-        itemId: item.item_id,
-        approvedQuantity: item.requested_quantity,
+      const approvedItems = (request?.items || []).map(item => ({
+        itemId: item.item_id || item.id,
+        approvedQuantity: item.approved_quantity || item.requested_quantity,
+        item_id: item.item_id || item.id,
+        approved_quantity: item.approved_quantity || item.requested_quantity,
       }))
 
       const response = await materialRequestService.approve(id, {
         status: 'APPROVED',
-        approvedItems: approvedItems,
+        approvedItems,
         remarks: 'Approved via UI',
       })
 
@@ -206,7 +273,7 @@ const MaterialRequest = () => {
       {
         title: 'Material Request List',
         data: materialRequests,
-        headers: ['SR. NO.', 'PR NO.', 'DATE', 'REQUESTED BY', 'STATUS', 'ITEMS COUNT'],
+        headers: ['SR. NO.', 'MR NO.', 'DATE', 'REQUESTED BY', 'STATUS', 'ITEMS COUNT'],
       },
       (data) => `
         <div class="header">
@@ -223,7 +290,7 @@ const MaterialRequest = () => {
             ${data.data.map(item => `
               <tr>
                 <td>${item.srNo}</td>
-                <td>${item.prNo}</td>
+                <td>${item.mrNo}</td>
                 <td>${item.date}</td>
                 <td>${item.requestedBy}</td>
                 <td>${item.status}</td>
@@ -257,13 +324,10 @@ const MaterialRequest = () => {
               <Plus className="w-4 h-4 mr-2 inline" />
               Add New
             </Button>
-            <button 
-              onClick={handleRefresh}
-              className="p-2 hover:bg-gray-100 rounded-md transition-colors"
-              title="Refresh"
-            >
-              <RefreshCw className="w-5 h-5 text-gray-700" />
-            </button>
+            <Button variant="secondary" onClick={handleRefresh}>
+              <RefreshCw className="w-4 h-4 mr-2 inline" />
+              Refresh
+            </Button>
           </div>
         </div>
 
@@ -343,7 +407,7 @@ const MaterialRequest = () => {
                   <tr key={item.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.srNo}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {item.approvalStatus === 'Requested' || item.approvalStatus === 'PENDING' ? (
+                      {isAdmin && (item.approvalStatus === 'Requested' || item.approvalStatus === 'PENDING') ? (
                         <button
                           onClick={() => handleApprove(item.id)}
                           className="px-3 py-1 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700 transition-colors"

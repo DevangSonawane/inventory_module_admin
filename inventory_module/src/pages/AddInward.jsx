@@ -239,10 +239,15 @@ const AddInward = () => {
           const bps = bpResponse.data?.businessPartners || bpResponse.data?.data || []
           const bpOptions = [
             { value: '', label: 'Party Name' },
-            ...bps.map(bp => ({
-              value: bp.partner_name,
-              label: bp.partner_name
-            }))
+            ...bps.map(bp => {
+              const partnerName = bp.partner_name || bp.partnerName || bp.name || 'Partner'
+              const partnerType = bp.partner_type || bp.partnerType || bp.type || ''
+              const typeSuffix = partnerType ? ` (${partnerType})` : ''
+              return {
+                value: bp.partner_name,
+                label: `${partnerName}${typeSuffix}`
+              }
+            })
           ]
           setPartyNameOptions(bpOptions)
           return
@@ -288,10 +293,15 @@ const AddInward = () => {
         const filteredPOs = pos.filter(po => po.status === 'SENT' || po.status === 'RECEIVED')
         const poOptions = [
           { value: '', label: 'Select Purchase Order' },
-          ...filteredPOs.map(po => ({
-            value: po.po_id || po.id,
-            label: `${po.po_number || (po.po_id || po.id)?.substring(0, 8)} - ${po.vendor?.partner_name || po.vendor_name || 'Vendor'}`
-          }))
+          ...filteredPOs.map(po => {
+            const vendorName = po.vendor?.partner_name || po.vendor_name || 'Vendor'
+            const vendorType = po.vendor?.partner_type || po.vendor?.partnerType || po.vendor?.type || ''
+            const typeSuffix = vendorType ? ` (${vendorType})` : ''
+            return {
+              value: po.po_id || po.id,
+              label: `${po.po_number || (po.po_id || po.id)?.substring(0, 8)} - ${vendorName}${typeSuffix}`
+            }
+          })
         ]
         setPurchaseOrderOptions(poOptions)
       } else {

@@ -1,5 +1,23 @@
 import { get, post, put, del } from '../utils/apiClient.js';
-import { API_BASE_URL } from '../utils/constants.js';
+import { API_ENDPOINTS } from '../utils/constants.js';
+
+const normalizePurchaseRequestResponse = (response = {}, fallback = {}) => {
+  const payload = response.data || {};
+  const pagination = payload.pagination || fallback.pagination || {};
+
+  return {
+    ...response,
+    data: {
+      purchaseRequests: payload.purchaseRequests || payload.requests || [],
+      pagination: {
+        totalItems: pagination.totalItems || 0,
+        totalPages: pagination.totalPages || 0,
+        currentPage: pagination.currentPage || fallback.page || 1,
+        itemsPerPage: pagination.itemsPerPage || fallback.limit || 10,
+      },
+    },
+  };
+};
 
 export const purchaseRequestService = {
   // Get all purchase requests
@@ -12,42 +30,46 @@ export const purchaseRequestService = {
     if (params.orgId) queryParams.append('orgId', params.orgId);
 
     const queryString = queryParams.toString();
-    const url = queryString ? `${API_BASE_URL}/inventory/purchase-requests?${queryString}` : `${API_BASE_URL}/inventory/purchase-requests`;
-    return await get(url);
+    const url = queryString
+      ? `${API_ENDPOINTS.PURCHASE_REQUESTS}?${queryString}`
+      : API_ENDPOINTS.PURCHASE_REQUESTS;
+
+    const response = await get(url);
+    return normalizePurchaseRequestResponse(response, params);
   },
 
   // Get purchase request by ID
   getById: async (id) => {
-    return await get(`${API_BASE_URL}/inventory/purchase-requests/${id}`);
+    return await get(API_ENDPOINTS.PURCHASE_REQUEST_BY_ID(id));
   },
 
   // Create purchase request
   create: async (prData) => {
-    return await post(`${API_BASE_URL}/inventory/purchase-requests`, prData);
+    return await post(API_ENDPOINTS.PURCHASE_REQUESTS, prData);
   },
 
   // Update purchase request
   update: async (id, prData) => {
-    return await put(`${API_BASE_URL}/inventory/purchase-requests/${id}`, prData);
+    return await put(API_ENDPOINTS.PURCHASE_REQUEST_BY_ID(id), prData);
   },
 
   // Submit purchase request
   submit: async (id) => {
-    return await put(`${API_BASE_URL}/inventory/purchase-requests/${id}/submit`);
+    return await put(API_ENDPOINTS.PURCHASE_REQUEST_SUBMIT(id));
   },
 
   // Approve purchase request
   approve: async (id) => {
-    return await put(`${API_BASE_URL}/inventory/purchase-requests/${id}/approve`);
+    return await put(API_ENDPOINTS.PURCHASE_REQUEST_APPROVE(id));
   },
 
   // Reject purchase request
   reject: async (id, remarks) => {
-    return await put(`${API_BASE_URL}/inventory/purchase-requests/${id}/reject`, { remarks });
+    return await put(API_ENDPOINTS.PURCHASE_REQUEST_REJECT(id), { remarks });
   },
 
   // Delete purchase request
   delete: async (id) => {
-    return await del(`${API_BASE_URL}/inventory/purchase-requests/${id}`);
+    return await del(API_ENDPOINTS.PURCHASE_REQUEST_BY_ID(id));
   },
 };

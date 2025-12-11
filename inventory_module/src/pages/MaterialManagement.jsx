@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import { Plus, Search, RefreshCw, Edit, Trash2, Loader2, Download, Upload } from 'lucide-react'
 import { toast } from 'react-toastify'
 import Button from '../components/common/Button'
@@ -17,8 +17,10 @@ import { bulkService } from '../services/bulkService.js'
 
 const MaterialManagement = () => {
   const navigate = useNavigate()
+  const location = useLocation()
   const { id } = useParams()
-  const isEditMode = id && id !== 'new'
+  const isEditMode = Boolean(id && id !== 'new')
+  const isCreateMode = location.pathname.endsWith('/material-management/new')
   
   const [materials, setMaterials] = useState([])
   const [loading, setLoading] = useState(true)
@@ -53,6 +55,15 @@ const MaterialManagement = () => {
       resetForm()
     }
   }, [id, isEditMode])
+
+  useEffect(() => {
+    if (isCreateMode && !isEditMode) {
+      resetForm()
+      setShowModal(true)
+    } else if (!isEditMode) {
+      setShowModal(false)
+    }
+  }, [isCreateMode, isEditMode])
 
   useEffect(() => {
     fetchMaterials()
@@ -407,12 +418,13 @@ const MaterialManagement = () => {
         <Modal
           isOpen={true}
           onClose={() => {
-            if (isEditMode) {
+          if (isEditMode) {
               navigate('/material-management')
-            } else {
-              setShowModal(false)
-              resetForm()
-            }
+          } else {
+              navigate('/material-management')
+            setShowModal(false)
+            resetForm()
+          }
           }}
           title={isEditMode ? 'Edit Material' : 'Add New Material'}
           size="lg"
@@ -500,6 +512,7 @@ const MaterialManagement = () => {
                   if (isEditMode) {
                     navigate('/material-management')
                   } else {
+                    navigate('/material-management')
                     setShowModal(false)
                     resetForm()
                   }

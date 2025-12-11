@@ -10,6 +10,95 @@ const BulkOperations = () => {
   const [uploadType, setUploadType] = useState('materials')
   const [showModal, setShowModal] = useState(false)
 
+  const parseCsv = (text) => {
+    const rows = text
+      .split(/\r?\n/)
+      .map(line => line.trim())
+      .filter(Boolean)
+
+    if (rows.length < 2) {
+      throw new Error('File must contain a header row and at least one data row')
+    }
+
+    const headers = rows[0]
+      .split(',')
+      .map(h => h.trim().replace(/"/g, '').toLowerCase())
+
+    const dataRows = rows.slice(1).map(row =>
+      row.split(',').map(v => v.trim().replace(/"/g, ''))
+    )
+
+    return { headers, dataRows }
+  }
+
+  const getValue = (headers, row, keys) => {
+    for (const key of keys) {
+      const index = headers.indexOf(key)
+      if (index !== -1) {
+        return row[index] || ''
+      }
+    }
+    return ''
+  }
+
+  const buildInwardPayload = (headers, dataRows) => {
+    const entriesMap = new Map()
+    const invalidRows = []
+
+    dataRows.forEach((row, idx) => {
+      const date = getValue(headers, row, ['date'])
+      const invoiceNumber = getValue(headers, row, ['invoicenumber', 'invoice number', 'invoice'])
+      const partyName = getValue(headers, row, ['partyname', 'party name', 'vendor'])
+      const purchaseOrder = getValue(headers, row, ['purchaseorder', 'purchase order', 'po'])
+      const poId = getValue(headers, row, ['poid', 'po id'])
+      const stockAreaId = getValue(headers, row, ['stockareaid', 'stock area id'])
+      const vehicleNumber = getValue(headers, row, ['vehiclenumber', 'vehicle number'])
+      const remark = getValue(headers, row, ['remark', 'remarks'])
+
+      const materialId = getValue(headers, row, ['materialid', 'material id'])
+      const quantityRaw = getValue(headers, row, ['quantity', 'qty'])
+      const priceRaw = getValue(headers, row, ['price', 'unitprice', 'unit price'])
+      const serialNumber = getValue(headers, row, ['serialnumber', 'serial number', 'serial'])
+      const macId = getValue(headers, row, ['macid', 'mac id'])
+      const itemRemarks = getValue(headers, row, ['itemremark', 'item remark', 'itemremarks'])
+
+      const quantity = Number(quantityRaw || 0)
+      const price = priceRaw ? Number(priceRaw) : undefined
+
+      if (!date || !invoiceNumber || !partyName || !stockAreaId || !materialId || !quantity) {
+        invalidRows.push(idx + 2) // +2 to account for header and 0-based index
+        return
+      }
+
+      const key = `${invoiceNumber}-${partyName}-${date}-${stockAreaId}-${purchaseOrder}-${vehicleNumber}-${remark}-${poId}`
+
+      if (!entriesMap.has(key)) {
+        entriesMap.set(key, {
+          date,
+          invoiceNumber,
+          partyName,
+          purchaseOrder: purchaseOrder || undefined,
+          poId: poId || undefined,
+          stockAreaId,
+          vehicleNumber: vehicleNumber || undefined,
+          remark: remark || undefined,
+          items: [],
+        })
+      }
+
+      entriesMap.get(key).items.push({
+        materialId,
+        quantity,
+        price,
+        serialNumber: serialNumber || undefined,
+        macId: macId || undefined,
+        remarks: itemRemarks || undefined,
+      })
+    })
+
+    return { entries: Array.from(entriesMap.values()), invalidRows }
+  }
+
   const handleFileUpload = async (event) => {
     const file = event.target.files[0]
     if (!file) return
@@ -17,19 +106,11 @@ const BulkOperations = () => {
     try {
       setUploading(true)
       const text = await file.text()
-      const lines = text.split('\n').filter(line => line.trim())
-      
-      if (lines.length < 2) {
-        toast.error('File must contain at least a header row and one data row')
-        return
-      }
+      const { headers, dataRows } = parseCsv(text)
 
-      const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, '').toLowerCase())
-      
       if (uploadType === 'materials') {
         const materials = []
-        for (let i = 1; i < lines.length; i++) {
-          const values = lines[i].split(',').map(v => v.trim().replace(/"/g, ''))
+        for (const values of dataRows) {
           const material = {}
           headers.forEach((header, index) => {
             if (header === 'materialname' || header === 'material name') {
@@ -60,9 +141,25 @@ const BulkOperations = () => {
           setShowModal(false)
         }
       } else if (uploadType === 'inward') {
-        // For inward entries, the structure is more complex
-        // This would need to be implemented based on the actual CSV structure
-        toast.info('Bulk inward import coming soon')
+        const { entries, invalidRows } = buildInwardPayload(headers, dataRows)
+
+        if (invalidRows.length) {
+          toast.error(`Invalid or missing required fields on rows: ${invalidRows.join(', ')}`)
+          return
+        }
+
+        if (!entries.length) {
+          toast.error('No valid inward entries found in file')
+          return
+        }
+
+        const response = await bulkService.bulkInward(entries)
+        if (response.success) {
+          const createdCount = response.data?.created ?? entries.length
+          const errorCount = response.data?.errors ?? 0
+          toast.success(`Imported ${createdCount} inward entries${errorCount ? ` (${errorCount} failed)` : ''}`)
+          setShowModal(false)
+        }
       }
     } catch (error) {
       console.error('Error processing file:', error)
@@ -110,7 +207,7 @@ const BulkOperations = () => {
               <h3 className="text-lg font-semibold text-gray-900">Bulk Import Inward</h3>
             </div>
             <p className="text-sm text-gray-600 mb-4">
-              Upload a CSV file with inward entry data (coming soon)
+              Upload a CSV file with inward entry and item details
             </p>
             <Button
               variant="secondary"
@@ -118,10 +215,9 @@ const BulkOperations = () => {
                 setUploadType('inward')
                 setShowModal(true)
               }}
-              disabled
             >
               <Upload className="w-4 h-4 mr-2 inline" />
-              Import Inward (Coming Soon)
+              Import Inward
             </Button>
           </div>
         </div>
@@ -148,7 +244,19 @@ const BulkOperations = () => {
                 </ul>
               </>
             ) : (
-              'Bulk inward import is coming soon.'
+              <>
+                Each row represents one item. Required columns:
+                <ul className="list-disc list-inside mt-2 space-y-1">
+                  <li>Date</li>
+                  <li>InvoiceNumber</li>
+                  <li>PartyName</li>
+                  <li>StockAreaId</li>
+                  <li>MaterialId</li>
+                  <li>Quantity</li>
+                </ul>
+                Optional columns: PurchaseOrder, POId, VehicleNumber, Remark, Price, SerialNumber, MacId, ItemRemark.
+                Entries with the same invoice/date/party/stock area are grouped into one inward entry.
+              </>
             )}
           </p>
           <div>

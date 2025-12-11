@@ -13,10 +13,12 @@ import { materialRequestService } from '../services/materialRequestService.js'
 import { materialService } from '../services/materialService.js'
 import { stockAreaService } from '../services/stockAreaService.js'
 import { materialAllocationService } from '../services/materialAllocationService.js'
+import { useAuth } from '../utils/useAuth.js'
 
 const MaterialRequestDetails = () => {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { user } = useAuth()
   const isEditMode = id && id !== 'new'
   const [activeTab, setActiveTab] = useState('details')
   const [currentPage, setCurrentPage] = useState(1)
@@ -94,42 +96,45 @@ const MaterialRequestDetails = () => {
       setLoading(true)
       const response = await materialRequestService.getById(id)
       if (response.success) {
-        const request = response.data?.materialRequest || response.data?.data
+        const request =
+          response.data?.materialRequest ||
+          response.data?.data?.materialRequest ||
+          response.data?.data ||
+          response.data
+
         if (request) {
-          // Set status
-          setMaterialRequestStatus(request.status || request.request_status)
+          const statusValue = request.status || request.request_status
+          setMaterialRequestStatus(statusValue)
           
-          // Set form data
           setFormData({
-            ticketId: request.ticket_id || '',
-            fromStockArea: request.from_stock_area_id || '',
+            ticketId: request.ticket_id || request.ticketId || '',
+            fromStockArea: request.from_stock_area_id || request.fromStockAreaId || '',
           })
           
-          // Set PR fields
-          if (request.pr_numbers && Array.isArray(request.pr_numbers)) {
-            setPrFields(request.pr_numbers.map((pr, index) => ({
+          if ((request.pr_numbers && Array.isArray(request.pr_numbers)) || (request.prNumbers && Array.isArray(request.prNumbers))) {
+            const source = request.pr_numbers || request.prNumbers
+            setPrFields(source.map((pr, index) => ({
               id: index + 1,
-              prNumber: pr.prNumber || '',
-              prDate: pr.prDate || '',
+              prNumber: pr.prNumber || pr.pr_number || '',
+              prDate: pr.prDate || pr.pr_date || '',
             })))
           }
           
-          // Set requested items
           if (request.items && Array.isArray(request.items)) {
             setRequestedItems(request.items.map((item, index) => ({
-              id: item.item_id || index,
+              id: item.item_id || item.id || index,
+              itemId: item.item_id || item.id,
               materialId: item.material_id,
-              itemName: item.material?.material_name || '-',
-              properties: item.material?.product_code || '-',
-              requestedQuantity: item.requested_quantity,
-              qtyToApprove: item.approved_quantity || item.requested_quantity,
+              itemName: item.material?.material_name || item.material_name || '-',
+              properties: item.material?.product_code || item.properties || '-',
+              requestedQuantity: item.requested_quantity || item.requestedQuantity,
+              qtyToApprove: item.approved_quantity || item.approvedQuantity || item.requested_quantity,
               uom: item.uom || 'PIECE(S)',
               remarks: item.remarks || '',
             })))
           }
           
-          // Fetch allocations if approved
-          if (request.status === 'APPROVED' || request.request_status === 'APPROVED') {
+          if (statusValue === 'APPROVED') {
             fetchAllocations()
             fetchAvailableStock()
           }
@@ -208,13 +213,20 @@ const MaterialRequestDetails = () => {
       return
     }
 
+    // Prevent duplicates of same material to reduce server-side conflicts
+    const alreadyExists = requestedItems.some(item => item.materialId === selectedMaterial.material_id)
+    if (alreadyExists) {
+      toast.error('This material is already added')
+      return
+    }
+
     const newItem = {
       id: Date.now(),
       materialId: selectedMaterial.material_id,
       itemName: selectedMaterial.material_name,
       properties: selectedMaterial.product_code || '-',
-      requestedQuantity: parseInt(itemForm.requestedQuantity),
-      qtyToApprove: parseInt(itemForm.requestedQuantity), // Default to requested quantity
+      requestedQuantity: parseInt(itemForm.requestedQuantity, 10),
+      qtyToApprove: parseInt(itemForm.requestedQuantity, 10), // Default to requested quantity
       uom: itemForm.uom || selectedMaterial.uom || 'PIECE(S)',
       remarks: itemForm.remarks || '',
     }
@@ -247,7 +259,14 @@ const MaterialRequestDetails = () => {
 
     try {
       setLoading(true)
-      
+      const orgId =
+        user?.org_id ||
+        user?.orgId ||
+        user?.organization_id ||
+        user?.organizationId ||
+        localStorage.getItem('orgId') ||
+        undefined
+
       const requestData = {
         ticketId: formData.ticketId || undefined,
         fromStockAreaId: formData.fromStockArea || undefined,
@@ -256,11 +275,13 @@ const MaterialRequestDetails = () => {
           prDate: f.prDate || new Date().toISOString().split('T')[0],
         })),
         items: requestedItems.map(item => ({
+          itemId: item.itemId || item.id, // send back item id for updates if present
           materialId: item.materialId,
           requestedQuantity: item.requestedQuantity,
           uom: item.uom,
           remarks: item.remarks || undefined,
         })),
+        orgId,
       }
 
       let response
@@ -280,6 +301,21 @@ const MaterialRequestDetails = () => {
     } finally {
       setLoading(false)
     }
+  }
+
+  // Count existing allocations per material to enforce remaining limits
+  const allocationsStateByMaterial = () => {
+    const counts = {}
+    allocations.forEach((allocation) => {
+      const materialId =
+        allocation.material_id ||
+        allocation.materialId ||
+        allocation.inventory?.material?.material_id
+      if (materialId) {
+        counts[materialId] = (counts[materialId] || 0) + 1
+      }
+    })
+    return counts
   }
 
   const handleAllocate = async () => {
@@ -312,16 +348,33 @@ const MaterialRequestDetails = () => {
       
       // Map to material request items
       const allocations = []
+      // Track remaining allowed quantities to prevent over-allocation
+      const existingAllocationsByMaterial = allocationsStateByMaterial()
+      
       requestedItems.forEach(requestItem => {
         const materialId = requestItem.materialId
         const inventoryIds = inventoryByMaterial[materialId] || []
-        
-        if (inventoryIds.length > 0) {
-          allocations.push({
-            materialRequestItemId: requestItem.id, // This should be the item_id from backend
-            inventoryMasterIds: inventoryIds
-          })
+        if (inventoryIds.length === 0) return
+
+        const allowedQty =
+          requestItem.qtyToApprove ||
+          requestItem.approvedQuantity ||
+          requestItem.requestedQuantity ||
+          0
+        const alreadyAllocated = existingAllocationsByMaterial[materialId] || 0
+        const remaining = Math.max(allowedQty - alreadyAllocated, 0)
+
+        if (inventoryIds.length > remaining) {
+          toast.error(
+            `Cannot allocate more than allowed for ${requestItem.itemName || 'item'}. Remaining: ${remaining}`
+          )
+          throw new Error('OVER_ALLOCATE')
         }
+
+        allocations.push({
+          materialRequestItemId: requestItem.id, // This should be the item_id from backend
+          inventoryMasterIds: inventoryIds
+        })
       })
       
       if (allocations.length === 0) {
@@ -337,8 +390,10 @@ const MaterialRequestDetails = () => {
         fetchAllocations()
       }
     } catch (error) {
-      console.error('Error allocating items:', error)
-      toast.error(error.message || 'Failed to allocate items')
+      if (error.message !== 'OVER_ALLOCATE') {
+        console.error('Error allocating items:', error)
+        toast.error(error.message || 'Failed to allocate items')
+      }
     } finally {
       setAllocationLoading(false)
     }
@@ -434,7 +489,7 @@ const MaterialRequestDetails = () => {
           {prFields.map((field, index) => (
             <div key={field.id} className="space-y-4">
               <Input
-                label="PR Number"
+                label="MR Number"
                 required
                 value={field.prNumber}
                 onChange={(e) =>
@@ -446,8 +501,8 @@ const MaterialRequestDetails = () => {
                 }
               />
               <Input
-                label="PR Date"
-                placeholder="Enter PR Date"
+                label="MR Date"
+                placeholder="Enter MR Date"
                 type="date"
                 value={field.prDate}
                 onChange={(e) =>

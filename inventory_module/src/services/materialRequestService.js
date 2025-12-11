@@ -1,6 +1,24 @@
 import { get, post, put, del } from '../utils/apiClient.js';
 import { API_ENDPOINTS } from '../utils/constants.js';
 
+const normalizeMaterialRequestResponse = (response = {}, fallback = {}) => {
+  const payload = response.data || {};
+  const pagination = payload.pagination || fallback.pagination || {};
+
+  return {
+    ...response,
+    data: {
+      materialRequests: payload.materialRequests || payload.requests || [],
+      pagination: {
+        totalItems: pagination.totalItems || 0,
+        totalPages: pagination.totalPages || 0,
+        currentPage: pagination.currentPage || fallback.page || 1,
+        itemsPerPage: pagination.itemsPerPage || fallback.limit || 10,
+      },
+    },
+  };
+};
+
 export const materialRequestService = {
   // Get all material requests
   getAll: async (params = {}) => {
@@ -15,7 +33,9 @@ export const materialRequestService = {
 
     const queryString = queryParams.toString();
     const url = queryString ? `${API_ENDPOINTS.MATERIAL_REQUEST}?${queryString}` : API_ENDPOINTS.MATERIAL_REQUEST;
-    return await get(url);
+    
+    const response = await get(url);
+    return normalizeMaterialRequestResponse(response, params);
   },
 
   // Get material request by ID
@@ -25,22 +45,79 @@ export const materialRequestService = {
 
   // Create material request
   create: async (requestData) => {
-    return await post(API_ENDPOINTS.MATERIAL_REQUEST, {
-      prNumbers: requestData.prNumbers,
-      items: requestData.items,
+    const prNumbers = (requestData.prNumbers || []).map(pr => ({
+      prNumber: pr.prNumber,
+      prDate: pr.prDate,
+      pr_number: pr.prNumber,
+      pr_date: pr.prDate,
+    }))
+
+    const items = (requestData.items || []).map(item => ({
+      itemId: item.itemId || item.id,
+      materialId: item.materialId,
+      requestedQuantity: item.requestedQuantity,
+      uom: item.uom,
+      remarks: item.remarks,
+      item_id: item.itemId || item.id,
+      material_id: item.materialId,
+      requested_quantity: item.requestedQuantity,
+      approved_quantity: item.approvedQuantity,
+    }))
+
+    const payload = {
+      // Meta
+      ticketId: requestData.ticketId,
+      ticket_id: requestData.ticketId,
+      fromStockAreaId: requestData.fromStockAreaId,
+      from_stock_area_id: requestData.fromStockAreaId,
+      // PRs & items
+      prNumbers,
+      pr_numbers: prNumbers,
+      items,
+      // Optional fields
       remarks: requestData.remarks,
       orgId: requestData.orgId,
-    });
+      status: requestData.status,
+    }
+
+    return await post(API_ENDPOINTS.MATERIAL_REQUEST, payload);
   },
 
   // Update material request
   update: async (id, requestData) => {
-    return await put(API_ENDPOINTS.MATERIAL_REQUEST_BY_ID(id), {
-      prNumbers: requestData.prNumbers,
-      items: requestData.items,
+    const prNumbers = (requestData.prNumbers || []).map(pr => ({
+      prNumber: pr.prNumber,
+      prDate: pr.prDate,
+      pr_number: pr.prNumber,
+      pr_date: pr.prDate,
+    }))
+
+    const items = (requestData.items || []).map(item => ({
+      itemId: item.itemId || item.id,
+      materialId: item.materialId,
+      requestedQuantity: item.requestedQuantity,
+      uom: item.uom,
+      remarks: item.remarks,
+      item_id: item.itemId || item.id,
+      material_id: item.materialId,
+      requested_quantity: item.requestedQuantity,
+      approved_quantity: item.approvedQuantity,
+    }))
+
+    const payload = {
+      ticketId: requestData.ticketId,
+      ticket_id: requestData.ticketId,
+      fromStockAreaId: requestData.fromStockAreaId,
+      from_stock_area_id: requestData.fromStockAreaId,
+      prNumbers,
+      pr_numbers: prNumbers,
+      items,
       remarks: requestData.remarks,
       status: requestData.status,
-    });
+      orgId: requestData.orgId,
+    }
+
+    return await put(API_ENDPOINTS.MATERIAL_REQUEST_BY_ID(id), payload);
   },
 
   // Approve or reject material request

@@ -1,15 +1,17 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Search, Loader2 } from 'lucide-react'
+import { Search, Loader2, Plus as PlusIcon } from 'lucide-react'
 import { toast } from 'react-toastify'
 import Button from '../components/common/Button'
 import Input from '../components/common/Input'
 import Dropdown from '../components/common/Dropdown'
 import Table from '../components/common/Table'
 import Pagination from '../components/common/Pagination'
+import Modal from '../components/common/Modal'
 import { stockTransferService } from '../services/stockTransferService.js'
 import { stockAreaService } from '../services/stockAreaService.js'
 import { materialRequestService } from '../services/materialRequestService.js'
+import { materialService } from '../services/materialService.js'
 import { userService } from '../services/userService.js'
 import { validationService } from '../services/validationService.js'
 
@@ -24,13 +26,13 @@ const StockTransfer = () => {
   const [stockAreas, setStockAreas] = useState([])
   const [materialRequests, setMaterialRequests] = useState([])
   const [selectedMaterialRequest, setSelectedMaterialRequest] = useState(null)
+  const [materials, setMaterials] = useState([])
+  const [isAddItemModalOpen, setIsAddItemModalOpen] = useState(false)
+  const [newItem, setNewItem] = useState({ materialId: '', quantity: 1, serialNumbers: '' })
 
   const formatDateDisplay = () => {
-    const date = new Date()
-    const day = String(date.getDate()).padStart(2, '0')
-    const month = String(date.getMonth() + 1).padStart(2, '0')
-    const year = date.getFullYear()
-    return `${day}-${month}-${year}`
+    // Use ISO date to satisfy backend validation
+    return new Date().toISOString().split('T')[0] // yyyy-mm-dd
   }
 
   const [basicDetails, setBasicDetails] = useState({
@@ -48,6 +50,7 @@ const StockTransfer = () => {
     fetchStockAreas()
     fetchMaterialRequests()
     fetchUsers()
+    fetchMaterials()
     if (isEditMode) {
       fetchStockTransfer()
     }
@@ -76,6 +79,13 @@ const StockTransfer = () => {
           }))
         ]
         setStockAreas(options)
+        // auto-select first available destination for non-person transfers if empty
+        if (!basicDetails.toStockArea && basicDetails.transferType !== 'warehouse-to-person') {
+          const first = areas[0]?.area_id || areas[0]?.id || ''
+          if (first) {
+            setBasicDetails(prev => ({ ...prev, toStockArea: first }))
+          }
+        }
       }
     } catch (error) {
       console.error('Error fetching stock areas:', error)
@@ -101,6 +111,31 @@ const StockTransfer = () => {
     } catch (error) {
       console.error('Error fetching material requests:', error)
       setMaterialRequests([{ value: '', label: 'Select Material Request No' }])
+    }
+  }
+
+  const fetchMaterials = async () => {
+    try {
+      const response = await materialService.getAll({ limit: 200 })
+      if (response.success || Array.isArray(response?.data)) {
+        const list =
+          response.data?.materials ||
+          response.data?.data ||
+          (Array.isArray(response.data) ? response.data : []) ||
+          []
+        const options = [
+          { value: '', label: 'Select Material' },
+          ...list.map((m) => ({
+            value: m.material_id || m.id,
+            label: m.material_name || m.materialName || m.name || 'Material',
+            productCode: m.product_code || m.productCode || '',
+          })),
+        ]
+        setMaterials(options)
+      }
+    } catch (error) {
+      console.error('Error fetching materials:', error)
+      setMaterials([{ value: '', label: 'Select Material' }])
     }
   }
 
@@ -150,21 +185,81 @@ const StockTransfer = () => {
       setLoading(true)
       const response = await stockTransferService.getById(id)
       if (response.success) {
-        const transfer = response.data?.stockTransfer || response.data?.data
+        const transfer =
+          response.data?.stockTransfer ||
+          response.data?.transfer ||
+          response.data?.data ||
+          response.data
+
         if (transfer) {
           try {
-            const transferDate = transfer.transfer_date ? new Date(transfer.transfer_date) : new Date()
+            const normalize = (t) => ({
+              date: t.transfer_date || t.transferDate || t.date,
+              slipNo: t.transfer_number || t.slip_number || t.slipNo || '',
+              transferTypeRaw: t.transfer_type || t.transferType,
+              materialRequestNo: t.material_request_id || t.materialRequestId || '',
+              fromStockArea: t.from_stock_area_id || t.fromStockAreaId || t.from_stock_area || '',
+              toStockArea: t.to_stock_area_id || t.toStockAreaId || t.to_stock_area || '',
+              toUserId: t.to_user_id || t.toUserId || '',
+              ticketId: t.ticket_id || t.ticketId || '',
+              description: t.remarks || t.description || '',
+              items: t.items || t.transfer_items || [],
+              materialRequest: t.material_request || t.materialRequest,
+            })
+
+            const normalized = normalize(transfer)
+
+            // map backend transfer type to UI value
+            const transferType =
+              normalized.materialRequestNo
+                ? 'material-request'
+                : normalized.toUserId
+                  ? 'warehouse-to-person'
+                  : normalized.transferTypeRaw === 'other'
+                    ? 'other'
+                    : 'warehouse-to-warehouse'
+
+            const transferDate = normalized.date ? new Date(normalized.date) : new Date()
             setBasicDetails({
               date: transferDate.toISOString().split('T')[0],
-              slipNo: transfer.slip_number || '',
-              transferType: transfer.material_request_id ? 'material-request' : (transfer.to_user_id ? 'warehouse-to-person' : 'other'),
-              materialRequestNo: transfer.material_request_id || '',
-              fromStockArea: transfer.from_stock_area_id || '',
-              toStockArea: transfer.to_stock_area_id || '',
-              description: transfer.remarks || '',
+              slipNo: normalized.slipNo,
+              transferType,
+              materialRequestNo: normalized.materialRequestNo,
+              fromStockArea: normalized.fromStockArea,
+              toStockArea: normalized.toStockArea,
+              description: normalized.description,
             })
-            setToUserId(transfer.to_user_id || '')
-            setTicketId(transfer.ticket_id || '')
+            setToUserId(normalized.toUserId)
+            setTicketId(normalized.ticketId)
+
+            // Prefill allocated items (if API returns them)
+            if (Array.isArray(normalized.items) && normalized.items.length > 0) {
+              setAllocateItemsData(normalized.items.map((item, idx) => ({
+                id: item.id || item.item_id || `${idx}`,
+                materialId: item.material_id || item.materialId,
+                itemName: item.material?.material_name || item.materialName || '-',
+                properties: item.material?.product_code || item.properties || '-',
+                grnNo: item.grn_number || item.grnNo || '-',
+                assetId: item.asset_id || item.assetId || '-',
+                requestedQuantity: item.requested_quantity || item.quantity || 0,
+                remarks: item.remarks || '',
+                quantity: item.quantity || 0,
+                selected: true,
+              })))
+            }
+
+            // Prefill requested items from material request (if already embedded)
+            const mr = normalized.materialRequest
+            if (mr && Array.isArray(mr.items)) {
+              setRequestedItemsData(mr.items.map((item) => ({
+                id: item.item_id,
+                itemName: item.material?.material_name || '-',
+                uom: item.uom || 'PIECE(S)',
+                properties: item.material?.product_code || '-',
+                requestedQuantity: item.requested_quantity,
+                remainingQuantity: item.requested_quantity - (item.approved_quantity || 0),
+              })))
+            }
           } catch (err) {
             console.error('Error processing transfer data:', err)
             toast.error('Error loading transfer data')
@@ -191,7 +286,12 @@ const StockTransfer = () => {
   const [toUserId, setToUserId] = useState('')
   const [ticketId, setTicketId] = useState('')
 
-  const toStockAreaOptions = stockAreas
+  const toStockAreaOptionsPerson = [
+    { value: 'PERSON', label: 'Person (Technician Holding)' },
+    { value: 'VAN', label: 'Van' },
+    ...stockAreas,
+  ]
+  const toStockAreaOptionsWarehouse = stockAreas
 
   // Requested Items from material request
   const [requestedItemsData, setRequestedItemsData] = useState([])
@@ -204,7 +304,10 @@ const StockTransfer = () => {
       ...basicDetails,
       transferType: value,
       materialRequestNo: value === 'material-request' ? basicDetails.materialRequestNo : '',
-      toStockArea: value === 'warehouse-to-person' ? '' : basicDetails.toStockArea,
+      // Always keep destination selectable; backend allows both user and stock area
+      toStockArea: value === 'warehouse-to-person'
+        ? (basicDetails.toStockArea || 'PERSON')
+        : (basicDetails.toStockArea || stockAreas.find(s => s.value)?.value || ''),
     })
     if (value !== 'warehouse-to-person') {
       setToUserId('')
@@ -217,22 +320,26 @@ const StockTransfer = () => {
       toast.error('Please fill all required fields')
       return
     }
-    if (basicDetails.transferType === 'warehouse-to-person') {
-      if (!toUserId) {
-        toast.error('Please select a technician')
-        return
-      }
-    } else {
-      if (!basicDetails.toStockArea) {
-        toast.error('Please select destination stock area')
-        return
-      }
+    const isPersonTransfer = basicDetails.transferType === 'warehouse-to-person'
+    const toStockAreaValue = isPersonTransfer
+      ? (basicDetails.toStockArea || 'PERSON')
+      : (basicDetails.toStockArea || '')
+
+    // Destination stock area is required for all types; technician required for person transfer
+    if (!toStockAreaValue) {
+      toast.error('Please select destination stock area')
+      return
+    }
+    if (isPersonTransfer && !toUserId) {
+      toast.error('Please select a technician')
+      return
     }
     if (basicDetails.transferType === 'material-request' && !basicDetails.materialRequestNo) {
       toast.error('Please select Material Request No.')
       return
     }
-    if (allocateItemsData.length === 0 && basicDetails.transferType === 'material-request') {
+    const selectedItems = allocateItemsData.filter(item => item.selected !== false)
+    if (selectedItems.length === 0) {
       toast.error('Please allocate at least one item')
       return
     }
@@ -242,17 +349,21 @@ const StockTransfer = () => {
       
       const transferData = {
         fromStockAreaId: basicDetails.fromStockArea,
-        toStockAreaId: basicDetails.transferType === 'warehouse-to-person' ? undefined : basicDetails.toStockArea,
-        toUserId: basicDetails.transferType === 'warehouse-to-person' ? toUserId : undefined,
-        ticketId: basicDetails.transferType === 'warehouse-to-person' ? (ticketId || undefined) : undefined,
+        toStockAreaId: toStockAreaValue || undefined,
+        to_stock_area_id: toStockAreaValue || undefined, // send snake_case to satisfy backend
+        toUserId: isPersonTransfer ? toUserId : undefined,
+        to_user_id: isPersonTransfer ? toUserId : undefined, // snake_case for backend
+        ticketId: isPersonTransfer ? (ticketId || undefined) : undefined,
         materialRequestId: basicDetails.materialRequestNo || undefined,
+        transferNumber: basicDetails.slipNo || undefined,
+        slipNumber: basicDetails.slipNo || undefined,
         transferDate: basicDetails.date,
-        items: allocateItemsData.length > 0 ? allocateItemsData.map(item => ({
+        items: selectedItems.map(item => ({
           materialId: item.materialId,
           quantity: item.quantity,
           serialNumbers: item.serialNumbers || undefined,
           remarks: item.remarks || undefined,
-        })) : [],
+        })),
         remarks: basicDetails.description || undefined,
       }
 
@@ -287,6 +398,36 @@ const StockTransfer = () => {
   )
   const allocateTotalPages = Math.ceil(allocateItemsData.length / itemsPerPage)
 
+  const resetNewItem = () => setNewItem({ materialId: '', quantity: 1, serialNumbers: '' })
+
+  const handleAddAllocatedItem = () => {
+    if (!newItem.materialId) {
+      toast.error('Please select a material')
+      return
+    }
+    if (!newItem.quantity || Number(newItem.quantity) <= 0) {
+      toast.error('Quantity must be greater than zero')
+      return
+    }
+    const materialInfo = materials.find((m) => m.value === newItem.materialId)
+    const newRow = {
+      id: `${Date.now()}`,
+      materialId: newItem.materialId,
+      itemName: materialInfo?.label || 'Material',
+      properties: materialInfo?.productCode || '-',
+      grnNo: '-',
+      assetId: '-',
+      requestedQuantity: newItem.quantity,
+      quantity: Number(newItem.quantity),
+      remarks: '',
+      serialNumbers: newItem.serialNumbers || '',
+      selected: true,
+    }
+    setAllocateItemsData([...allocateItemsData, newRow])
+    resetNewItem()
+    setIsAddItemModalOpen(false)
+  }
+
   return (
     <div className="space-y-6">
       <div className="bg-white rounded-lg shadow p-6">
@@ -306,7 +447,7 @@ const StockTransfer = () => {
             label="Slip No"
             required
             value={basicDetails.slipNo}
-            readOnly
+            onChange={(e) => setBasicDetails({ ...basicDetails, slipNo: e.target.value })}
           />
           <Dropdown
             label="Transfer Type"
@@ -334,6 +475,13 @@ const StockTransfer = () => {
           {basicDetails.transferType === 'warehouse-to-person' ? (
             <>
               <Dropdown
+                label="Destination Stock Area"
+                required
+                options={toStockAreaOptionsPerson}
+                value={basicDetails.toStockArea}
+                onChange={(e) => setBasicDetails({ ...basicDetails, toStockArea: e.target.value })}
+              />
+              <Dropdown
                 label="To Technician"
                 required
                 options={[
@@ -357,15 +505,15 @@ const StockTransfer = () => {
             <Dropdown
               label="To Stock Area"
               required
-              options={toStockAreaOptions}
+              options={toStockAreaOptionsWarehouse}
               value={basicDetails.toStockArea}
               onChange={(e) => setBasicDetails({ ...basicDetails, toStockArea: e.target.value })}
             />
           )}
         </div>
 
-        {basicDetails.transferType === 'material-request' && basicDetails.materialRequestNo && (
-          <div className="border-t border-gray-200 pt-6">
+        <div className="border-t border-gray-200 pt-6">
+          {basicDetails.transferType === 'material-request' && basicDetails.materialRequestNo ? (
             <div className="flex border-b border-gray-200 mb-4">
               <button
                 onClick={() => setActiveTab('requested-items')}
@@ -388,102 +536,108 @@ const StockTransfer = () => {
                 Allocate Items
               </button>
             </div>
-
-            <div className="mb-4">
-              <div className="relative max-w-md">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Search"
-                  className="w-full pl-10 pr-4 py-2 h-[38px] border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
+          ) : (
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Allocate Items</h3>
+              <Button variant="primary" onClick={() => setIsAddItemModalOpen(true)}>
+                <PlusIcon className="w-4 h-4 mr-2 inline" />
+                Add Item
+              </Button>
             </div>
+          )}
 
-            {activeTab === 'requested-items' ? (
-              <>
-                <Table
-                  headers={['ITEM NAME', 'UOM', 'PROPERTIES', 'REQUESTED QUANTITY', 'REMAINING QUANTITY']}
-                >
-                  {paginatedRequestedItems.length > 0 ? (
-                    paginatedRequestedItems.map((item) => (
-                      <tr key={item.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.itemName}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.uom}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.properties}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.requestedQuantity}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.remainingQuantity}</td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
-                        No data found
-                      </td>
+          {basicDetails.transferType === 'material-request' && basicDetails.materialRequestNo && activeTab === 'requested-items' ? (
+            <>
+              <Table
+                headers={['ITEM NAME', 'UOM', 'PROPERTIES', 'REQUESTED QUANTITY', 'REMAINING QUANTITY']}
+              >
+                {paginatedRequestedItems.length > 0 ? (
+                  paginatedRequestedItems.map((item) => (
+                    <tr key={item.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.itemName}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.uom}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.properties}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.requestedQuantity}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.remainingQuantity}</td>
                     </tr>
-                  )}
-                </Table>
-                {requestedItemsData.length > 0 && (
-                  <Pagination
-                    currentPage={currentPage}
-                    totalPages={requestedTotalPages}
-                    itemsPerPage={itemsPerPage}
-                    totalItems={requestedItemsData.length}
-                    onPageChange={setCurrentPage}
-                    onItemsPerPageChange={setItemsPerPage}
-                  />
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
+                      No data found
+                    </td>
+                  </tr>
                 )}
-              </>
-            ) : (
-              <>
-                <Table
-                  headers={['SELECT', 'ITEM NAME', 'PROPERTIES', 'GRN NO.', 'AASET ID', 'REQUESTED QUANTITY', 'REMARKS']}
-                >
-                  {paginatedAllocateItems.length > 0 ? (
-                    paginatedAllocateItems.map((item) => (
-                      <tr key={item.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-center">
-                          <input
-                            type="checkbox"
-                            checked={item.selected}
-                            onChange={(e) => {
-                              setAllocateItemsData(allocateItemsData.map(i =>
-                                i.id === item.id ? { ...i, selected: e.target.checked } : i
-                              ))
-                            }}
-                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                          />
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.itemName}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.properties}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.grnNo}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.assetId}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.requestedQuantity}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.remarks}</td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
-                        No data found
+              </Table>
+              {requestedItemsData.length > 0 && (
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={requestedTotalPages}
+                  itemsPerPage={itemsPerPage}
+                  totalItems={requestedItemsData.length}
+                  onPageChange={setCurrentPage}
+                  onItemsPerPageChange={setItemsPerPage}
+                />
+              )}
+            </>
+          ) : (
+            <>
+              {basicDetails.transferType === 'material-request' && basicDetails.materialRequestNo && (
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-gray-900">Allocate Items</h3>
+                  <Button variant="primary" onClick={() => setIsAddItemModalOpen(true)}>
+                    <PlusIcon className="w-4 h-4 mr-2 inline" />
+                    Add Item
+                  </Button>
+                </div>
+              )}
+              <Table
+                headers={['SELECT', 'ITEM NAME', 'PROPERTIES', 'GRN NO.', 'ASSET ID', 'QUANTITY', 'REMARKS']}
+              >
+                {paginatedAllocateItems.length > 0 ? (
+                  paginatedAllocateItems.map((item) => (
+                    <tr key={item.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-center">
+                        <input
+                          type="checkbox"
+                          checked={item.selected}
+                          onChange={(e) => {
+                            setAllocateItemsData(allocateItemsData.map(i =>
+                              i.id === item.id ? { ...i, selected: e.target.checked } : i
+                            ))
+                          }}
+                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                        />
                       </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.itemName}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.properties}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.grnNo}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.assetId}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.quantity || item.requestedQuantity}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.remarks}</td>
                     </tr>
-                  )}
-                </Table>
-                {allocateItemsData.length > 0 && (
-                  <Pagination
-                    currentPage={currentPage}
-                    totalPages={allocateTotalPages}
-                    itemsPerPage={itemsPerPage}
-                    totalItems={allocateItemsData.length}
-                    onPageChange={setCurrentPage}
-                    onItemsPerPageChange={setItemsPerPage}
-                  />
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
+                      No items added. Click "Add Item" to allocate.
+                    </td>
+                  </tr>
                 )}
-              </>
-            )}
-          </div>
-        )}
+              </Table>
+              {allocateItemsData.length > 0 && (
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={allocateTotalPages}
+                  itemsPerPage={itemsPerPage}
+                  totalItems={allocateItemsData.length}
+                  onPageChange={setCurrentPage}
+                  onItemsPerPageChange={setItemsPerPage}
+                />
+              )}
+            </>
+          )}
+        </div>
 
         <div className="border-t border-gray-200 pt-6 mt-6">
           <Input
@@ -514,6 +668,54 @@ const StockTransfer = () => {
           </Button>
         </div>
       </div>
+
+      <Modal
+        isOpen={isAddItemModalOpen}
+        onClose={() => {
+          resetNewItem()
+          setIsAddItemModalOpen(false)
+        }}
+        title="Add Item"
+        size="sm"
+      >
+        <div className="space-y-4">
+          <Dropdown
+            label="Material"
+            required
+            options={materials}
+            value={newItem.materialId}
+            onChange={(e) => setNewItem({ ...newItem, materialId: e.target.value })}
+          />
+          <Input
+            label="Quantity"
+            type="number"
+            min="0"
+            value={newItem.quantity}
+            onChange={(e) => setNewItem({ ...newItem, quantity: e.target.value })}
+            required
+          />
+          <Input
+            label="Serial Numbers (optional)"
+            placeholder="Comma separated or single value"
+            value={newItem.serialNumbers}
+            onChange={(e) => setNewItem({ ...newItem, serialNumbers: e.target.value })}
+          />
+          <div className="flex justify-end gap-3 pt-2">
+            <Button
+              variant="gray"
+              onClick={() => {
+                resetNewItem()
+                setIsAddItemModalOpen(false)
+              }}
+            >
+              Cancel
+            </Button>
+            <Button variant="primary" onClick={handleAddAllocatedItem}>
+              Add
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }

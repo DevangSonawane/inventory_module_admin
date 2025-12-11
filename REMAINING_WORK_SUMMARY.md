@@ -26,7 +26,7 @@ The inventory management system is **95% complete** and **production-ready**. Al
 - ✅ File uploads
 - ✅ Authentication & authorization
 
-### Frontend (90% Complete)
+### Frontend (92% Complete)
 - ✅ All major pages created
 - ✅ All services connected to backend
 - ✅ Material Request creation & management
@@ -38,7 +38,7 @@ The inventory management system is **95% complete** and **production-ready**. Al
 - ✅ Purchase Request & Purchase Order management
 - ✅ Business Partner management
 
-### Integration (98% Complete)
+### Integration (99% Complete)
 - ✅ All API endpoints matched between frontend and backend
 - ✅ Request/response formats consistent
 - ✅ Error handling comprehensive
@@ -51,7 +51,7 @@ The inventory management system is **95% complete** and **production-ready**. Al
 
 ### 1. **Material Allocation UI** (HIGH PRIORITY)
 
-**Status**: Backend fully implemented, Frontend UI missing
+**Status**: Backend fully implemented, Frontend UI **partially implemented** (allocation tab exists; now enforces over-allocation guardrails). Remaining UX polish: clearer status/remaining counts, bulk select safety.
 
 **What's Missing**:
 - Allocation tab/screen in `MaterialRequestDetails.jsx`
@@ -78,7 +78,7 @@ The inventory management system is **95% complete** and **production-ready**. Al
 
 ### 2. **Serial Number Validation in Consumption** (MEDIUM PRIORITY)
 
-**Status**: Needs verification and enhancement
+**Status**: Backend validates; Frontend now validates against technician stock and passes `fromUserId`. Remaining: optional autocomplete UX.
 
 **What's Missing**:
 - Verify that consumption validates serial numbers against person stock
@@ -145,7 +145,7 @@ if (activeTab === 'my-mr') {
 
 ### 5. **Documentation Updates** (LOW PRIORITY)
 
-**Status**: Documentation needs updates to reflect current state
+**Status**: Integration doc updated; flow doc pending minor refresh.
 
 **Files to Update**:
 

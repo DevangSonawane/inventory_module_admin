@@ -23,6 +23,25 @@ const PurchaseOrderList = () => {
   const [deleteId, setDeleteId] = useState(null)
   const [actionLoading, setActionLoading] = useState(null)
 
+  const getOrgId = () => {
+    const storedUser = localStorage.getItem('user')
+    if (storedUser) {
+      try {
+        const parsed = JSON.parse(storedUser)
+        return (
+          parsed?.org_id ||
+          parsed?.orgId ||
+          parsed?.organization_id ||
+          parsed?.organizationId ||
+          null
+        )
+      } catch (error) {
+        console.error('Failed to parse user for orgId', error)
+      }
+    }
+    return localStorage.getItem('orgId') || null
+  }
+
   useEffect(() => {
     fetchPurchaseOrders()
   }, [currentPage, itemsPerPage, searchTerm, statusFilter])
@@ -41,11 +60,13 @@ const PurchaseOrderList = () => {
   const fetchPurchaseOrders = async () => {
     try {
       setLoading(true)
+      const orgId = getOrgId()
       const response = await purchaseOrderService.getAll({
         page: currentPage,
         limit: itemsPerPage,
         search: searchTerm || undefined,
         status: statusFilter || undefined,
+        orgId: orgId || undefined,
       })
       
       if (response.success) {

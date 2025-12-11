@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { Search } from 'lucide-react'
 import { toast } from 'react-toastify'
 import Button from '../components/common/Button'
@@ -8,13 +8,17 @@ import Dropdown from '../components/common/Dropdown'
 import Table from '../components/common/Table'
 import Pagination from '../components/common/Pagination'
 import { consumptionService } from '../services/consumptionService.js'
+import { businessPartnerService } from '../services/businessPartnerService.js'
+import { personStockService } from '../services/personStockService.js'
+import { useAuth } from '../utils/useAuth.js'
 
 const RecordConsumption = () => {
-  const { id } = useParams()
   const navigate = useNavigate()
+  const { user } = useAuth()
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage, setItemsPerPage] = useState(10)
   const [activeButton, setActiveButton] = useState('new-consumption')
+  const [saving, setSaving] = useState(false)
 
   const [externalSystemRefId, setExternalSystemRefId] = useState('')
   const [isExternalRefSelected, setIsExternalRefSelected] = useState(false)
@@ -38,47 +42,34 @@ const RecordConsumption = () => {
   const [franchiseOptions, setFranchiseOptions] = useState([
     { value: '', label: 'Select Franchise' },
   ])
+  const [personStockSerials, setPersonStockSerials] = useState(new Set())
+  const [loadingPersonStock, setLoadingPersonStock] = useState(false)
 
   const searchByOptions = [
     { value: 'asset-id', label: 'Asset ID' },
     { value: 'other', label: 'Other' },
   ]
 
-  // Fetch unique external system ref IDs and franchises on component mount
+  // Fetch external refs and business partners on mount
   useEffect(() => {
     const fetchExternalRefIds = async () => {
       try {
         setLoadingRefs(true)
         const response = await consumptionService.getAll({ limit: 1000 })
-        
+
         if (response.success && response.data?.consumptions) {
           // Get unique external_system_ref_id values
-          const uniqueRefs = [...new Set(
-            response.data.consumptions
-              .map(c => c.external_system_ref_id)
-              .filter(ref => ref && ref.trim() !== '')
-          )].sort()
-          
+          const uniqueRefs = [
+            ...new Set(
+              response.data.consumptions
+                .map((c) => c.external_system_ref_id)
+                .filter((ref) => ref && ref.trim() !== '')
+            ),
+          ].sort()
+
           setExternalSystemRefOptions([
             { value: '', label: 'Select External System Ref. ID' },
-            ...uniqueRefs.map(ref => ({ value: ref, label: ref }))
-          ])
-
-          // Get unique franchise values from customer_data
-          const uniqueFranchises = [...new Set(
-            response.data.consumptions
-              .map(c => {
-                if (c.customer_data && typeof c.customer_data === 'object') {
-                  return c.customer_data.franchise || c.customer_data.Franchise
-                }
-                return null
-              })
-              .filter(f => f && f.trim() !== '')
-          )].sort()
-          
-          setFranchiseOptions([
-            { value: '', label: 'Select Franchise' },
-            ...uniqueFranchises.map(franchise => ({ value: franchise, label: franchise }))
+            ...uniqueRefs.map((ref) => ({ value: ref, label: ref })),
           ])
         }
       } catch (error) {
@@ -88,9 +79,88 @@ const RecordConsumption = () => {
         setLoadingRefs(false)
       }
     }
-    
+
+    const fetchFranchises = async () => {
+      try {
+        const response = await businessPartnerService.getAll({ limit: 1000 })
+        if (response.success) {
+          const partners =
+            response.data?.businessPartners ||
+            response.data?.data ||
+            response.data?.items ||
+            []
+
+          const partnerOptions = partners
+            .map((partner) => {
+              const partnerName =
+                partner.partner_name ||
+                partner.partnerName ||
+                partner.name ||
+                'Business Partner'
+              const partnerType = partner.partner_type || partner.partnerType || partner.type || ''
+              const typeSuffix = partnerType ? ` (${partnerType})` : ''
+
+              return {
+                value:
+                  partner.partner_name ||
+                  partner.partnerName ||
+                  partner.name ||
+                  partner.partner_id ||
+                  partner.id ||
+                  '',
+                label: `${partnerName}${typeSuffix}`,
+              }
+            })
+            .filter((opt) => opt.value)
+
+          setFranchiseOptions([
+            { value: '', label: 'Select Franchise' },
+            ...partnerOptions,
+          ])
+        }
+      } catch (error) {
+        console.error('Error fetching business partners:', error)
+        toast.error('Failed to load business partners')
+      }
+    }
+
     fetchExternalRefIds()
+    fetchFranchises()
   }, [])
+
+  // Load technician/person stock once user context is available
+  useEffect(() => {
+    const fetchPersonStock = async () => {
+      if (!user?.id && !user?.user_id) return
+      try {
+        setLoadingPersonStock(true)
+        const response = await personStockService.getAll({
+          userId: user.id || user.user_id,
+          limit: 1000,
+        })
+        const items =
+          response?.data?.personStock ||
+          response?.data?.data ||
+          response?.data ||
+          response?.personStock ||
+          []
+        const serials = new Set()
+        items.forEach((item) => {
+          if (item.serial_number) {
+            serials.add(String(item.serial_number).trim().toLowerCase())
+          }
+        })
+        setPersonStockSerials(serials)
+      } catch (error) {
+        console.error('Error loading person stock:', error)
+        toast.error('Unable to load technician stock for validation')
+      } finally {
+        setLoadingPersonStock(false)
+      }
+    }
+
+    fetchPersonStock()
+  }, [user])
 
   // Fetch customer data and items when external system ref is selected
   const handleExternalSystemRefChange = async (value) => {
@@ -124,7 +194,15 @@ const RecordConsumption = () => {
         
         // Extract customer data from customer_data JSON field
         if (consumption.customer_data) {
-          const customer = consumption.customer_data
+          let customer = consumption.customer_data
+          if (typeof customer === 'string') {
+            try {
+              customer = JSON.parse(customer)
+            } catch (err) {
+              console.error('Failed to parse customer_data JSON string', err)
+              customer = {}
+            }
+          }
           const name =
             customer.customerName ||
             customer.customer_name ||
@@ -150,7 +228,7 @@ const RecordConsumption = () => {
             email,
             mobileNo: phone,
             remark: customer.remark || consumption.remarks || '',
-            franchise: customer.franchise || customerData.franchise || '',
+            franchise: customer.franchise || customer.Franchise || customerData.franchise || '',
           })
         } else {
           // Fallback: use remarks if customer_data is not available
@@ -232,6 +310,67 @@ const RecordConsumption = () => {
     currentPage * itemsPerPage
   )
   const totalPages = Math.ceil(tableData.length / itemsPerPage)
+
+  const handleSave = async () => {
+    if (saving) return
+
+    if (!externalSystemRefId) {
+      toast.error('Please select External System Ref. ID')
+      return
+    }
+
+    const selectedItems = tableData.filter((item) => item.selected)
+    if (selectedItems.length === 0) {
+      toast.error('Please select at least one item')
+      return
+    }
+
+    // Validate serials against technician/person stock where provided
+    const missingSerials = selectedItems
+      .map((item) => item.assetId && item.assetId !== '-' ? String(item.assetId).trim() : null)
+      .filter(Boolean)
+      .filter((serial) => !personStockSerials.has(serial.toLowerCase()))
+
+    if (missingSerials.length > 0) {
+      toast.error(`Serials not in your stock: ${missingSerials.join(', ')}`)
+      return
+    }
+
+    if (!user?.id && !user?.user_id) {
+      toast.error('User context missing. Please re-login and try again.')
+      return
+    }
+
+    try {
+      setSaving(true)
+      const payload = {
+        externalSystemRefId,
+        customerData,
+        consumptionDate: new Date().toISOString().split('T')[0],
+        items: selectedItems.map((item) => ({
+          materialId: item.materialId,
+          quantity: item.requestedQuantity || 1,
+          serialNumber: item.assetId && item.assetId !== '-' ? item.assetId : null,
+          remarks: item.remarks && item.remarks !== '-' ? item.remarks : null,
+        })),
+        remarks: customerData.remark,
+        fromUserId: user?.id || user?.user_id,
+      }
+
+      const response = await consumptionService.create(payload)
+      if (response.success) {
+        toast.success('Record consumption saved successfully!')
+        navigate('/record-consumption')
+      } else {
+        toast.error(response.message || 'Failed to save record consumption')
+      }
+    } catch (error) {
+      console.error('Error saving record consumption:', error)
+      toast.error(error.message || 'Failed to save record consumption')
+    } finally {
+      setSaving(false)
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -394,21 +533,10 @@ const RecordConsumption = () => {
           </Button>
           <Button 
             variant="primary"
-            onClick={() => {
-              if (!externalSystemRefId) {
-                toast.error('Please select External System Ref. ID')
-                return
-              }
-              const selectedItems = tableData.filter(item => item.selected)
-              if (selectedItems.length === 0) {
-                toast.error('Please select at least one item')
-                return
-              }
-              console.log('Saving record consumption:', { externalSystemRefId, customerData, selectedItems })
-              toast.success('Record consumption saved successfully!')
-            }}
+            onClick={handleSave}
+            disabled={saving}
           >
-            Save
+            {saving ? 'Saving...' : 'Save'}
           </Button>
         </div>
       </div>

@@ -27,13 +27,20 @@ export const createStockTransfer = async (req, res) => {
     const {
       fromStockAreaId,
       toStockAreaId,
-      toUserId, // New: Transfer to person instead of stock area
-      ticketId, // New: Link to ticket
+      to_stock_area_id,
+      from_stock_area_id,
+      toUserId,
+      to_user_id,
+      ticketId,
       materialRequestId,
       transferDate,
-      items, // Array of {materialId, quantity, serialNumbers, remarks}
+      items,
       remarks
     } = req.body;
+
+    const normalizedFromStockAreaId = fromStockAreaId || from_stock_area_id;
+    const normalizedToStockAreaId = (toStockAreaId || to_stock_area_id || normalizedFromStockAreaId || '').trim();
+    const normalizedToUserId = toUserId || to_user_id;
 
     const userId = req.user?.id || req.user?.user_id;
 
@@ -52,18 +59,47 @@ export const createStockTransfer = async (req, res) => {
       });
     }
 
-    // Validate destination: either toStockAreaId OR toUserId (not both, at least one)
+    // Validate destination: destination stock area is REQUIRED; destination user is OPTIONAL (can have both)
     let toStockArea = null;
     let toUser = null;
-    let destinationType = null;
-    let destinationId = null;
 
-    if (toUserId) {
-      // Transferring to a person (technician)
+    // Allow sentinel values 'PERSON'/'VAN' to map to source area (satisfy NOT NULL)
+    const resolvedToStockAreaId =
+      normalizedToStockAreaId &&
+      (normalizedToStockAreaId.toUpperCase() === 'PERSON' || normalizedToStockAreaId.toUpperCase() === 'VAN')
+        ? normalizedFromStockAreaId
+        : normalizedToStockAreaId || normalizedFromStockAreaId;
+
+    toStockArea = await StockArea.findOne({
+      where: req.withOrg
+        ? req.withOrg({ area_id: resolvedToStockAreaId, is_active: true })
+        : { area_id: resolvedToStockAreaId, is_active: true }
+    });
+
+    if (!toStockArea) {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid destination stock area'
+      });
+    }
+
+    if (normalizedFromStockAreaId === resolvedToStockAreaId) {
+      // For sentinel mapping it's expected; allow only when original sentinel used
+      if (!(normalizedToStockAreaId.toUpperCase() === 'PERSON' || normalizedToStockAreaId.toUpperCase() === 'VAN')) {
+        await transaction.rollback();
+        return res.status(400).json({
+          success: false,
+          message: 'Source and destination stock areas cannot be the same'
+        });
+      }
+    }
+
+    if (normalizedToUserId) {
       toUser = await User.findOne({
         where: req.withOrg
-          ? req.withOrg({ id: toUserId, is_active: true })
-          : { id: toUserId, is_active: true }
+          ? req.withOrg({ id: normalizedToUserId, is_active: true })
+          : { id: normalizedToUserId, is_active: true }
       });
 
       if (!toUser) {
@@ -73,40 +109,11 @@ export const createStockTransfer = async (req, res) => {
           message: 'Invalid destination user'
         });
       }
-      destinationType = 'PERSON';
-      destinationId = toUserId.toString();
-    } else if (toStockAreaId) {
-      // Transferring to another stock area
-      toStockArea = await StockArea.findOne({
-        where: req.withOrg
-          ? req.withOrg({ area_id: toStockAreaId, is_active: true })
-          : { area_id: toStockAreaId, is_active: true }
-      });
-
-      if (!toStockArea) {
-        await transaction.rollback();
-        return res.status(400).json({
-          success: false,
-          message: 'Invalid destination stock area'
-        });
-      }
-
-      if (fromStockAreaId === toStockAreaId) {
-        await transaction.rollback();
-        return res.status(400).json({
-          success: false,
-          message: 'Source and destination stock areas cannot be the same'
-        });
-      }
-      destinationType = 'WAREHOUSE';
-      destinationId = toStockAreaId;
-    } else {
-      await transaction.rollback();
-      return res.status(400).json({
-        success: false,
-        message: 'Either destination stock area or destination user must be provided'
-      });
     }
+
+    // Decide where the inventory items will end up: either another warehouse or a person
+    const destinationType = normalizedToUserId ? 'PERSON' : 'WAREHOUSE';
+    const destinationId = normalizedToUserId ? normalizedToUserId : resolvedToStockAreaId;
 
     // Validate material request if provided
     if (materialRequestId) {
@@ -134,8 +141,8 @@ export const createStockTransfer = async (req, res) => {
       });
     }
 
-    // Generate unique transfer number
-    let transferNumber = generateST();
+    // Use provided slip/transfer number if given, else generate
+    let transferNumber = req.body.transferNumber || req.body.slipNumber || generateST();
     let isUnique = false;
     let attempts = 0;
     
@@ -156,8 +163,8 @@ export const createStockTransfer = async (req, res) => {
     // Create stock transfer
     const stockTransfer = await StockTransfer.create({
       from_stock_area_id: fromStockAreaId,
-      to_stock_area_id: toStockAreaId || null, // Can be null if transferring to person
-      to_user_id: toUserId || null, // Can be null if transferring to stock area
+      to_stock_area_id: resolvedToStockAreaId, // required (handles sentinel)
+      to_user_id: normalizedToUserId || null, // optional
       ticket_id: ticketId || null,
       material_request_id: materialRequestId || null,
       transfer_date: transferDate || new Date().toISOString().split('T')[0],
@@ -552,6 +559,7 @@ export const updateStockTransfer = async (req, res) => {
     await transfer.update({
       from_stock_area_id: fromStockAreaId || transfer.from_stock_area_id,
       to_stock_area_id: toStockAreaId || transfer.to_stock_area_id,
+      to_user_id: req.body.toUserId !== undefined ? req.body.toUserId : transfer.to_user_id,
       material_request_id: materialRequestId !== undefined ? materialRequestId : transfer.material_request_id,
       transfer_date: transferDate || transfer.transfer_date,
       status: status || transfer.status,
