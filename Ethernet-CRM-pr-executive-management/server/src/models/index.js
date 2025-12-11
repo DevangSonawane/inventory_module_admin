@@ -160,6 +160,9 @@ User.hasMany(PurchaseRequest, { foreignKey: 'requested_by', as: 'purchaseRequest
 PurchaseRequestItem.belongsTo(Material, { foreignKey: 'material_id', as: 'material' });
 Material.hasMany(PurchaseRequestItem, { foreignKey: 'material_id', as: 'purchaseRequestItems' });
 
+PurchaseRequestItem.belongsTo(BusinessPartner, { foreignKey: 'business_partner_id', as: 'businessPartner' });
+BusinessPartner.hasMany(PurchaseRequestItem, { foreignKey: 'business_partner_id', as: 'purchaseRequestItems' });
+
 // PurchaseOrder associations
 PurchaseOrder.hasMany(PurchaseOrderItem, { foreignKey: 'po_id', as: 'items' });
 PurchaseOrderItem.belongsTo(PurchaseOrder, { foreignKey: 'po_id', as: 'purchaseOrder' });

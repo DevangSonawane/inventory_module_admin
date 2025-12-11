@@ -32,7 +32,9 @@ export const getAllStockAreas = async (req, res) => {
       whereClause[Op.or] = [
         { area_name: { [Op.like]: `%${search}%` } },
         { location_code: { [Op.like]: `%${search}%` } },
-        { address: { [Op.like]: `%${search}%` } }
+        { address: { [Op.like]: `%${search}%` } },
+        { description: { [Op.like]: `%${search}%` } },
+        { pin_code: { [Op.like]: `%${search}%` } }
       ];
     }
 
@@ -93,7 +95,15 @@ export const getStockAreaById = async (req, res) => {
         : {
           area_id: id,
           is_active: true
+        },
+      include: [
+        {
+          model: User,
+          as: 'storeKeeper',
+          attributes: ['id', 'name', 'employeCode', 'email'],
+          required: false
         }
+      ]
     });
 
     if (!stockArea) {
@@ -105,7 +115,7 @@ export const getStockAreaById = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      data: stockArea
+      data: { stockArea }
     });
   } catch (error) {
     console.error('Error fetching stock area:', error);
@@ -128,7 +138,7 @@ export const createStockArea = async (req, res) => {
       return res.status(400).json({ success: false, errors: errors.array() });
     }
 
-    const { areaName, locationCode, address, capacity, storeKeeperId } = req.body;
+    const { areaName, locationCode, address, capacity, storeKeeperId, description, pinCode } = req.body;
 
     const stockArea = await StockArea.create({
       area_name: areaName,
@@ -136,6 +146,8 @@ export const createStockArea = async (req, res) => {
       address: address || null,
       capacity: capacity || null,
       store_keeper_id: storeKeeperId || null,
+      description: description || null,
+      pin_code: pinCode || null,
       org_id: req.orgId || null,
       is_active: true
     });
@@ -167,7 +179,7 @@ export const updateStockArea = async (req, res) => {
     }
 
     const { id } = req.params;
-    const { areaName, locationCode, address, capacity, storeKeeperId } = req.body;
+    const { areaName, locationCode, address, capacity, storeKeeperId, description, pinCode } = req.body;
 
     const stockArea = await StockArea.findOne({
       where: req.withOrg
@@ -189,11 +201,13 @@ export const updateStockArea = async (req, res) => {
     }
 
     await stockArea.update({
-      area_name: areaName || stockArea.area_name,
+      area_name: areaName !== undefined ? areaName : stockArea.area_name,
       location_code: locationCode !== undefined ? locationCode : stockArea.location_code,
       address: address !== undefined ? address : stockArea.address,
       capacity: capacity !== undefined ? capacity : stockArea.capacity,
-      store_keeper_id: storeKeeperId !== undefined ? storeKeeperId : stockArea.store_keeper_id
+      store_keeper_id: storeKeeperId !== undefined ? storeKeeperId : stockArea.store_keeper_id,
+      description: description !== undefined ? description : stockArea.description,
+      pin_code: pinCode !== undefined ? pinCode : stockArea.pin_code
     });
 
     return res.status(200).json({

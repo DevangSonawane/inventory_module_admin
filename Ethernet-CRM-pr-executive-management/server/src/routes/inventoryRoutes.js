@@ -141,7 +141,8 @@ import {
   submitPurchaseRequest,
   approvePurchaseRequest,
   rejectPurchaseRequest,
-  deletePurchaseRequest
+  deletePurchaseRequest,
+  generatePRNumberEndpoint
 } from '../controllers/purchaseRequestController.js';
 import {
   getAllPurchaseOrders,
@@ -151,9 +152,11 @@ import {
   updatePurchaseOrder,
   deletePurchaseOrder,
   sendPurchaseOrder,
-  receivePurchaseOrder
+  receivePurchaseOrder,
+  addDocumentsToPurchaseOrder,
+  submitPurchaseOrder
 } from '../controllers/purchaseOrderController.js';
-import { uploadInwardDocuments } from '../middleware/upload.js';
+import { uploadInwardDocuments, uploadMaterialDocuments, uploadPODocuments } from '../middleware/upload.js';
 
 const router = express.Router();
 
@@ -405,6 +408,7 @@ router.get(
  */
 router.post(
   '/materials',
+  uploadMaterialDocuments, // Multer middleware must come BEFORE validation to parse FormData
   [
     body('materialName')
       .notEmpty()
@@ -419,6 +423,23 @@ router.post(
       .withMessage('Material type is required')
       .trim(),
     body('uom')
+      .optional()
+      .trim(),
+    body('hsn')
+      .optional()
+      .trim(),
+    body('gstPercentage')
+      .optional()
+      .isFloat({ min: 0, max: 100 })
+      .withMessage('GST percentage must be between 0 and 100'),
+    body('price')
+      .optional()
+      .isFloat({ min: 0 })
+      .withMessage('Price must be a positive number'),
+    body('assetId')
+      .optional()
+      .trim(),
+    body('materialProperty')
       .optional()
       .trim(),
     body('orgId')
@@ -437,6 +458,7 @@ router.post(
  */
 router.put(
   '/materials/:id',
+  uploadMaterialDocuments, // Multer middleware must come BEFORE validation to parse FormData
   [
     param('id')
       .isUUID()
@@ -451,6 +473,14 @@ router.put(
       .trim()
       .notEmpty()
       .withMessage('Product code cannot be empty'),
+    body('gstPercentage')
+      .optional()
+      .isFloat({ min: 0, max: 100 })
+      .withMessage('GST percentage must be between 0 and 100'),
+    body('price')
+      .optional()
+      .isFloat({ min: 0 })
+      .withMessage('Price must be a positive number'),
   ],
   validate,
   updateMaterial
@@ -508,12 +538,22 @@ router.post(
   [
     body('areaName')
       .notEmpty()
-      .withMessage('Area name is required')
+      .withMessage('Warehouse name is required')
       .trim(),
     body('storeKeeperId')
       .optional()
       .isInt()
       .withMessage('Invalid store keeper ID'),
+    body('description')
+      .optional()
+      .trim(),
+    body('pinCode')
+      .optional()
+      .trim()
+      .isLength({ min: 6, max: 10 })
+      .withMessage('Pin code must be between 6 and 10 characters')
+      .matches(/^[0-9]+$/)
+      .withMessage('Pin code must contain only numbers'),
     body('orgId')
       .optional()
       .isUUID()
@@ -538,7 +578,21 @@ router.put(
       .optional()
       .trim()
       .notEmpty()
-      .withMessage('Area name cannot be empty'),
+      .withMessage('Warehouse name cannot be empty'),
+    body('storeKeeperId')
+      .optional()
+      .isInt()
+      .withMessage('Invalid store keeper ID'),
+    body('description')
+      .optional()
+      .trim(),
+    body('pinCode')
+      .optional()
+      .trim()
+      .isLength({ min: 6, max: 10 })
+      .withMessage('Pin code must be between 6 and 10 characters')
+      .matches(/^[0-9]+$/)
+      .withMessage('Pin code must contain only numbers'),
   ],
   validate,
   updateStockArea
@@ -1500,14 +1554,89 @@ router.post(
       .trim()
       .withMessage('Partner name is required'),
     body('partnerType')
-      .optional()
-      .isIn(['VENDOR', 'SUPPLIER', 'CUSTOMER'])
-      .withMessage('Invalid partner type'),
-    body('email')
-      .optional()
+      .notEmpty()
+      .isIn(['SUPPLIER', 'CUSTOMER', 'BOTH'])
+      .withMessage('Partner type is required and must be SUPPLIER, CUSTOMER, or BOTH'),
+    body('gstNumber')
+      .notEmpty()
+      .trim()
+      .withMessage('GST number is required')
+      .custom((value) => {
+        const cleaned = value.replace(/\s/g, '');
+        if (cleaned.length !== 15) {
+          throw new Error('GST number must be 15 characters');
+        }
+        return true;
+      }),
+    body('panCard')
+      .notEmpty()
+      .trim()
+      .withMessage('PAN card is required')
+      .isLength({ min: 10, max: 10 })
+      .withMessage('PAN card must be 10 characters')
+      .matches(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/)
+      .withMessage('Invalid PAN card format'),
+    body('billingAddress')
+      .notEmpty()
+      .trim()
+      .withMessage('Billing address is required'),
+    body('shippingAddress')
+      .notEmpty()
+      .trim()
+      .withMessage('Shipping address is required'),
+    body('bankName')
+      .notEmpty()
+      .trim()
+      .withMessage('Bank name is required'),
+    body('bankAccountName')
+      .notEmpty()
+      .trim()
+      .withMessage('Bank account name is required'),
+    body('ifscCode')
+      .notEmpty()
+      .trim()
+      .withMessage('IFSC code is required')
+      .matches(/^[A-Z]{4}0[A-Z0-9]{6}$/)
+      .withMessage('Invalid IFSC code format'),
+    body('accountNumber')
+      .notEmpty()
+      .trim()
+      .withMessage('Account number is required'),
+    body('contactFirstName')
+      .notEmpty()
+      .trim()
+      .withMessage('Contact first name is required'),
+    body('contactLastName')
+      .notEmpty()
+      .trim()
+      .withMessage('Contact last name is required'),
+    body('contactDesignation')
+      .notEmpty()
+      .trim()
+      .withMessage('Contact designation is required'),
+    body('contactPhone')
+      .notEmpty()
+      .trim()
+      .withMessage('Contact phone number is required')
+      .matches(/^[0-9]{10}$/)
+      .withMessage('Invalid phone number format'),
+    body('contactEmail')
+      .notEmpty()
+      .trim()
       .isEmail()
-      .withMessage('Invalid email format'),
-    body('phone')
+      .withMessage('Valid contact email is required'),
+    body('country')
+      .optional()
+      .trim(),
+    body('state')
+      .optional()
+      .trim(),
+    body('companyWebsite')
+      .optional()
+      .trim()
+      .isURL()
+      .withMessage('Invalid website URL format'),
+    body('vendorCode')
       .optional()
       .trim(),
     body('orgId')
@@ -1538,12 +1667,46 @@ router.put(
       .withMessage('Partner name cannot be empty'),
     body('partnerType')
       .optional()
-      .isIn(['VENDOR', 'SUPPLIER', 'CUSTOMER'])
+      .isIn(['SUPPLIER', 'CUSTOMER', 'BOTH'])
       .withMessage('Invalid partner type'),
-    body('email')
+    body('gstNumber')
       .optional()
+      .trim()
+      .custom((value) => {
+        if (!value) return true;
+        const cleaned = value.replace(/\s/g, '');
+        if (cleaned.length !== 15) {
+          throw new Error('GST number must be 15 characters');
+        }
+        return true;
+      }),
+    body('panCard')
+      .optional()
+      .trim()
+      .isLength({ min: 10, max: 10 })
+      .withMessage('PAN card must be 10 characters')
+      .matches(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/)
+      .withMessage('Invalid PAN card format'),
+    body('ifscCode')
+      .optional()
+      .trim()
+      .matches(/^[A-Z]{4}0[A-Z0-9]{6}$/)
+      .withMessage('Invalid IFSC code format'),
+    body('contactPhone')
+      .optional()
+      .trim()
+      .matches(/^[0-9]{10}$/)
+      .withMessage('Invalid phone number format'),
+    body('contactEmail')
+      .optional()
+      .trim()
       .isEmail()
-      .withMessage('Invalid email format')
+      .withMessage('Invalid email format'),
+    body('companyWebsite')
+      .optional()
+      .trim()
+      .isURL()
+      .withMessage('Invalid website URL format')
   ],
   validate,
   updateBusinessPartner
@@ -1568,6 +1731,18 @@ router.delete(
 );
 
 // ==================== PURCHASE REQUEST ROUTES ====================
+
+/**
+ * @route   GET /api/inventory/purchase-requests/generate-pr-number
+ * @desc    Generate PR number based on requested date
+ * @access  Private
+ * @query   requestedDate (ISO date string)
+ */
+router.get(
+  '/purchase-requests/generate-pr-number',
+  authenticate,
+  generatePRNumberEndpoint
+);
 
 /**
  * @route   GET /api/inventory/purchase-requests
@@ -1612,13 +1787,32 @@ router.post(
     body('items')
       .isArray({ min: 1 })
       .withMessage('At least one item is required'),
-    body('items.*.materialId')
+    body('items.*.prName')
       .notEmpty()
+      .trim()
+      .withMessage('PR name is required for each item'),
+    body('items.*.materialType')
+      .notEmpty()
+      .isIn(['components', 'raw material', 'finish product', 'supportive material', 'cable'])
+      .withMessage('Material type is required and must be one of: components, raw material, finish product, supportive material, cable'),
+    body('items.*.materialId')
+      .optional()
       .isUUID()
-      .withMessage('Valid material ID is required for each item'),
+      .withMessage('Invalid material ID format'),
     body('items.*.requestedQuantity')
+      .optional()
       .isInt({ min: 1 })
       .withMessage('Requested quantity must be a positive integer'),
+    body('items.*.businessPartnerId')
+      .optional()
+      .isUUID()
+      .withMessage('Invalid business partner ID format'),
+    body('items.*.shippingAddress')
+      .optional()
+      .trim(),
+    body('items.*.description')
+      .optional()
+      .trim(),
     body('orgId')
       .optional()
       .isUUID()
@@ -1647,7 +1841,34 @@ router.put(
     body('items')
       .optional()
       .isArray({ min: 1 })
-      .withMessage('At least one item is required if provided')
+      .withMessage('At least one item is required if provided'),
+    body('items.*.prName')
+      .optional()
+      .notEmpty()
+      .trim()
+      .withMessage('PR name cannot be empty'),
+    body('items.*.materialType')
+      .optional()
+      .isIn(['components', 'raw material', 'finish product', 'supportive material', 'cable'])
+      .withMessage('Invalid material type'),
+    body('items.*.materialId')
+      .optional()
+      .isUUID()
+      .withMessage('Invalid material ID format'),
+    body('items.*.requestedQuantity')
+      .optional()
+      .isInt({ min: 1 })
+      .withMessage('Requested quantity must be a positive integer'),
+    body('items.*.businessPartnerId')
+      .optional()
+      .isUUID()
+      .withMessage('Invalid business partner ID format'),
+    body('items.*.shippingAddress')
+      .optional()
+      .trim(),
+    body('items.*.description')
+      .optional()
+      .trim()
   ],
   validate,
   updatePurchaseRequest
@@ -1915,6 +2136,41 @@ router.delete(
   validate,
   roleGuard('admin'),
   deletePurchaseOrder
+);
+
+/**
+ * @route   POST /api/inventory/purchase-orders/:id/documents
+ * @desc    Add documents to purchase order
+ * @access  Private
+ */
+router.post(
+  '/purchase-orders/:id/documents',
+  authenticate,
+  [
+    param('id')
+      .isUUID()
+      .withMessage('Invalid purchase order ID')
+  ],
+  validate,
+  uploadPODocuments,
+  addDocumentsToPurchaseOrder
+);
+
+/**
+ * @route   POST /api/inventory/purchase-orders/:id/submit
+ * @desc    Submit purchase order (sends email to vendor)
+ * @access  Private
+ */
+router.post(
+  '/purchase-orders/:id/submit',
+  authenticate,
+  [
+    param('id')
+      .isUUID()
+      .withMessage('Invalid purchase order ID')
+  ],
+  validate,
+  submitPurchaseOrder
 );
 
 // ==================== VALIDATION ROUTES ====================

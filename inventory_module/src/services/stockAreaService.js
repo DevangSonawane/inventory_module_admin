@@ -28,6 +28,9 @@ export const stockAreaService = {
       locationCode: stockAreaData.locationCode,
       address: stockAreaData.address,
       capacity: stockAreaData.capacity,
+      storeKeeperId: stockAreaData.storeKeeperId,
+      description: stockAreaData.description,
+      pinCode: stockAreaData.pinCode,
       orgId: stockAreaData.orgId,
     });
   },
@@ -39,6 +42,9 @@ export const stockAreaService = {
       locationCode: stockAreaData.locationCode,
       address: stockAreaData.address,
       capacity: stockAreaData.capacity,
+      storeKeeperId: stockAreaData.storeKeeperId,
+      description: stockAreaData.description,
+      pinCode: stockAreaData.pinCode,
     });
   },
 

@@ -43,6 +43,14 @@ export const purchaseRequestService = {
     return await get(API_ENDPOINTS.PURCHASE_REQUEST_BY_ID(id));
   },
 
+  // Generate PR number based on date
+  generatePRNumber: async (requestedDate) => {
+    const queryParams = new URLSearchParams();
+    queryParams.append('requestedDate', requestedDate);
+    const url = `${API_ENDPOINTS.PURCHASE_REQUEST_GENERATE_PR_NUMBER}?${queryParams.toString()}`;
+    return await get(url);
+  },
+
   // Create purchase request
   create: async (prData) => {
     return await post(API_ENDPOINTS.PURCHASE_REQUESTS, prData);

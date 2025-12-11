@@ -116,6 +116,25 @@ export const createBusinessPartner = async (req, res) => {
     const {
       partnerName,
       partnerType,
+      gstNumber,
+      panCard,
+      billingAddress,
+      shippingAddress,
+      sameAsBilling,
+      bankName,
+      bankAccountName,
+      ifscCode,
+      accountNumber,
+      contactFirstName,
+      contactLastName,
+      contactDesignation,
+      contactPhone,
+      contactEmail,
+      country,
+      state,
+      companyWebsite,
+      vendorCode,
+      // Legacy fields
       contactPerson,
       email,
       phone,
@@ -123,13 +142,47 @@ export const createBusinessPartner = async (req, res) => {
       orgId
     } = req.body;
 
+    // Auto-generate vendor code if not provided
+    let finalVendorCode = vendorCode;
+    if (!finalVendorCode) {
+      const prefix = partnerType === 'SUPPLIER' ? 'SUP' : partnerType === 'CUSTOMER' ? 'CUS' : 'BTH';
+      const timestamp = Date.now().toString().slice(-6);
+      finalVendorCode = `${prefix}-${timestamp}`;
+      
+      // Ensure uniqueness
+      let counter = 1;
+      while (await BusinessPartner.findOne({ where: { vendor_code: finalVendorCode } })) {
+        finalVendorCode = `${prefix}-${timestamp}-${counter}`;
+        counter++;
+      }
+    }
+
     const businessPartner = await BusinessPartner.create({
       partner_name: partnerName,
-      partner_type: partnerType || 'VENDOR',
-      contact_person: contactPerson || null,
-      email: email || null,
-      phone: phone || null,
-      address: address || null,
+      partner_type: partnerType || 'SUPPLIER',
+      gst_number: gstNumber ? gstNumber.replace(/\s/g, '').toUpperCase() : null,
+      pan_card: panCard ? panCard.replace(/\s/g, '').toUpperCase() : null,
+      billing_address: billingAddress,
+      shipping_address: sameAsBilling ? billingAddress : shippingAddress,
+      same_as_billing: sameAsBilling || false,
+      bank_name: bankName,
+      bank_account_name: bankAccountName,
+      ifsc_code: ifscCode ? ifscCode.replace(/\s/g, '').toUpperCase() : null,
+      account_number: accountNumber,
+      contact_first_name: contactFirstName,
+      contact_last_name: contactLastName,
+      contact_designation: contactDesignation,
+      contact_phone: contactPhone ? contactPhone.replace(/\D/g, '') : null,
+      contact_email: contactEmail ? contactEmail.toLowerCase().trim() : null,
+      country: country || null,
+      state: state || null,
+      company_website: companyWebsite || null,
+      vendor_code: finalVendorCode,
+      // Legacy fields for backward compatibility
+      contact_person: contactPerson || `${contactFirstName} ${contactLastName}`.trim(),
+      email: email || contactEmail || null,
+      phone: phone ? phone.replace(/\D/g, '') : (contactPhone ? contactPhone.replace(/\D/g, '') : null),
+      address: address || billingAddress || null,
       org_id: req.orgId || orgId || null,
       is_active: true
     });
@@ -171,6 +224,25 @@ export const updateBusinessPartner = async (req, res) => {
     const {
       partnerName,
       partnerType,
+      gstNumber,
+      panCard,
+      billingAddress,
+      shippingAddress,
+      sameAsBilling,
+      bankName,
+      bankAccountName,
+      ifscCode,
+      accountNumber,
+      contactFirstName,
+      contactLastName,
+      contactDesignation,
+      contactPhone,
+      contactEmail,
+      country,
+      state,
+      companyWebsite,
+      vendorCode,
+      // Legacy fields
       contactPerson,
       email,
       phone,
@@ -190,14 +262,49 @@ export const updateBusinessPartner = async (req, res) => {
       });
     }
 
-    await businessPartner.update({
+    // Handle vendor code uniqueness if being updated
+    let finalVendorCode = vendorCode !== undefined ? vendorCode : businessPartner.vendor_code;
+    if (vendorCode && vendorCode !== businessPartner.vendor_code) {
+      const existing = await BusinessPartner.findOne({ 
+        where: { vendor_code: vendorCode, partner_id: { [Op.ne]: id } } 
+      });
+      if (existing) {
+        return res.status(400).json({
+          success: false,
+          message: 'Vendor code already exists'
+        });
+      }
+    }
+
+    const updateData = {
       partner_name: partnerName !== undefined ? partnerName : businessPartner.partner_name,
       partner_type: partnerType !== undefined ? partnerType : businessPartner.partner_type,
-      contact_person: contactPerson !== undefined ? contactPerson : businessPartner.contact_person,
-      email: email !== undefined ? email : businessPartner.email,
-      phone: phone !== undefined ? phone : businessPartner.phone,
-      address: address !== undefined ? address : businessPartner.address
-    });
+      gst_number: gstNumber !== undefined ? gstNumber.replace(/\s/g, '').toUpperCase() : businessPartner.gst_number,
+      pan_card: panCard !== undefined ? panCard.replace(/\s/g, '').toUpperCase() : businessPartner.pan_card,
+      billing_address: billingAddress !== undefined ? billingAddress : businessPartner.billing_address,
+      shipping_address: sameAsBilling ? (billingAddress !== undefined ? billingAddress : businessPartner.billing_address) : (shippingAddress !== undefined ? shippingAddress : businessPartner.shipping_address),
+      same_as_billing: sameAsBilling !== undefined ? sameAsBilling : businessPartner.same_as_billing,
+      bank_name: bankName !== undefined ? bankName : businessPartner.bank_name,
+      bank_account_name: bankAccountName !== undefined ? bankAccountName : businessPartner.bank_account_name,
+      ifsc_code: ifscCode !== undefined ? ifscCode.replace(/\s/g, '').toUpperCase() : businessPartner.ifsc_code,
+      account_number: accountNumber !== undefined ? accountNumber : businessPartner.account_number,
+      contact_first_name: contactFirstName !== undefined ? contactFirstName : businessPartner.contact_first_name,
+      contact_last_name: contactLastName !== undefined ? contactLastName : businessPartner.contact_last_name,
+      contact_designation: contactDesignation !== undefined ? contactDesignation : businessPartner.contact_designation,
+      contact_phone: contactPhone !== undefined ? contactPhone.replace(/\D/g, '') : businessPartner.contact_phone,
+      contact_email: contactEmail !== undefined ? contactEmail.toLowerCase().trim() : businessPartner.contact_email,
+      country: country !== undefined ? country : businessPartner.country,
+      state: state !== undefined ? state : businessPartner.state,
+      company_website: companyWebsite !== undefined ? companyWebsite : businessPartner.company_website,
+      vendor_code: finalVendorCode,
+      // Legacy fields
+      contact_person: contactPerson !== undefined ? contactPerson : (contactFirstName && contactLastName ? `${contactFirstName} ${contactLastName}`.trim() : businessPartner.contact_person),
+      email: email !== undefined ? email : (contactEmail ? contactEmail.toLowerCase().trim() : businessPartner.email),
+      phone: phone !== undefined ? phone.replace(/\D/g, '') : (contactPhone ? contactPhone.replace(/\D/g, '') : businessPartner.phone),
+      address: address !== undefined ? address : (billingAddress || businessPartner.address)
+    };
+
+    await businessPartner.update(updateData);
 
     return res.status(200).json({
       success: true,

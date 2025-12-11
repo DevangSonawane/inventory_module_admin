@@ -120,7 +120,27 @@ export const createMaterial = async (req, res) => {
       return res.status(400).json({ success: false, errors: errors.array() });
     }
 
-    const { materialName, productCode, materialType, uom, properties, description, orgId } = req.body;
+    const { 
+      materialName, 
+      productCode, 
+      materialType, 
+      uom, 
+      properties, 
+      description, 
+      hsn,
+      gstPercentage,
+      price,
+      assetId,
+      materialProperty,
+      orgId 
+    } = req.body;
+
+    // Get uploaded files from multer (only files with fieldname 'documents')
+    const uploadedFiles = (req.files || []).filter(file => file.fieldname === 'documents');
+    let documents = null;
+    if (uploadedFiles.length > 0) {
+      documents = uploadedFiles.map(file => `/uploads/materials/${file.filename}`);
+    }
 
     // Check if material with same product code already exists
     const existingMaterial = await Material.findOne({
@@ -144,6 +164,12 @@ export const createMaterial = async (req, res) => {
       uom: uom || 'PIECE(S)',
       properties: properties || null,
       description: description || null,
+      hsn: hsn || null,
+      gst_percentage: gstPercentage ? parseFloat(gstPercentage) : null,
+      price: price ? parseFloat(price) : null,
+      asset_id: assetId || null,
+      material_property: materialProperty || null,
+      documents: documents || null,
       org_id: req.orgId || orgId || null,
       is_active: true
     });
@@ -175,8 +201,21 @@ export const updateMaterial = async (req, res) => {
     }
 
     const { id } = req.params;
-    const { materialName, productCode, materialType, uom, properties, description } = req.body;
+    const { 
+      materialName, 
+      productCode, 
+      materialType, 
+      uom, 
+      properties, 
+      description,
+      hsn,
+      gstPercentage,
+      price,
+      assetId,
+      materialProperty
+    } = req.body;
 
+    // Find material first
     const material = await Material.findOne({
       where: req.withOrg
         ? req.withOrg({ material_id: id, is_active: true })
@@ -188,6 +227,19 @@ export const updateMaterial = async (req, res) => {
         success: false,
         message: 'Material not found'
       });
+    }
+
+    // Get uploaded files from multer (only files with fieldname 'documents')
+    const uploadedFiles = (req.files || []).filter(file => file.fieldname === 'documents');
+    let documents = undefined;
+    if (uploadedFiles.length > 0) {
+      const newDocuments = uploadedFiles.map(file => `/uploads/materials/${file.filename}`);
+      // If material already has documents, append new ones; otherwise set new ones
+      if (material.documents && Array.isArray(material.documents)) {
+        documents = [...material.documents, ...newDocuments];
+      } else {
+        documents = newDocuments;
+      }
     }
 
     // Check if product code is being changed and if new code already exists
@@ -216,7 +268,13 @@ export const updateMaterial = async (req, res) => {
       material_type: materialType || material.material_type,
       uom: uom || material.uom,
       properties: properties !== undefined ? properties : material.properties,
-      description: description !== undefined ? description : material.description
+      description: description !== undefined ? description : material.description,
+      hsn: hsn !== undefined ? hsn : material.hsn,
+      gst_percentage: gstPercentage !== undefined ? (gstPercentage ? parseFloat(gstPercentage) : null) : material.gst_percentage,
+      price: price !== undefined ? (price ? parseFloat(price) : null) : material.price,
+      asset_id: assetId !== undefined ? assetId : material.asset_id,
+      material_property: materialProperty !== undefined ? materialProperty : material.material_property,
+      documents: documents !== undefined ? documents : material.documents
     });
 
     return res.status(200).json({

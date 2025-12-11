@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { useParams, useNavigate, useLocation } from 'react-router-dom'
-import { Plus, Trash2, Loader2, ArrowLeft } from 'lucide-react'
+import { useParams, useNavigate } from 'react-router-dom'
+import { Plus, Trash2, Loader2, ArrowLeft, Upload, X, FileText, Send, Edit2 } from 'lucide-react'
 import { toast } from 'react-toastify'
 import Button from '../components/common/Button'
 import Input from '../components/common/Input'
@@ -11,24 +11,30 @@ import { purchaseOrderService } from '../services/purchaseOrderService.js'
 import { purchaseRequestService } from '../services/purchaseRequestService.js'
 import { businessPartnerService } from '../services/businessPartnerService.js'
 import { materialService } from '../services/materialService.js'
+import { fileService } from '../services/fileService.js'
 
 const PurchaseOrderDetails = () => {
   const { id } = useParams()
   const navigate = useNavigate()
-  const location = useLocation()
-  const prId = new URLSearchParams(location.search).get('prId')
   const isEditMode = id && id !== 'new'
   const [loading, setLoading] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
   const [materials, setMaterials] = useState([])
   const [vendors, setVendors] = useState([])
   const [purchaseRequests, setPurchaseRequests] = useState([])
+  const [selectedPR, setSelectedPR] = useState(null)
   const [isAddItemModalOpen, setIsAddItemModalOpen] = useState(false)
+  const [isEditItemModalOpen, setIsEditItemModalOpen] = useState(false)
+  const [editingItem, setEditingItem] = useState(null)
+  const [uploadedFiles, setUploadedFiles] = useState([])
+  const [existingDocuments, setExistingDocuments] = useState([])
 
   const [formData, setFormData] = useState({
     poNumber: '',
     poDate: new Date().toISOString().split('T')[0],
     vendorId: '',
-    prId: prId || '',
+    prId: '',
+    remarks: '',
   })
 
   const [orderItems, setOrderItems] = useState([])
@@ -62,13 +68,11 @@ const PurchaseOrderDetails = () => {
   useEffect(() => {
     fetchMaterials()
     fetchVendors()
-    if (prId) {
-      fetchPRItems(prId)
-    }
+    fetchPurchaseRequests()
     if (isEditMode) {
       fetchPurchaseOrder()
     }
-  }, [id, prId])
+  }, [id])
 
   const fetchMaterials = async () => {
     try {
@@ -94,26 +98,89 @@ const PurchaseOrderDetails = () => {
     }
   }
 
-  const fetchPRItems = async (prId) => {
+  const fetchPurchaseRequests = async () => {
     try {
-      const response = await purchaseRequestService.getById(prId)
-      if (response.success && response.data?.purchaseRequest?.items) {
-        const items = (response.data.purchaseRequest.items || []).map(item => ({
-          id: Date.now() + Math.random(),
-          materialId: item.material_id,
-          itemName: item.material?.material_name || '-',
-          productCode: item.material?.product_code || '-',
-          quantity: item.requested_quantity,
-          unitPrice: '',
-          uom: item.material?.uom || 'PIECE(S)',
-          remarks: item.remarks || '',
-        }))
-        setOrderItems(items)
-        setFormData(prev => ({ ...prev, prId }))
+      const response = await purchaseRequestService.getAll({ limit: 1000, status: 'APPROVED' })
+      if (response.success) {
+        setPurchaseRequests(response.data?.purchaseRequests || response.data?.data || [])
       }
     } catch (error) {
-      console.error('Error fetching PR items:', error)
-      toast.error('Failed to load PR items')
+      console.error('Error fetching purchase requests:', error)
+      setPurchaseRequests([])
+    }
+  }
+
+  const handlePRSelection = async (prId) => {
+    if (!prId) {
+      setSelectedPR(null)
+      setFormData(prev => ({ ...prev, prId: '', poNumber: '' }))
+      setOrderItems([])
+      return
+    }
+
+    try {
+      setLoading(true)
+      const response = await purchaseRequestService.getById(prId)
+      if (response.success) {
+        const pr = response.data?.purchaseRequest || response.data?.data
+        if (pr) {
+          setSelectedPR(pr)
+          
+          // Generate PO number based on PR number
+          const prNumber = pr.pr_number || ''
+          const poNumber = prNumber ? `PO-${prNumber.replace('PR-', '')}` : ''
+          
+          // Fetch PR items and populate order items
+          const items = (pr.items || []).map((item, index) => ({
+            id: Date.now() + index,
+            materialId: item.material_id,
+            itemName: item.material?.material_name || item.pr_name || '-',
+            productCode: item.material?.product_code || '-',
+            quantity: item.requested_quantity || 1,
+            unitPrice: '',
+            uom: item.material?.uom || 'PIECE(S)',
+            remarks: item.remarks || '',
+            prName: item.pr_name || '',
+            materialType: item.material_type || '',
+            businessPartnerId: item.business_partner_id || '',
+            shippingAddress: item.shipping_address || '',
+            description: item.description || '',
+          }))
+
+          setOrderItems(items)
+          
+          // Set vendor from first item's business partner if available
+          const firstItem = items[0]
+          if (firstItem?.businessPartnerId) {
+            const vendor = vendors.find(v => v.partner_id === firstItem.businessPartnerId)
+            if (vendor) {
+              setFormData(prev => ({
+                ...prev,
+                prId: prId,
+                poNumber: poNumber,
+                vendorId: vendor.partner_id,
+              }))
+            } else {
+              setFormData(prev => ({
+                ...prev,
+                prId: prId,
+                poNumber: poNumber,
+              }))
+            }
+          } else {
+            setFormData(prev => ({
+              ...prev,
+              prId: prId,
+              poNumber: poNumber,
+            }))
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching PR details:', error)
+      toast.error('Failed to load PR details')
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -129,9 +196,16 @@ const PurchaseOrderDetails = () => {
             poDate: po.po_date ? po.po_date.split('T')[0] : new Date().toISOString().split('T')[0],
             vendorId: po.vendor_id || '',
             prId: po.pr_id || '',
+            remarks: po.remarks || '',
           })
           
-          if (po.items && Array.isArray(po.items)) {
+          // Set existing documents
+          if (po.documents && Array.isArray(po.documents)) {
+            setExistingDocuments(po.documents)
+          }
+          
+          // Load items from PO (don't load PR if items already exist)
+          if (po.items && Array.isArray(po.items) && po.items.length > 0) {
             setOrderItems(po.items.map((item, index) => ({
               id: item.item_id || index,
               materialId: item.material_id,
@@ -142,6 +216,9 @@ const PurchaseOrderDetails = () => {
               uom: item.material?.uom || 'PIECE(S)',
               remarks: item.remarks || '',
             })))
+          } else if (po.pr_id) {
+            // Only load PR if no items exist
+            await handlePRSelection(po.pr_id)
           }
         }
       }
@@ -172,6 +249,14 @@ const PurchaseOrderDetails = () => {
         label: `${vendorName}${typeSuffix}`
       }
     })
+  ]
+
+  const prOptions = [
+    { value: '', label: 'Select Purchase Request' },
+    ...purchaseRequests.map(pr => ({
+      value: pr.pr_id || pr.id,
+      label: `${pr.pr_number || 'PR-' + (pr.pr_id || pr.id).substring(0, 8)} - ${pr.requested_date ? new Date(pr.requested_date).toLocaleDateString() : ''}`
+    }))
   ]
 
   const handleAddItem = () => {
@@ -208,9 +293,81 @@ const PurchaseOrderDetails = () => {
     toast.success('Item added successfully')
   }
 
+  const handleEditItem = (item) => {
+    setEditingItem(item)
+    setItemForm({
+      materialId: item.materialId,
+      quantity: item.quantity.toString(),
+      unitPrice: item.unitPrice.toString(),
+      remarks: item.remarks || '',
+    })
+    setIsEditItemModalOpen(true)
+  }
+
+  const handleUpdateItem = () => {
+    if (!itemForm.materialId || !itemForm.quantity) {
+      toast.error('Please fill all required fields')
+      return
+    }
+
+    const selectedMaterial = materials.find(m => m.material_id === itemForm.materialId)
+    if (!selectedMaterial) {
+      toast.error('Please select a valid material')
+      return
+    }
+
+    const updatedItems = orderItems.map(item => 
+      item.id === editingItem.id
+        ? {
+            ...item,
+            materialId: selectedMaterial.material_id,
+            itemName: selectedMaterial.material_name,
+            productCode: selectedMaterial.product_code || '-',
+            quantity: parseInt(itemForm.quantity),
+            unitPrice: parseFloat(itemForm.unitPrice) || 0,
+            uom: selectedMaterial.uom || 'PIECE(S)',
+            remarks: itemForm.remarks || '',
+          }
+        : item
+    )
+    
+    setOrderItems(updatedItems)
+    setItemForm({
+      materialId: '',
+      quantity: '',
+      unitPrice: '',
+      remarks: '',
+    })
+    setEditingItem(null)
+    setIsEditItemModalOpen(false)
+    toast.success('Item updated successfully')
+  }
+
   const handleDeleteItem = (itemId) => {
     setOrderItems(orderItems.filter((item) => item.id !== itemId))
     toast.success('Item removed')
+  }
+
+  const handleFileUpload = (e) => {
+    const files = Array.from(e.target.files)
+    setUploadedFiles([...uploadedFiles, ...files])
+  }
+
+  const handleRemoveFile = (index) => {
+    setUploadedFiles(uploadedFiles.filter((_, i) => i !== index))
+  }
+
+  const handleRemoveExistingDocument = async (filename) => {
+    try {
+      const response = await fileService.delete(filename)
+      if (response.success) {
+        setExistingDocuments(existingDocuments.filter(doc => doc !== filename))
+        toast.success('Document removed successfully')
+      }
+    } catch (error) {
+      console.error('Error removing document:', error)
+      toast.error('Failed to remove document')
+    }
   }
 
   const handleSave = async () => {
@@ -230,6 +387,8 @@ const PurchaseOrderDetails = () => {
         poNumber: formData.poNumber || undefined,
         poDate: formData.poDate,
         vendorId: formData.vendorId,
+        prId: formData.prId || undefined,
+        remarks: formData.remarks || undefined,
         orgId: getOrgId() || undefined,
         items: orderItems.map(item => ({
           materialId: item.materialId,
@@ -249,27 +408,28 @@ const PurchaseOrderDetails = () => {
       }
 
       if (response.success) {
+        const poId = response.data?.purchaseOrder?.po_id || response.data?.data?.po_id || id
+        
+        // Upload documents if any
+        if (uploadedFiles.length > 0 && poId) {
+          try {
+            await fileService.addToPurchaseOrder(poId, uploadedFiles)
+            setUploadedFiles([])
+          } catch (error) {
+            console.error('Error uploading documents:', error)
+            toast.warning('PO saved but documents upload failed')
+          }
+        }
+
         toast.success(`Purchase order ${isEditMode ? 'updated' : 'created'} successfully!`)
-        // Trigger multiple refresh mechanisms for reliability
+        
         if (!isEditMode) {
           window.dispatchEvent(new CustomEvent('purchaseOrderCreated'))
-          // Also use localStorage as a backup
           localStorage.setItem('purchaseOrderCreated', Date.now().toString())
-          // Trigger storage event for cross-tab/window communication
-          window.dispatchEvent(new StorageEvent('storage', {
-            key: 'purchaseOrderCreated',
-            newValue: Date.now().toString()
-          }))
-          
-          // If we came from AddInward, navigate back and refresh
-          if (sessionStorage.getItem('returnToInward') === 'true') {
-            sessionStorage.removeItem('returnToInward')
-            navigate('/add-inward')
-          } else {
-            navigate('/purchase-order')
-          }
+          navigate(`/purchase-order/${poId}`)
         } else {
-          navigate('/purchase-order')
+          // Reload to get updated data
+          await fetchPurchaseOrder()
         }
       }
     } catch (error) {
@@ -277,6 +437,86 @@ const PurchaseOrderDetails = () => {
       toast.error(error.message || `Failed to ${isEditMode ? 'update' : 'create'} purchase order`)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleSubmit = async () => {
+    if (!formData.vendorId) {
+      toast.error('Please select a vendor')
+      return
+    }
+    if (orderItems.length === 0) {
+      toast.error('Please add at least one item')
+      return
+    }
+
+    try {
+      setSubmitting(true)
+      let poId = id
+
+      // First save the PO if it's new
+      if (!isEditMode || !poId) {
+        // Save the PO first
+        const orderData = {
+          poNumber: formData.poNumber || undefined,
+          poDate: formData.poDate,
+          vendorId: formData.vendorId,
+          prId: formData.prId || undefined,
+          remarks: formData.remarks || undefined,
+          orgId: getOrgId() || undefined,
+          items: orderItems.map(item => ({
+            materialId: item.materialId,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice || undefined,
+            remarks: item.remarks || undefined,
+          })),
+        }
+
+        let createResponse
+        if (formData.prId) {
+          createResponse = await purchaseOrderService.createFromPR(formData.prId, orderData)
+        } else {
+          createResponse = await purchaseOrderService.create(orderData)
+        }
+
+        if (!createResponse.success) {
+          toast.error('Failed to save purchase order')
+          return
+        }
+
+        poId = createResponse.data?.purchaseOrder?.po_id || createResponse.data?.data?.po_id
+
+        // Upload documents if any
+        if (uploadedFiles.length > 0 && poId) {
+          try {
+            await fileService.addToPurchaseOrder(poId, uploadedFiles)
+            setUploadedFiles([])
+          } catch (error) {
+            console.error('Error uploading documents:', error)
+            toast.warning('PO saved but documents upload failed')
+          }
+        }
+      }
+
+      if (!poId) {
+        toast.error('Failed to get purchase order ID')
+        return
+      }
+
+      // Submit PO (this will send email to business partner)
+      const response = await purchaseOrderService.submit(poId, {
+        documents: [...existingDocuments, ...uploadedFiles.map(f => f.name)]
+      })
+
+      if (response.success) {
+        toast.success('Purchase order submitted and sent to vendor successfully!')
+        navigate('/purchase-order')
+      }
+    } catch (error) {
+      console.error('Error submitting purchase order:', error)
+      toast.error(error.message || 'Failed to submit purchase order')
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -291,12 +531,22 @@ const PurchaseOrderDetails = () => {
       key: 'actions',
       label: 'Actions',
       render: (row) => (
-        <button
-          onClick={() => handleDeleteItem(row.id)}
-          className="p-1 text-red-600 hover:bg-red-50 rounded"
-        >
-          <Trash2 className="w-4 h-4" />
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => handleEditItem(row)}
+            className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+            title="Edit"
+          >
+            <Edit2 className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => handleDeleteItem(row.id)}
+            className="p-1 text-red-600 hover:bg-red-50 rounded"
+            title="Delete"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
       ),
     },
   ]
@@ -317,12 +567,33 @@ const PurchaseOrderDetails = () => {
       </div>
 
       <div className="bg-white rounded-lg shadow-sm p-6 space-y-6">
+        {/* PR Selection Dropdown */}
+        <div className="border-b pb-4">
+          <h2 className="text-lg font-semibold mb-4">Select Purchase Request</h2>
+          <Dropdown
+            label="Purchase Request"
+            options={prOptions}
+            value={formData.prId}
+            onChange={(e) => handlePRSelection(e.target.value)}
+            disabled={isEditMode || loading}
+            required
+          />
+          {selectedPR && (
+            <div className="mt-2 text-sm text-gray-600">
+              <p>PR Number: {selectedPR.pr_number}</p>
+              <p>Requested Date: {selectedPR.requested_date ? new Date(selectedPR.requested_date).toLocaleDateString() : '-'}</p>
+            </div>
+          )}
+        </div>
+
+        {/* PO Details */}
         <div className="grid grid-cols-2 gap-4">
           <Input
             label="PO Number"
             value={formData.poNumber}
             onChange={(e) => setFormData({ ...formData, poNumber: e.target.value })}
-            placeholder="Auto-generated if left empty"
+            placeholder="Auto-generated from PR"
+            disabled={!formData.prId}
           />
           <Input
             label="PO Date"
@@ -337,8 +608,15 @@ const PurchaseOrderDetails = () => {
             onChange={(e) => setFormData({ ...formData, vendorId: e.target.value })}
             required
           />
+          <Input
+            label="Remarks"
+            value={formData.remarks}
+            onChange={(e) => setFormData({ ...formData, remarks: e.target.value })}
+            placeholder="Optional remarks"
+          />
         </div>
 
+        {/* Order Items */}
         <div className="border-t pt-4">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-semibold">Order Items</h2>
@@ -348,7 +626,7 @@ const PurchaseOrderDetails = () => {
           </div>
 
           {orderItems.length === 0 ? (
-            <p className="text-gray-500 text-center py-8">No items added yet</p>
+            <p className="text-gray-500 text-center py-8">No items added yet. Select a PR or add items manually.</p>
           ) : (
             <>
               <Table data={orderItems} columns={itemColumns} />
@@ -359,9 +637,84 @@ const PurchaseOrderDetails = () => {
           )}
         </div>
 
+        {/* Document Upload */}
+        <div className="border-t pt-4">
+          <h2 className="text-lg font-semibold mb-4">Documents</h2>
+          
+          {/* Existing Documents */}
+          {existingDocuments.length > 0 && (
+            <div className="mb-4">
+              <p className="text-sm font-medium text-gray-700 mb-2">Existing Documents:</p>
+              <div className="flex flex-wrap gap-2">
+                {existingDocuments.map((doc, index) => (
+                  <div key={index} className="flex items-center gap-2 bg-gray-100 px-3 py-2 rounded">
+                    <FileText className="w-4 h-4 text-gray-600" />
+                    <span className="text-sm text-gray-700">{doc.split('/').pop()}</span>
+                    <button
+                      onClick={() => handleRemoveExistingDocument(doc)}
+                      className="text-red-600 hover:text-red-800"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* File Upload */}
+          <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
+            <label className="flex flex-col items-center cursor-pointer">
+              <Upload className="w-8 h-8 text-gray-400 mb-2" />
+              <span className="text-sm text-gray-600">Click to upload documents</span>
+              <input
+                type="file"
+                multiple
+                accept="image/*,.pdf"
+                onChange={handleFileUpload}
+                className="hidden"
+              />
+            </label>
+          </div>
+
+          {/* Uploaded Files Preview */}
+          {uploadedFiles.length > 0 && (
+            <div className="mt-4">
+              <p className="text-sm font-medium text-gray-700 mb-2">Files to Upload:</p>
+              <div className="flex flex-wrap gap-2">
+                {uploadedFiles.map((file, index) => (
+                  <div key={index} className="flex items-center gap-2 bg-blue-100 px-3 py-2 rounded">
+                    <FileText className="w-4 h-4 text-blue-600" />
+                    <span className="text-sm text-gray-700">{file.name}</span>
+                    <button
+                      onClick={() => handleRemoveFile(index)}
+                      className="text-red-600 hover:text-red-800"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Action Buttons */}
         <div className="flex gap-4 pt-4 border-t">
-          <Button onClick={handleSave} disabled={loading} icon={loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}>
-            {isEditMode ? 'Update' : 'Save'}
+          <Button 
+            onClick={handleSave} 
+            disabled={loading} 
+            icon={loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+          >
+            {isEditMode ? 'Update' : 'Save Draft'}
+          </Button>
+          <Button 
+            onClick={handleSubmit} 
+            disabled={loading || submitting} 
+            variant="primary"
+            icon={submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+          >
+            {submitting ? 'Submitting...' : 'Submit to Vendor'}
           </Button>
           <Button onClick={() => navigate('/purchase-order')} variant="outline">
             Cancel
@@ -369,6 +722,7 @@ const PurchaseOrderDetails = () => {
         </div>
       </div>
 
+      {/* Add Item Modal */}
       <Modal
         isOpen={isAddItemModalOpen}
         onClose={() => setIsAddItemModalOpen(false)}
@@ -380,6 +734,7 @@ const PurchaseOrderDetails = () => {
             options={materialOptions}
             value={itemForm.materialId}
             onChange={(e) => setItemForm({ ...itemForm, materialId: e.target.value })}
+            required
           />
           <Input
             label="Quantity"
@@ -387,6 +742,7 @@ const PurchaseOrderDetails = () => {
             value={itemForm.quantity}
             onChange={(e) => setItemForm({ ...itemForm, quantity: e.target.value })}
             min="1"
+            required
           />
           <Input
             label="Unit Price"
@@ -408,6 +764,62 @@ const PurchaseOrderDetails = () => {
             </Button>
             <Button onClick={handleAddItem}>
               Add Item
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Edit Item Modal */}
+      <Modal
+        isOpen={isEditItemModalOpen}
+        onClose={() => {
+          setIsEditItemModalOpen(false)
+          setEditingItem(null)
+        }}
+        title="Edit Item"
+      >
+        <div className="space-y-4">
+          <Dropdown
+            label="Material"
+            options={materialOptions}
+            value={itemForm.materialId}
+            onChange={(e) => setItemForm({ ...itemForm, materialId: e.target.value })}
+            required
+          />
+          <Input
+            label="Quantity"
+            type="number"
+            value={itemForm.quantity}
+            onChange={(e) => setItemForm({ ...itemForm, quantity: e.target.value })}
+            min="1"
+            required
+          />
+          <Input
+            label="Unit Price"
+            type="number"
+            step="0.01"
+            value={itemForm.unitPrice}
+            onChange={(e) => setItemForm({ ...itemForm, unitPrice: e.target.value })}
+            min="0"
+          />
+          <Input
+            label="Remarks"
+            value={itemForm.remarks}
+            onChange={(e) => setItemForm({ ...itemForm, remarks: e.target.value })}
+            placeholder="Optional"
+          />
+          <div className="flex gap-2 justify-end">
+            <Button 
+              onClick={() => {
+                setIsEditItemModalOpen(false)
+                setEditingItem(null)
+              }} 
+              variant="outline"
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleUpdateItem}>
+              Update Item
             </Button>
           </div>
         </div>

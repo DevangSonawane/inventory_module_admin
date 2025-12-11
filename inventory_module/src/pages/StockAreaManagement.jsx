@@ -4,12 +4,14 @@ import { Plus, Search, Edit, Trash2, Loader2, Download } from 'lucide-react'
 import { toast } from 'react-toastify'
 import Button from '../components/common/Button'
 import Input from '../components/common/Input'
+import Dropdown from '../components/common/Dropdown'
 import Table from '../components/common/Table'
 import Pagination from '../components/common/Pagination'
 import Modal from '../components/common/Modal'
 import ConfirmationModal from '../components/common/ConfirmationModal'
 import { TableSkeleton } from '../components/common/Skeleton'
 import { stockAreaService } from '../services/stockAreaService.js'
+import { userService } from '../services/userService.js'
 import { exportService } from '../services/exportService.js'
 
 const StockAreaManagement = () => {
@@ -31,13 +33,19 @@ const StockAreaManagement = () => {
   const [deleteAreaId, setDeleteAreaId] = useState(null)
   const [saving, setSaving] = useState(false)
   
+  const [employees, setEmployees] = useState([])
+  const [loadingEmployees, setLoadingEmployees] = useState(false)
   const [formData, setFormData] = useState({
     areaName: '',
-    locationCode: '',
-    address: '',
-    capacity: '',
+    storeKeeperId: '',
+    description: '',
+    pinCode: '',
   })
   const [formErrors, setFormErrors] = useState({})
+
+  useEffect(() => {
+    fetchEmployees()
+  }, [])
 
   useEffect(() => {
     if (isEditMode) {
@@ -59,6 +67,21 @@ const StockAreaManagement = () => {
   useEffect(() => {
     fetchStockAreas()
   }, [currentPage, itemsPerPage, searchTerm])
+
+  const fetchEmployees = async () => {
+    try {
+      setLoadingEmployees(true)
+      const response = await userService.getAll({ limit: 1000 })
+      if (response.success && response.data?.users) {
+        setEmployees(response.data.users)
+      }
+    } catch (error) {
+      console.error('Error fetching employees:', error)
+      toast.error('Failed to load employees')
+    } finally {
+      setLoadingEmployees(false)
+    }
+  }
 
   const fetchStockAreas = async () => {
     try {
@@ -89,9 +112,9 @@ const StockAreaManagement = () => {
         const area = response.data.stockArea
         setFormData({
           areaName: area.area_name || '',
-          locationCode: area.location_code || '',
-          address: area.address || '',
-          capacity: area.capacity?.toString() || '',
+          storeKeeperId: area.store_keeper_id?.toString() || '',
+          description: area.description || '',
+          pinCode: area.pin_code || '',
         })
       }
     } catch (error) {
@@ -106,9 +129,9 @@ const StockAreaManagement = () => {
   const resetForm = () => {
     setFormData({
       areaName: '',
-      locationCode: '',
-      address: '',
-      capacity: '',
+      storeKeeperId: '',
+      description: '',
+      pinCode: '',
     })
     setFormErrors({})
   }
@@ -116,8 +139,7 @@ const StockAreaManagement = () => {
   const handleSubmit = async () => {
     // Validation
     const errors = {}
-    if (!formData.areaName.trim()) errors.areaName = 'Area name is required'
-    if (!formData.locationCode.trim()) errors.locationCode = 'Location code is required'
+    if (!formData.areaName.trim()) errors.areaName = 'Warehouse name is required'
 
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors)
@@ -128,9 +150,9 @@ const StockAreaManagement = () => {
       setSaving(true)
       const areaData = {
         areaName: formData.areaName.trim(),
-        locationCode: formData.locationCode.trim(),
-        address: formData.address.trim() || undefined,
-        capacity: formData.capacity ? parseInt(formData.capacity) : undefined,
+        storeKeeperId: formData.storeKeeperId ? parseInt(formData.storeKeeperId) : undefined,
+        description: formData.description.trim() || undefined,
+        pinCode: formData.pinCode.trim() || undefined,
       }
 
       let response
@@ -223,15 +245,19 @@ const StockAreaManagement = () => {
         ) : (
           <>
             <Table
-              headers={['AREA NAME', 'LOCATION CODE', 'ADDRESS', 'CAPACITY', 'ACTIONS']}
+              headers={['WAREHOUSE NAME', 'STORE KEEPER', 'DESCRIPTION', 'PIN CODE', 'ACTIONS']}
             >
               {stockAreas.length > 0 ? (
                 stockAreas.map((area) => (
                   <tr key={area.area_id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{area.area_name}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{area.location_code}</td>
-                    <td className="px-6 py-4 text-sm text-gray-900">{area.address || '-'}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{area.capacity || '-'}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {area.storeKeeper ? area.storeKeeper.name : '-'}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-900">
+                      {area.description ? (area.description.length > 50 ? `${area.description.substring(0, 50)}...` : area.description) : '-'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{area.pin_code || '-'}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
                       <div className="flex gap-2">
                         <button
@@ -296,7 +322,7 @@ const StockAreaManagement = () => {
         >
           <div className="space-y-4">
             <Input
-              label="Area Name"
+              label="Warehouse Name"
               required
               value={formData.areaName}
               onChange={(e) => {
@@ -304,33 +330,57 @@ const StockAreaManagement = () => {
                 setFormErrors({ ...formErrors, areaName: '' })
               }}
               error={formErrors.areaName}
+              placeholder="Enter warehouse name"
             />
-            <Input
-              label="Location Code"
-              required
-              value={formData.locationCode}
+            <Dropdown
+              label="Store Keeper"
+              value={formData.storeKeeperId}
               onChange={(e) => {
-                setFormData({ ...formData, locationCode: e.target.value })
-                setFormErrors({ ...formErrors, locationCode: '' })
+                setFormData({ ...formData, storeKeeperId: e.target.value })
+                setFormErrors({ ...formErrors, storeKeeperId: '' })
               }}
-              error={formErrors.locationCode}
+              error={formErrors.storeKeeperId}
+              options={[
+                { value: '', label: 'Select Store Keeper' },
+                ...employees
+                  .filter(emp => emp.isActive !== false)
+                  .map(emp => ({
+                    value: emp.id.toString(),
+                    label: `${emp.name}${emp.employeCode ? ` (${emp.employeCode})` : ''}`
+                  }))
+              ]}
+              disabled={loadingEmployees}
             />
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Address
+                Description
               </label>
               <textarea
-                value={formData.address}
-                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                value={formData.description}
+                onChange={(e) => {
+                  setFormData({ ...formData, description: e.target.value })
+                  setFormErrors({ ...formErrors, description: '' })
+                }}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 rows={3}
+                placeholder="Enter description"
               />
+              {formErrors.description && (
+                <span className="text-sm text-red-500 mt-1">{formErrors.description}</span>
+              )}
             </div>
             <Input
-              label="Capacity"
-              type="number"
-              value={formData.capacity}
-              onChange={(e) => setFormData({ ...formData, capacity: e.target.value })}
+              label="Pin Code"
+              type="text"
+              value={formData.pinCode}
+              onChange={(e) => {
+                const value = e.target.value.replace(/\D/g, '')
+                setFormData({ ...formData, pinCode: value })
+                setFormErrors({ ...formErrors, pinCode: '' })
+              }}
+              error={formErrors.pinCode}
+              placeholder="Enter pin code"
+              maxLength={10}
             />
             <div className="flex justify-end gap-3 pt-4">
               <Button

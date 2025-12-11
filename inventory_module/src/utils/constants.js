@@ -56,6 +56,7 @@ export const API_ENDPOINTS = {
   DOCUMENTS: '/inventory/documents',
   DOCUMENT_BY_FILENAME: (filename) => `/inventory/documents/${filename}`,
   INWARD_DOCUMENTS: (id) => `/inventory/inward/${id}/documents`,
+  PURCHASE_ORDER_DOCUMENTS: (id) => `/inventory/purchase-orders/${id}/documents`,
   
   // Audit
   AUDIT_LOGS: '/inventory/audit-logs',
@@ -85,6 +86,7 @@ export const API_ENDPOINTS = {
   // Purchase Requests
   PURCHASE_REQUESTS: '/inventory/purchase-requests',
   PURCHASE_REQUEST_BY_ID: (id) => `/inventory/purchase-requests/${id}`,
+  PURCHASE_REQUEST_GENERATE_PR_NUMBER: '/inventory/purchase-requests/generate-pr-number',
   PURCHASE_REQUEST_SUBMIT: (id) => `/inventory/purchase-requests/${id}/submit`,
   PURCHASE_REQUEST_APPROVE: (id) => `/inventory/purchase-requests/${id}/approve`,
   PURCHASE_REQUEST_REJECT: (id) => `/inventory/purchase-requests/${id}/reject`,

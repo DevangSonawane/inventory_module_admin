@@ -24,27 +24,110 @@ export const materialService = {
 
   // Create material
   create: async (materialData) => {
-    return await post(API_ENDPOINTS.MATERIALS, {
-      materialName: materialData.materialName,
-      productCode: materialData.productCode,
-      materialType: materialData.materialType,
-      uom: materialData.uom || 'PIECE(S)',
-      properties: materialData.properties,
-      description: materialData.description,
-      orgId: materialData.orgId,
-    });
+    // Check if there are files to upload
+    const hasFiles = materialData.documents && materialData.documents.length > 0;
+    
+    if (hasFiles) {
+      // Use FormData for file uploads
+      const formData = new FormData();
+      formData.append('materialName', materialData.materialName);
+      formData.append('productCode', materialData.productCode);
+      formData.append('materialType', materialData.materialType);
+      if (materialData.uom) formData.append('uom', materialData.uom);
+      if (materialData.description) formData.append('description', materialData.description);
+      if (materialData.hsn) formData.append('hsn', materialData.hsn);
+      if (materialData.gstPercentage !== undefined && materialData.gstPercentage !== null && materialData.gstPercentage !== '') {
+        formData.append('gstPercentage', materialData.gstPercentage);
+      }
+      if (materialData.price !== undefined && materialData.price !== null && materialData.price !== '') {
+        formData.append('price', materialData.price);
+      }
+      if (materialData.assetId) formData.append('assetId', materialData.assetId);
+      if (materialData.materialProperty) formData.append('materialProperty', materialData.materialProperty);
+      if (materialData.properties) {
+        formData.append('properties', typeof materialData.properties === 'string' 
+          ? materialData.properties 
+          : JSON.stringify(materialData.properties));
+      }
+      if (materialData.orgId) formData.append('orgId', materialData.orgId);
+      
+      // Append files
+      materialData.documents.forEach((file) => {
+        formData.append('documents', file);
+      });
+      
+      // Don't set Content-Type header - let browser set it with boundary
+      return await post(API_ENDPOINTS.MATERIALS, formData);
+    } else {
+      // Regular JSON request
+      return await post(API_ENDPOINTS.MATERIALS, {
+        materialName: materialData.materialName,
+        productCode: materialData.productCode,
+        materialType: materialData.materialType,
+        uom: materialData.uom || 'PIECE(S)',
+        properties: materialData.properties,
+        description: materialData.description,
+        hsn: materialData.hsn,
+        gstPercentage: materialData.gstPercentage,
+        price: materialData.price,
+        assetId: materialData.assetId,
+        materialProperty: materialData.materialProperty,
+        orgId: materialData.orgId,
+      });
+    }
   },
 
   // Update material
   update: async (id, materialData) => {
-    return await put(API_ENDPOINTS.MATERIAL_BY_ID(id), {
-      materialName: materialData.materialName,
-      productCode: materialData.productCode,
-      materialType: materialData.materialType,
-      uom: materialData.uom,
-      properties: materialData.properties,
-      description: materialData.description,
-    });
+    // Check if there are files to upload
+    const hasFiles = materialData.documents && materialData.documents.length > 0;
+    
+    if (hasFiles) {
+      // Use FormData for file uploads
+      const formData = new FormData();
+      if (materialData.materialName) formData.append('materialName', materialData.materialName);
+      if (materialData.productCode) formData.append('productCode', materialData.productCode);
+      if (materialData.materialType) formData.append('materialType', materialData.materialType);
+      if (materialData.uom) formData.append('uom', materialData.uom);
+      if (materialData.description !== undefined) formData.append('description', materialData.description || '');
+      if (materialData.hsn !== undefined) formData.append('hsn', materialData.hsn || '');
+      if (materialData.gstPercentage !== undefined && materialData.gstPercentage !== null && materialData.gstPercentage !== '') {
+        formData.append('gstPercentage', materialData.gstPercentage);
+      }
+      if (materialData.price !== undefined && materialData.price !== null && materialData.price !== '') {
+        formData.append('price', materialData.price);
+      }
+      if (materialData.assetId !== undefined) formData.append('assetId', materialData.assetId || '');
+      if (materialData.materialProperty !== undefined) formData.append('materialProperty', materialData.materialProperty || '');
+      if (materialData.properties !== undefined) {
+        formData.append('properties', typeof materialData.properties === 'string' 
+          ? materialData.properties 
+          : JSON.stringify(materialData.properties));
+      }
+      
+      // Append files
+      materialData.documents.forEach((file) => {
+        formData.append('documents', file);
+      });
+      
+      // Don't set Content-Type header - let browser set it with boundary
+      return await put(API_ENDPOINTS.MATERIAL_BY_ID(id), formData);
+    } else {
+      // Regular JSON request
+      return await put(API_ENDPOINTS.MATERIAL_BY_ID(id), {
+        materialName: materialData.materialName,
+        productCode: materialData.productCode,
+        materialType: materialData.materialType,
+        uom: materialData.uom,
+        properties: materialData.properties,
+        description: materialData.description,
+        hsn: materialData.hsn,
+        gstPercentage: materialData.gstPercentage,
+        price: materialData.price,
+        assetId: materialData.assetId,
+        materialProperty: materialData.materialProperty,
+      });
+    }
   },
 
   // Delete material

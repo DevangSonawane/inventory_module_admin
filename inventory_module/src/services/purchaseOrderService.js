@@ -42,6 +42,11 @@ export const purchaseOrderService = {
     return await post(`${API_BASE_URL}/inventory/purchase-orders/${id}/send`);
   },
 
+  // Submit purchase order (sends email to vendor)
+  submit: async (id, data = {}) => {
+    return await post(`${API_BASE_URL}/inventory/purchase-orders/${id}/submit`, data);
+  },
+
   // Receive purchase order
   receive: async (id) => {
     return await post(`${API_BASE_URL}/inventory/purchase-orders/${id}/receive`);

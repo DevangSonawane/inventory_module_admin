@@ -11,6 +11,61 @@ import Modal from '../components/common/Modal'
 import ConfirmationModal from '../components/common/ConfirmationModal'
 import { businessPartnerService } from '../services/businessPartnerService.js'
 
+// Country and State data
+const countries = [
+  { value: '', label: 'Select Country' },
+  { value: 'India', label: 'India' },
+  { value: 'USA', label: 'United States' },
+  { value: 'UK', label: 'United Kingdom' },
+  { value: 'Canada', label: 'Canada' },
+  { value: 'Australia', label: 'Australia' },
+  { value: 'Germany', label: 'Germany' },
+  { value: 'France', label: 'France' },
+  { value: 'Japan', label: 'Japan' },
+  { value: 'China', label: 'China' },
+  { value: 'Singapore', label: 'Singapore' },
+]
+
+const indianStates = [
+  { value: '', label: 'Select State' },
+  { value: 'Andhra Pradesh', label: 'Andhra Pradesh' },
+  { value: 'Arunachal Pradesh', label: 'Arunachal Pradesh' },
+  { value: 'Assam', label: 'Assam' },
+  { value: 'Bihar', label: 'Bihar' },
+  { value: 'Chhattisgarh', label: 'Chhattisgarh' },
+  { value: 'Goa', label: 'Goa' },
+  { value: 'Gujarat', label: 'Gujarat' },
+  { value: 'Haryana', label: 'Haryana' },
+  { value: 'Himachal Pradesh', label: 'Himachal Pradesh' },
+  { value: 'Jharkhand', label: 'Jharkhand' },
+  { value: 'Karnataka', label: 'Karnataka' },
+  { value: 'Kerala', label: 'Kerala' },
+  { value: 'Madhya Pradesh', label: 'Madhya Pradesh' },
+  { value: 'Maharashtra', label: 'Maharashtra' },
+  { value: 'Manipur', label: 'Manipur' },
+  { value: 'Meghalaya', label: 'Meghalaya' },
+  { value: 'Mizoram', label: 'Mizoram' },
+  { value: 'Nagaland', label: 'Nagaland' },
+  { value: 'Odisha', label: 'Odisha' },
+  { value: 'Punjab', label: 'Punjab' },
+  { value: 'Rajasthan', label: 'Rajasthan' },
+  { value: 'Sikkim', label: 'Sikkim' },
+  { value: 'Tamil Nadu', label: 'Tamil Nadu' },
+  { value: 'Telangana', label: 'Telangana' },
+  { value: 'Tripura', label: 'Tripura' },
+  { value: 'Uttar Pradesh', label: 'Uttar Pradesh' },
+  { value: 'Uttarakhand', label: 'Uttarakhand' },
+  { value: 'West Bengal', label: 'West Bengal' },
+  { value: 'Andaman and Nicobar Islands', label: 'Andaman and Nicobar Islands' },
+  { value: 'Chandigarh', label: 'Chandigarh' },
+  { value: 'Dadra and Nagar Haveli and Daman and Diu', label: 'Dadra and Nagar Haveli and Daman and Diu' },
+  { value: 'Delhi', label: 'Delhi' },
+  { value: 'Jammu and Kashmir', label: 'Jammu and Kashmir' },
+  { value: 'Ladakh', label: 'Ladakh' },
+  { value: 'Lakshadweep', label: 'Lakshadweep' },
+  { value: 'Puducherry', label: 'Puducherry' },
+]
+
 const BusinessPartnerManagement = () => {
   const navigate = useNavigate()
   const location = useLocation()
@@ -34,10 +89,24 @@ const BusinessPartnerManagement = () => {
   const [formData, setFormData] = useState({
     partnerName: '',
     partnerType: 'SUPPLIER',
-    email: '',
-    phone: '',
-    address: '',
-    contactPerson: '',
+    gstNumber: '',
+    panCard: '',
+    billingAddress: '',
+    shippingAddress: '',
+    sameAsBilling: false,
+    bankName: '',
+    bankAccountName: '',
+    ifscCode: '',
+    accountNumber: '',
+    contactFirstName: '',
+    contactLastName: '',
+    contactDesignation: '',
+    contactPhone: '',
+    contactEmail: '',
+    country: '',
+    state: '',
+    companyWebsite: '',
+    vendorCode: '',
   })
   const [formErrors, setFormErrors] = useState({})
 
@@ -52,6 +121,13 @@ const BusinessPartnerManagement = () => {
   useEffect(() => {
     fetchPartners()
   }, [currentPage, itemsPerPage, searchTerm, typeFilter])
+
+  // Update shipping address when same as billing is checked
+  useEffect(() => {
+    if (formData.sameAsBilling && formData.billingAddress) {
+      setFormData(prev => ({ ...prev, shippingAddress: prev.billingAddress }))
+    }
+  }, [formData.sameAsBilling, formData.billingAddress])
 
   const fetchPartners = async () => {
     try {
@@ -85,10 +161,24 @@ const BusinessPartnerManagement = () => {
           setFormData({
             partnerName: partner.partner_name || '',
             partnerType: partner.partner_type || 'SUPPLIER',
-            email: partner.email || '',
-            phone: partner.phone || '',
-            address: partner.address || '',
-            contactPerson: partner.contact_person || '',
+            gstNumber: partner.gst_number || '',
+            panCard: partner.pan_card || '',
+            billingAddress: partner.billing_address || '',
+            shippingAddress: partner.shipping_address || '',
+            sameAsBilling: partner.same_as_billing || false,
+            bankName: partner.bank_name || '',
+            bankAccountName: partner.bank_account_name || '',
+            ifscCode: partner.ifsc_code || '',
+            accountNumber: partner.account_number || '',
+            contactFirstName: partner.contact_first_name || '',
+            contactLastName: partner.contact_last_name || '',
+            contactDesignation: partner.contact_designation || '',
+            contactPhone: partner.contact_phone || '',
+            contactEmail: partner.contact_email || '',
+            country: partner.country || '',
+            state: partner.state || '',
+            companyWebsite: partner.company_website || '',
+            vendorCode: partner.vendor_code || '',
           })
           setSelectedPartner(partner)
         }
@@ -106,10 +196,24 @@ const BusinessPartnerManagement = () => {
     setFormData({
       partnerName: '',
       partnerType: 'SUPPLIER',
-      email: '',
-      phone: '',
-      address: '',
-      contactPerson: '',
+      gstNumber: '',
+      panCard: '',
+      billingAddress: '',
+      shippingAddress: '',
+      sameAsBilling: false,
+      bankName: '',
+      bankAccountName: '',
+      ifscCode: '',
+      accountNumber: '',
+      contactFirstName: '',
+      contactLastName: '',
+      contactDesignation: '',
+      contactPhone: '',
+      contactEmail: '',
+      country: '',
+      state: '',
+      companyWebsite: '',
+      vendorCode: '',
     })
     setFormErrors({})
     setSelectedPartner(null)
@@ -117,12 +221,69 @@ const BusinessPartnerManagement = () => {
 
   const validateForm = () => {
     const errors = {}
+    
+    // Mandatory fields
     if (!formData.partnerName.trim()) {
       errors.partnerName = 'Partner name is required'
     }
-    if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      errors.email = 'Invalid email format'
+    if (!formData.partnerType) {
+      errors.partnerType = 'Partner type is required'
     }
+    if (!formData.gstNumber.trim()) {
+      errors.gstNumber = 'GST number is required'
+    } else if (formData.gstNumber.length !== 15) {
+      errors.gstNumber = 'GST number must be 15 characters'
+    }
+    if (!formData.panCard.trim()) {
+      errors.panCard = 'PAN card is required'
+    } else if (!/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(formData.panCard.toUpperCase())) {
+      errors.panCard = 'Invalid PAN card format (e.g., ABCDE1234F)'
+    }
+    if (!formData.billingAddress.trim()) {
+      errors.billingAddress = 'Billing address is required'
+    }
+    if (!formData.shippingAddress.trim()) {
+      errors.shippingAddress = 'Shipping address is required'
+    }
+    if (!formData.bankName.trim()) {
+      errors.bankName = 'Bank name is required'
+    }
+    if (!formData.bankAccountName.trim()) {
+      errors.bankAccountName = 'Bank account name is required'
+    }
+    if (!formData.ifscCode.trim()) {
+      errors.ifscCode = 'IFSC code is required'
+    } else if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(formData.ifscCode.toUpperCase())) {
+      errors.ifscCode = 'Invalid IFSC code format (e.g., ABCD0123456)'
+    }
+    if (!formData.accountNumber.trim()) {
+      errors.accountNumber = 'Account number is required'
+    }
+    if (!formData.contactFirstName.trim()) {
+      errors.contactFirstName = 'Contact first name is required'
+    }
+    if (!formData.contactLastName.trim()) {
+      errors.contactLastName = 'Contact last name is required'
+    }
+    if (!formData.contactDesignation.trim()) {
+      errors.contactDesignation = 'Contact designation is required'
+    }
+    if (!formData.contactPhone.trim()) {
+      errors.contactPhone = 'Contact phone number is required'
+    } else if (!/^[0-9]{10}$/.test(formData.contactPhone.replace(/\D/g, ''))) {
+      errors.contactPhone = 'Invalid phone number (must be 10 digits)'
+    }
+    if (!formData.contactEmail.trim()) {
+      errors.contactEmail = 'Contact email is required'
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.contactEmail)) {
+      errors.contactEmail = 'Invalid email format'
+    }
+    
+    // Optional field validation
+    if (formData.companyWebsite && !/^https?:\/\/.+/.test(formData.companyWebsite)) {
+      errors.companyWebsite = 'Invalid website URL format'
+    }
+    
     setFormErrors(errors)
     return Object.keys(errors).length === 0
   }
@@ -135,11 +296,36 @@ const BusinessPartnerManagement = () => {
 
     try {
       setSaving(true)
+      
+      // Format data for API
+      const submitData = {
+        partnerName: formData.partnerName.trim(),
+        partnerType: formData.partnerType,
+        gstNumber: formData.gstNumber.trim().toUpperCase(),
+        panCard: formData.panCard.trim().toUpperCase(),
+        billingAddress: formData.billingAddress.trim(),
+        shippingAddress: formData.shippingAddress.trim(),
+        sameAsBilling: formData.sameAsBilling,
+        bankName: formData.bankName.trim(),
+        bankAccountName: formData.bankAccountName.trim(),
+        ifscCode: formData.ifscCode.trim().toUpperCase(),
+        accountNumber: formData.accountNumber.trim(),
+        contactFirstName: formData.contactFirstName.trim(),
+        contactLastName: formData.contactLastName.trim(),
+        contactDesignation: formData.contactDesignation.trim(),
+        contactPhone: formData.contactPhone.replace(/\D/g, ''),
+        contactEmail: formData.contactEmail.trim().toLowerCase(),
+        country: formData.country || undefined,
+        state: formData.state || undefined,
+        companyWebsite: formData.companyWebsite.trim() || undefined,
+        vendorCode: formData.vendorCode.trim() || undefined,
+      }
+      
       let response
       if (isEditMode) {
-        response = await businessPartnerService.update(id, formData)
+        response = await businessPartnerService.update(id, submitData)
       } else {
-        response = await businessPartnerService.create(formData)
+        response = await businessPartnerService.create(submitData)
       }
 
       if (response.success) {
@@ -150,17 +336,13 @@ const BusinessPartnerManagement = () => {
           setShowModal(false)
           resetForm()
           fetchPartners()
-          // Trigger multiple refresh mechanisms for reliability
           window.dispatchEvent(new CustomEvent('businessPartnerCreated'))
-          // Also use localStorage as a backup
           localStorage.setItem('businessPartnerCreated', Date.now().toString())
-          // Trigger storage event for cross-tab/window communication
           window.dispatchEvent(new StorageEvent('storage', {
             key: 'businessPartnerCreated',
             newValue: Date.now().toString()
           }))
           
-          // If we came from AddInward, navigate back and refresh
           if (sessionStorage.getItem('returnToInward') === 'true') {
             sessionStorage.removeItem('returnToInward')
             navigate('/add-inward')
@@ -190,23 +372,23 @@ const BusinessPartnerManagement = () => {
   const partnerTypeOptions = [
     { value: '', label: 'All Types' },
     { value: 'SUPPLIER', label: 'Supplier' },
-    { value: 'VENDOR', label: 'Vendor' },
     { value: 'CUSTOMER', label: 'Customer' },
+    { value: 'BOTH', label: 'Both' },
   ]
 
   const formTypeOptions = [
     { value: 'SUPPLIER', label: 'Supplier' },
-    { value: 'VENDOR', label: 'Vendor' },
     { value: 'CUSTOMER', label: 'Customer' },
+    { value: 'BOTH', label: 'Both' },
   ]
 
   const columns = [
     { key: 'srNo', label: 'Sr. No.' },
     { key: 'partnerName', label: 'Partner Name' },
     { key: 'partnerType', label: 'Type' },
-    { key: 'email', label: 'Email' },
-    { key: 'phone', label: 'Phone' },
-    { key: 'contactPerson', label: 'Contact Person' },
+    { key: 'gstNumber', label: 'GST Number' },
+    { key: 'contactEmail', label: 'Contact Email' },
+    { key: 'contactPhone', label: 'Contact Phone' },
     {
       key: 'actions',
       label: 'Actions',
@@ -239,10 +421,213 @@ const BusinessPartnerManagement = () => {
     srNo: (currentPage - 1) * itemsPerPage + index + 1,
     partnerName: partner.partner_name,
     partnerType: partner.partner_type,
-    email: partner.email || '-',
-    phone: partner.phone || '-',
-    contactPerson: partner.contact_person || '-',
+    gstNumber: partner.gst_number || '-',
+    contactEmail: partner.contact_email || partner.email || '-',
+    contactPhone: partner.contact_phone || partner.phone || '-',
   }))
+
+  const renderForm = () => (
+    <div className="space-y-6 max-h-[80vh] overflow-y-auto pr-2">
+      {/* Basic Information */}
+      <div className="border-b pb-4">
+        <h3 className="text-lg font-semibold text-gray-800 mb-4">Basic Information</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Input
+            label="Partner Name"
+            value={formData.partnerName}
+            onChange={(e) => setFormData({ ...formData, partnerName: e.target.value })}
+            error={formErrors.partnerName}
+            required
+          />
+          <Dropdown
+            label="Partner Type"
+            options={formTypeOptions}
+            value={formData.partnerType}
+            onChange={(e) => setFormData({ ...formData, partnerType: e.target.value })}
+            error={formErrors.partnerType}
+            required
+          />
+          <Input
+            label="GST Number"
+            value={formData.gstNumber}
+            onChange={(e) => setFormData({ ...formData, gstNumber: e.target.value.toUpperCase() })}
+            error={formErrors.gstNumber}
+            maxLength={15}
+            required
+            placeholder="15 character GST number"
+          />
+          <Input
+            label="PAN Card"
+            value={formData.panCard}
+            onChange={(e) => setFormData({ ...formData, panCard: e.target.value.toUpperCase() })}
+            error={formErrors.panCard}
+            maxLength={10}
+            required
+            placeholder="ABCDE1234F"
+          />
+          <Input
+            label="Vendor Code (Auto-generated if left empty)"
+            value={formData.vendorCode}
+            onChange={(e) => setFormData({ ...formData, vendorCode: e.target.value })}
+            placeholder="Leave empty for auto-generation"
+          />
+        </div>
+      </div>
+
+      {/* Address Information */}
+      <div className="border-b pb-4">
+        <h3 className="text-lg font-semibold text-gray-800 mb-4">Address Information</h3>
+        <div className="space-y-4">
+          <div>
+            <label className="text-sm font-medium text-gray-700 mb-1 block">Billing Address <span className="text-red-500">*</span></label>
+            <textarea
+              value={formData.billingAddress}
+              onChange={(e) => setFormData({ ...formData, billingAddress: e.target.value })}
+              className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${formErrors.billingAddress ? 'border-red-500' : ''}`}
+              rows={3}
+              required
+            />
+            {formErrors.billingAddress && <span className="text-sm text-red-500 mt-1">{formErrors.billingAddress}</span>}
+          </div>
+          <div className="flex items-center">
+            <input
+              type="checkbox"
+              id="sameAsBilling"
+              checked={formData.sameAsBilling}
+              onChange={(e) => setFormData({ ...formData, sameAsBilling: e.target.checked })}
+              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+            />
+            <label htmlFor="sameAsBilling" className="ml-2 text-sm text-gray-700">
+              Shipping address is same as billing address
+            </label>
+          </div>
+          <div>
+            <label className="text-sm font-medium text-gray-700 mb-1 block">Shipping Address <span className="text-red-500">*</span></label>
+            <textarea
+              value={formData.shippingAddress}
+              onChange={(e) => setFormData({ ...formData, shippingAddress: e.target.value })}
+              disabled={formData.sameAsBilling}
+              className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${formData.sameAsBilling ? 'bg-gray-100' : ''} ${formErrors.shippingAddress ? 'border-red-500' : ''}`}
+              rows={3}
+              required
+            />
+            {formErrors.shippingAddress && <span className="text-sm text-red-500 mt-1">{formErrors.shippingAddress}</span>}
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Dropdown
+              label="Country"
+              options={countries}
+              value={formData.country}
+              onChange={(e) => setFormData({ ...formData, country: e.target.value })}
+            />
+            <Dropdown
+              label="State"
+              options={indianStates}
+              value={formData.state}
+              onChange={(e) => setFormData({ ...formData, state: e.target.value })}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Bank Details */}
+      <div className="border-b pb-4">
+        <h3 className="text-lg font-semibold text-gray-800 mb-4">Bank Details</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Input
+            label="Bank Name"
+            value={formData.bankName}
+            onChange={(e) => setFormData({ ...formData, bankName: e.target.value })}
+            error={formErrors.bankName}
+            required
+          />
+          <Input
+            label="Account Holder Name"
+            value={formData.bankAccountName}
+            onChange={(e) => setFormData({ ...formData, bankAccountName: e.target.value })}
+            error={formErrors.bankAccountName}
+            required
+          />
+          <Input
+            label="IFSC Code"
+            value={formData.ifscCode}
+            onChange={(e) => setFormData({ ...formData, ifscCode: e.target.value.toUpperCase() })}
+            error={formErrors.ifscCode}
+            maxLength={11}
+            required
+            placeholder="ABCD0123456"
+          />
+          <Input
+            label="Account Number"
+            value={formData.accountNumber}
+            onChange={(e) => setFormData({ ...formData, accountNumber: e.target.value })}
+            error={formErrors.accountNumber}
+            required
+          />
+        </div>
+      </div>
+
+      {/* Contact Details */}
+      <div className="border-b pb-4">
+        <h3 className="text-lg font-semibold text-gray-800 mb-4">Contact Details</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Input
+            label="First Name"
+            value={formData.contactFirstName}
+            onChange={(e) => setFormData({ ...formData, contactFirstName: e.target.value })}
+            error={formErrors.contactFirstName}
+            required
+          />
+          <Input
+            label="Last Name"
+            value={formData.contactLastName}
+            onChange={(e) => setFormData({ ...formData, contactLastName: e.target.value })}
+            error={formErrors.contactLastName}
+            required
+          />
+          <Input
+            label="Designation"
+            value={formData.contactDesignation}
+            onChange={(e) => setFormData({ ...formData, contactDesignation: e.target.value })}
+            error={formErrors.contactDesignation}
+            required
+            placeholder="e.g., Manager, Director"
+          />
+          <Input
+            label="Phone Number"
+            value={formData.contactPhone}
+            onChange={(e) => setFormData({ ...formData, contactPhone: e.target.value.replace(/\D/g, '').slice(0, 10) })}
+            error={formErrors.contactPhone}
+            maxLength={10}
+            required
+            placeholder="10 digits"
+          />
+          <Input
+            label="Email"
+            type="email"
+            value={formData.contactEmail}
+            onChange={(e) => setFormData({ ...formData, contactEmail: e.target.value })}
+            error={formErrors.contactEmail}
+            required
+          />
+        </div>
+      </div>
+
+      {/* Optional Information */}
+      <div>
+        <h3 className="text-lg font-semibold text-gray-800 mb-4">Optional Information</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Input
+            label="Company Website"
+            value={formData.companyWebsite}
+            onChange={(e) => setFormData({ ...formData, companyWebsite: e.target.value })}
+            error={formErrors.companyWebsite}
+            placeholder="https://example.com"
+          />
+        </div>
+      </div>
+    </div>
+  )
 
   if (isEditMode) {
     return (
@@ -255,50 +640,14 @@ const BusinessPartnerManagement = () => {
         </div>
 
         <div className="bg-white rounded-lg shadow-sm p-6">
-          <div className="space-y-4">
-            <Input
-              label="Partner Name"
-              value={formData.partnerName}
-              onChange={(e) => setFormData({ ...formData, partnerName: e.target.value })}
-              error={formErrors.partnerName}
-              required
-            />
-            <Dropdown
-              label="Partner Type"
-              options={formTypeOptions}
-              value={formData.partnerType}
-              onChange={(e) => setFormData({ ...formData, partnerType: e.target.value })}
-            />
-            <Input
-              label="Email"
-              type="email"
-              value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              error={formErrors.email}
-            />
-            <Input
-              label="Phone"
-              value={formData.phone}
-              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-            />
-            <Input
-              label="Address"
-              value={formData.address}
-              onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-            />
-            <Input
-              label="Contact Person"
-              value={formData.contactPerson}
-              onChange={(e) => setFormData({ ...formData, contactPerson: e.target.value })}
-            />
-            <div className="flex gap-4 pt-4">
-              <Button onClick={handleSave} disabled={saving} icon={saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}>
-                Update
-              </Button>
-              <Button onClick={() => navigate('/business-partner')} variant="outline">
-                Cancel
-              </Button>
-            </div>
+          {renderForm()}
+          <div className="flex gap-4 pt-6 mt-6 border-t">
+            <Button onClick={handleSave} disabled={saving} icon={saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}>
+              Update
+            </Button>
+            <Button onClick={() => navigate('/business-partner')} variant="outline">
+              Cancel
+            </Button>
           </div>
         </div>
       </div>
@@ -373,54 +722,19 @@ const BusinessPartnerManagement = () => {
           resetForm()
         }}
         title="Add Business Partner"
+        size="lg"
       >
-        <div className="space-y-4">
-          <Input
-            label="Partner Name"
-            value={formData.partnerName}
-            onChange={(e) => setFormData({ ...formData, partnerName: e.target.value })}
-            error={formErrors.partnerName}
-            required
-          />
-          <Dropdown
-            label="Partner Type"
-            options={formTypeOptions}
-            value={formData.partnerType}
-            onChange={(e) => setFormData({ ...formData, partnerType: e.target.value })}
-          />
-          <Input
-            label="Email"
-            type="email"
-            value={formData.email}
-            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-            error={formErrors.email}
-          />
-          <Input
-            label="Phone"
-            value={formData.phone}
-            onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-          />
-          <Input
-            label="Address"
-            value={formData.address}
-            onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-          />
-          <Input
-            label="Contact Person"
-            value={formData.contactPerson}
-            onChange={(e) => setFormData({ ...formData, contactPerson: e.target.value })}
-          />
-          <div className="flex gap-2 justify-end pt-4">
-            <Button onClick={() => {
-              setShowModal(false)
-              resetForm()
-            }} variant="outline">
-              Cancel
-            </Button>
-            <Button onClick={handleSave} disabled={saving} icon={saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}>
-              Create
-            </Button>
-          </div>
+        {renderForm()}
+        <div className="flex gap-2 justify-end pt-4 mt-6 border-t">
+          <Button onClick={() => {
+            setShowModal(false)
+            resetForm()
+          }} variant="outline">
+            Cancel
+          </Button>
+          <Button onClick={handleSave} disabled={saving} icon={saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}>
+            Create
+          </Button>
         </div>
       </Modal>
 

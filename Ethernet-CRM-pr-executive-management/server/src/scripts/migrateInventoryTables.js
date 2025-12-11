@@ -375,7 +375,25 @@ const runMigration = async (silent = false) => {
         CREATE TABLE \`business_partners\` (
           \`partner_id\` CHAR(36) NOT NULL PRIMARY KEY,
           \`partner_name\` VARCHAR(255) NOT NULL,
-          \`partner_type\` ENUM('VENDOR', 'SUPPLIER', 'CUSTOMER') NOT NULL DEFAULT 'VENDOR',
+          \`partner_type\` ENUM('SUPPLIER', 'CUSTOMER', 'BOTH') NOT NULL DEFAULT 'SUPPLIER',
+          \`gst_number\` VARCHAR(15) NOT NULL,
+          \`pan_card\` VARCHAR(10) NOT NULL,
+          \`billing_address\` TEXT NOT NULL,
+          \`shipping_address\` TEXT NOT NULL,
+          \`same_as_billing\` BOOLEAN NOT NULL DEFAULT FALSE,
+          \`bank_name\` VARCHAR(255) NOT NULL,
+          \`bank_account_name\` VARCHAR(255) NOT NULL,
+          \`ifsc_code\` VARCHAR(11) NOT NULL,
+          \`account_number\` VARCHAR(50) NOT NULL,
+          \`contact_first_name\` VARCHAR(100) NOT NULL,
+          \`contact_last_name\` VARCHAR(100) NOT NULL,
+          \`contact_designation\` VARCHAR(100) NOT NULL,
+          \`contact_phone\` VARCHAR(20) NOT NULL,
+          \`contact_email\` VARCHAR(100) NOT NULL,
+          \`country\` VARCHAR(100) NULL,
+          \`state\` VARCHAR(100) NULL,
+          \`company_website\` VARCHAR(255) NULL,
+          \`vendor_code\` VARCHAR(50) NULL,
           \`contact_person\` VARCHAR(255) NULL,
           \`email\` VARCHAR(100) NULL,
           \`phone\` VARCHAR(20) NULL,
@@ -386,12 +404,86 @@ const runMigration = async (silent = false) => {
           \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
           INDEX \`idx_partner_name\` (\`partner_name\`),
           INDEX \`idx_partner_type\` (\`partner_type\`),
-          INDEX \`idx_org_id\` (\`org_id\`)
+          INDEX \`idx_org_id\` (\`org_id\`),
+          INDEX \`idx_vendor_code\` (\`vendor_code\`),
+          INDEX \`idx_gst_number\` (\`gst_number\`),
+          UNIQUE KEY \`unique_vendor_code\` (\`vendor_code\`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
       `, { type: QueryTypes.RAW });
       if (!silent) console.log('   ✅ business_partners table created');
     } else {
       if (!silent) console.log('   ℹ️  business_partners table already exists');
+      
+      // Add new columns if they don't exist
+      if (!silent) console.log('   Checking for new columns in business_partners table...');
+      
+      const newColumns = [
+        { name: 'gst_number', definition: 'VARCHAR(15) NULL' },
+        { name: 'pan_card', definition: 'VARCHAR(10) NULL' },
+        { name: 'billing_address', definition: 'TEXT NULL' },
+        { name: 'shipping_address', definition: 'TEXT NULL' },
+        { name: 'same_as_billing', definition: 'BOOLEAN NOT NULL DEFAULT FALSE' },
+        { name: 'bank_name', definition: 'VARCHAR(255) NULL' },
+        { name: 'bank_account_name', definition: 'VARCHAR(255) NULL' },
+        { name: 'ifsc_code', definition: 'VARCHAR(11) NULL' },
+        { name: 'account_number', definition: 'VARCHAR(50) NULL' },
+        { name: 'contact_first_name', definition: 'VARCHAR(100) NULL' },
+        { name: 'contact_last_name', definition: 'VARCHAR(100) NULL' },
+        { name: 'contact_designation', definition: 'VARCHAR(100) NULL' },
+        { name: 'contact_phone', definition: 'VARCHAR(20) NULL' },
+        { name: 'contact_email', definition: 'VARCHAR(100) NULL' },
+        { name: 'country', definition: 'VARCHAR(100) NULL' },
+        { name: 'state', definition: 'VARCHAR(100) NULL' },
+        { name: 'company_website', definition: 'VARCHAR(255) NULL' },
+        { name: 'vendor_code', definition: 'VARCHAR(50) NULL' },
+      ];
+
+      for (const column of newColumns) {
+        if (!(await columnExists('business_partners', column.name))) {
+          try {
+            await sequelize.query(`
+              ALTER TABLE \`business_partners\` 
+              ADD COLUMN \`${column.name}\` ${column.definition}
+            `, { type: QueryTypes.RAW });
+            if (!silent) console.log(`   ✅ Added column: ${column.name}`);
+          } catch (error) {
+            if (!silent) console.log(`   ⚠️  Error adding column ${column.name}: ${error.message}`);
+          }
+        }
+      }
+
+      // Update partner_type ENUM if needed
+      try {
+        await sequelize.query(`
+          ALTER TABLE \`business_partners\` 
+          MODIFY COLUMN \`partner_type\` ENUM('SUPPLIER', 'CUSTOMER', 'BOTH', 'VENDOR') NOT NULL DEFAULT 'SUPPLIER'
+        `, { type: QueryTypes.RAW });
+        if (!silent) console.log('   ✅ Updated partner_type ENUM');
+      } catch (error) {
+        // Ignore if already updated
+        if (!silent && !error.message.includes('Duplicate')) {
+          console.log(`   ⚠️  Error updating partner_type: ${error.message}`);
+        }
+      }
+
+      // Add indexes if they don't exist
+      try {
+        await sequelize.query(`
+          CREATE INDEX \`idx_vendor_code\` ON \`business_partners\` (\`vendor_code\`)
+        `, { type: QueryTypes.RAW });
+        if (!silent) console.log('   ✅ Added vendor_code index');
+      } catch (error) {
+        // Index might already exist
+      }
+
+      try {
+        await sequelize.query(`
+          CREATE INDEX \`idx_gst_number\` ON \`business_partners\` (\`gst_number\`)
+        `, { type: QueryTypes.RAW });
+        if (!silent) console.log('   ✅ Added gst_number index');
+      } catch (error) {
+        // Index might already exist
+      }
     }
 
     // 4. GROUPS
@@ -563,6 +655,28 @@ const runMigration = async (silent = false) => {
       if (!silent) console.log('   ✅ purchase_orders table created');
     } else {
       if (!silent) console.log('   ℹ️  purchase_orders table already exists');
+      
+      // Check if documents column exists, if not add it
+      try {
+        const [columns] = await sequelize.query(`
+          SELECT COLUMN_NAME 
+          FROM INFORMATION_SCHEMA.COLUMNS 
+          WHERE TABLE_SCHEMA = DATABASE() 
+          AND TABLE_NAME = 'purchase_orders' 
+          AND COLUMN_NAME = 'documents'
+        `, { type: QueryTypes.SELECT });
+        
+        if (!columns || columns.length === 0) {
+          if (!silent) console.log('   Adding documents column to purchase_orders table...');
+          await sequelize.query(`
+            ALTER TABLE \`purchase_orders\`
+            ADD COLUMN \`documents\` JSON NULL COMMENT 'Array of document file paths'
+          `, { type: QueryTypes.RAW });
+          if (!silent) console.log('   ✅ documents column added to purchase_orders');
+        }
+      } catch (e) {
+        if (!silent) console.log('   ⚠️  Could not add documents column:', e.message);
+      }
     }
 
     // 9. PURCHASE ORDER ITEMS
@@ -655,6 +769,96 @@ const runMigration = async (silent = false) => {
       }
     } else {
       if (!silent) console.log('   ℹ️  store_keeper_id already exists in stock_areas');
+    }
+
+    // Add description and pin_code to Stock Areas
+    if (!(await columnExists('stock_areas', 'description'))) {
+      if (!silent) console.log('   Adding description to stock_areas...');
+      try {
+        await sequelize.query(`
+          ALTER TABLE \`stock_areas\` 
+          ADD COLUMN \`description\` TEXT NULL COMMENT 'Description of the stock area/warehouse' AFTER \`store_keeper_id\`;
+        `, { type: QueryTypes.RAW });
+        if (!silent) console.log('   ✅ Added description to stock_areas');
+      } catch (e) {
+        if (e.message && (e.message.includes('Duplicate column') || e.message.includes('already exists'))) {
+          if (!silent) console.log('   ℹ️  description already exists, skipping...');
+        } else {
+          throw e;
+        }
+      }
+    } else {
+      if (!silent) console.log('   ℹ️  description already exists in stock_areas');
+    }
+
+    if (!(await columnExists('stock_areas', 'pin_code'))) {
+      if (!silent) console.log('   Adding pin_code to stock_areas...');
+      try {
+        await sequelize.query(`
+          ALTER TABLE \`stock_areas\` 
+          ADD COLUMN \`pin_code\` VARCHAR(10) NULL COMMENT 'Pin code of the warehouse location' AFTER \`description\`;
+        `, { type: QueryTypes.RAW });
+        if (!silent) console.log('   ✅ Added pin_code to stock_areas');
+      } catch (e) {
+        if (e.message && (e.message.includes('Duplicate column') || e.message.includes('already exists'))) {
+          if (!silent) console.log('   ℹ️  pin_code already exists, skipping...');
+        } else {
+          throw e;
+        }
+      }
+    } else {
+      if (!silent) console.log('   ℹ️  pin_code already exists in stock_areas');
+    }
+
+    // Add missing columns to Materials table
+    if (!(await columnExists('materials', 'hsn'))) {
+      if (!silent) console.log('   Adding new columns to materials table...');
+      try {
+        await sequelize.query(`
+          ALTER TABLE \`materials\`
+          ADD COLUMN \`hsn\` VARCHAR(50) NULL COMMENT 'HSN (Harmonized System of Nomenclature) code - international standard code' AFTER \`description\`,
+          ADD COLUMN \`gst_percentage\` DECIMAL(5, 2) NULL COMMENT 'GST percentage for the material' AFTER \`hsn\`,
+          ADD COLUMN \`price\` DECIMAL(10, 2) NULL COMMENT 'Price of the material' AFTER \`gst_percentage\`,
+          ADD COLUMN \`asset_id\` VARCHAR(100) NULL COMMENT 'Asset ID for the material' AFTER \`price\`,
+          ADD COLUMN \`material_property\` TEXT NULL COMMENT 'Material property information' AFTER \`asset_id\`,
+          ADD COLUMN \`documents\` JSON NULL COMMENT 'Array of document file paths/URLs' AFTER \`material_property\`;
+        `, { type: QueryTypes.RAW });
+        if (!silent) console.log('   ✅ Added new columns to materials table');
+      } catch (e) {
+        if (e.message && (e.message.includes('Duplicate column') || e.message.includes('already exists'))) {
+          if (!silent) console.log('   ℹ️  Some columns already exist in materials table');
+        } else {
+          throw e;
+        }
+      }
+    } else {
+      // Check and add individual columns if they don't exist
+      const columnsToAdd = [
+        { name: 'hsn', sql: 'ADD COLUMN `hsn` VARCHAR(50) NULL COMMENT \'HSN (Harmonized System of Nomenclature) code - international standard code\' AFTER `description`' },
+        { name: 'gst_percentage', sql: 'ADD COLUMN `gst_percentage` DECIMAL(5, 2) NULL COMMENT \'GST percentage for the material\' AFTER `hsn`' },
+        { name: 'price', sql: 'ADD COLUMN `price` DECIMAL(10, 2) NULL COMMENT \'Price of the material\' AFTER `gst_percentage`' },
+        { name: 'asset_id', sql: 'ADD COLUMN `asset_id` VARCHAR(100) NULL COMMENT \'Asset ID for the material\' AFTER `price`' },
+        { name: 'material_property', sql: 'ADD COLUMN `material_property` TEXT NULL COMMENT \'Material property information\' AFTER `asset_id`' },
+        { name: 'documents', sql: 'ADD COLUMN `documents` JSON NULL COMMENT \'Array of document file paths/URLs\' AFTER `material_property`' },
+      ];
+      
+      for (const col of columnsToAdd) {
+        if (!(await columnExists('materials', col.name))) {
+          try {
+            await sequelize.query(`
+              ALTER TABLE \`materials\`
+              ${col.sql};
+            `, { type: QueryTypes.RAW });
+            if (!silent) console.log(`   ✅ Added ${col.name} to materials table`);
+          } catch (e) {
+            if (e.message && (e.message.includes('Duplicate column') || e.message.includes('already exists'))) {
+              if (!silent) console.log(`   ℹ️  ${col.name} already exists in materials table`);
+            } else {
+              if (!silent) console.log(`   ⚠️  Could not add ${col.name}: ${e.message}`);
+            }
+          }
+        }
+      }
     }
 
     // Add missing columns to Material Requests

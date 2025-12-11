@@ -38,6 +38,36 @@ const Material = sequelize.define('material', {
     allowNull: true,
     comment: 'Description of the material'
   },
+  hsn: {
+    type: DataTypes.STRING(50),
+    allowNull: true,
+    comment: 'HSN (Harmonized System of Nomenclature) code - international standard code'
+  },
+  gst_percentage: {
+    type: DataTypes.DECIMAL(5, 2),
+    allowNull: true,
+    comment: 'GST percentage for the material'
+  },
+  price: {
+    type: DataTypes.DECIMAL(10, 2),
+    allowNull: true,
+    comment: 'Price of the material'
+  },
+  asset_id: {
+    type: DataTypes.STRING(100),
+    allowNull: true,
+    comment: 'Asset ID for the material'
+  },
+  material_property: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    comment: 'Material property information'
+  },
+  documents: {
+    type: DataTypes.JSON,
+    allowNull: true,
+    comment: 'Array of document file paths/URLs'
+  },
   org_id: {
     type: DataTypes.UUID,
     allowNull: true,

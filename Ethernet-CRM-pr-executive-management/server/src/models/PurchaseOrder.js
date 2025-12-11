@@ -50,6 +50,11 @@ const PurchaseOrder = sequelize.define('purchase_order', {
     allowNull: true,
     comment: 'Organization ID for multi-tenant support'
   },
+  documents: {
+    type: DataTypes.JSON,
+    allowNull: true,
+    comment: 'Array of document file paths'
+  },
   is_active: {
     type: DataTypes.BOOLEAN,
     defaultValue: true,

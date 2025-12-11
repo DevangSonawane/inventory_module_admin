@@ -1,4 +1,4 @@
-import { post, del } from '../utils/apiClient.js';
+import { post, del, upload } from '../utils/apiClient.js';
 import { API_ENDPOINTS, API_BASE_URL } from '../utils/constants.js';
 
 export const fileService = {
@@ -21,6 +21,15 @@ export const fileService = {
         'Content-Type': 'multipart/form-data',
       },
     });
+  },
+
+  addToPurchaseOrder: async (poId, files) => {
+    const formData = new FormData();
+    files.forEach(file => {
+      formData.append('documents', file);
+    });
+    
+    return await upload(`${API_BASE_URL}${API_ENDPOINTS.PURCHASE_ORDER_DOCUMENTS(poId)}`, formData);
   },
 };
 

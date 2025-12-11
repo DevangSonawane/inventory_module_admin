@@ -32,6 +32,16 @@ const StockArea = sequelize.define('stock_area', {
     allowNull: true,
     comment: 'User ID assigned as Store Keeper'
   },
+  description: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    comment: 'Description of the stock area/warehouse'
+  },
+  pin_code: {
+    type: DataTypes.STRING(10),
+    allowNull: true,
+    comment: 'Pin code of the warehouse location'
+  },
   org_id: {
     type: DataTypes.UUID,
     allowNull: true,

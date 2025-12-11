@@ -34,6 +34,31 @@ const PurchaseRequestItem = sequelize.define('purchase_request_item', {
     allowNull: true,
     comment: 'Additional remarks'
   },
+  pr_name: {
+    type: DataTypes.STRING(255),
+    allowNull: false,
+    comment: 'Name of the product requested'
+  },
+  business_partner_id: {
+    type: DataTypes.UUID,
+    allowNull: true,
+    comment: 'Reference to business partner (supplier)'
+  },
+  material_type: {
+    type: DataTypes.ENUM('components', 'raw material', 'finish product', 'supportive material', 'cable'),
+    allowNull: false,
+    comment: 'Type of material'
+  },
+  shipping_address: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    comment: 'Shipping address (warehouse address)'
+  },
+  description: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    comment: 'Description of the item'
+  },
 }, {
   tableName: 'purchase_request_items',
   timestamps: true,
@@ -44,6 +69,12 @@ const PurchaseRequestItem = sequelize.define('purchase_request_item', {
     },
     {
       fields: ['material_id']
+    },
+    {
+      fields: ['business_partner_id']
+    },
+    {
+      fields: ['material_type']
     }
   ]
 });

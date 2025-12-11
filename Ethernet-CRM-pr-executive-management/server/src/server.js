@@ -3,6 +3,8 @@ import app from './app.js';
 import { connectDB } from './config/database.js';
 // Import models to ensure associations are loaded
 import './models/index.js';
+// Import migration script
+import runMigration from './scripts/migrateInventoryTables.js';
 
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
@@ -52,6 +54,39 @@ const logAccessibleUrls = () => {
 const startServer = async () => {
   try {
     await connectDB();
+    
+    // Run database migrations silently
+    console.log('🔄 Running database migrations...');
+    try {
+      const migrationResult = await runMigration(true); // silent = true
+      if (migrationResult && migrationResult.success === false) {
+        console.warn('⚠️  Migration completed with warnings:', migrationResult.error);
+      } else {
+        console.log('✅ Database migrations completed');
+      }
+    } catch (migrationError) {
+      console.error('❌ Migration error:', migrationError.message);
+      // Don't exit - allow server to start even if migration has issues
+      // This is useful for development where some migrations might fail
+      console.warn('⚠️  Continuing server startup despite migration warnings...');
+    }
+    
+    // Verify email configuration (non-blocking)
+    if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+      try {
+        const { verifyEmailConfig } = await import('./utils/emailService.js');
+        const emailStatus = await verifyEmailConfig();
+        if (emailStatus.configured) {
+          console.log('✅ Email service configured and ready');
+        } else {
+          console.warn('⚠️  Email service configuration issue:', emailStatus.message);
+        }
+      } catch (emailError) {
+        console.warn('⚠️  Could not verify email configuration:', emailError.message);
+      }
+    } else {
+      console.log('ℹ️  Email service not configured (optional)');
+    }
     
     app.listen(PORT, HOST, () => {
       console.log(`🚀 Server is running on http://${HOST}:${PORT}`);

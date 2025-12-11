@@ -44,9 +44,15 @@ const MaterialManagement = () => {
     uom: 'PIECE(S)',
     properties: '',
     description: '',
+    hsn: '',
+    gstPercentage: '',
+    price: '',
+    assetId: '',
+    materialProperty: '',
   })
   const [formErrors, setFormErrors] = useState({})
   const [productCodeValidating, setProductCodeValidating] = useState(false)
+  const [selectedFiles, setSelectedFiles] = useState([])
 
   useEffect(() => {
     if (isEditMode) {
@@ -96,7 +102,7 @@ const MaterialManagement = () => {
       setLoading(true)
       const response = await materialService.getById(id)
       if (response.success) {
-        const material = response.data.material
+        const material = response.data.material || response.data
         setFormData({
           materialName: material.material_name || '',
           productCode: material.product_code || '',
@@ -104,8 +110,14 @@ const MaterialManagement = () => {
           uom: material.uom || 'PIECE(S)',
           properties: material.properties ? JSON.stringify(material.properties, null, 2) : '',
           description: material.description || '',
+          hsn: material.hsn || '',
+          gstPercentage: material.gst_percentage !== null && material.gst_percentage !== undefined ? material.gst_percentage.toString() : '',
+          price: material.price !== null && material.price !== undefined ? material.price.toString() : '',
+          assetId: material.asset_id || '',
+          materialProperty: material.material_property || '',
         })
         setSelectedMaterial(material)
+        setSelectedFiles([]) // Reset file selection on edit
       }
     } catch (error) {
       console.error('Error fetching material:', error)
@@ -124,9 +136,15 @@ const MaterialManagement = () => {
       uom: 'PIECE(S)',
       properties: '',
       description: '',
+      hsn: '',
+      gstPercentage: '',
+      price: '',
+      assetId: '',
+      materialProperty: '',
     })
     setFormErrors({})
     setSelectedMaterial(null)
+    setSelectedFiles([])
   }
 
   const validateProductCode = async (productCode, excludeId = null) => {
@@ -189,6 +207,12 @@ const MaterialManagement = () => {
         uom: formData.uom || undefined,
         description: formData.description.trim() || undefined,
         properties: formData.properties.trim() ? JSON.parse(formData.properties) : undefined,
+        hsn: formData.hsn.trim() || undefined,
+        gstPercentage: formData.gstPercentage.trim() || undefined,
+        price: formData.price.trim() || undefined,
+        assetId: formData.assetId.trim() || undefined,
+        materialProperty: formData.materialProperty.trim() || undefined,
+        documents: selectedFiles.length > 0 ? selectedFiles : undefined,
       }
 
       let response
@@ -286,10 +310,11 @@ const MaterialManagement = () => {
 
   const materialTypeOptions = [
     { value: '', label: 'All Types' },
+    { value: 'CABLE', label: 'Cable' },
     { value: 'COMPONENT', label: 'Component' },
-    { value: 'EQUIPMENT', label: 'Equipment' },
-    { value: 'CONSUMABLE', label: 'Consumable' },
-    { value: 'TOOL', label: 'Tool' },
+    { value: 'FINISH_PRODUCT', label: 'Finish Product' },
+    { value: 'RAW_MATERIAL', label: 'Raw Material' },
+    { value: 'SUPPORTING_MATERIAL', label: 'Supporting Material' },
   ]
 
   const uomOptions = [
@@ -462,10 +487,11 @@ const MaterialManagement = () => {
               required
               options={[
                 { value: '', label: 'Select Material Type' },
+                { value: 'CABLE', label: 'Cable' },
                 { value: 'COMPONENT', label: 'Component' },
-                { value: 'EQUIPMENT', label: 'Equipment' },
-                { value: 'CONSUMABLE', label: 'Consumable' },
-                { value: 'TOOL', label: 'Tool' },
+                { value: 'FINISH_PRODUCT', label: 'Finish Product' },
+                { value: 'RAW_MATERIAL', label: 'Raw Material' },
+                { value: 'SUPPORTING_MATERIAL', label: 'Supporting Material' },
               ]}
               value={formData.materialType}
               onChange={(e) => {
@@ -482,6 +508,61 @@ const MaterialManagement = () => {
               value={formData.uom}
               onChange={(e) => setFormData({ ...formData, uom: e.target.value })}
             />
+            <Input
+              label="HSN"
+              value={formData.hsn}
+              onChange={(e) => setFormData({ ...formData, hsn: e.target.value })}
+              placeholder="Enter HSN code"
+            />
+            <Input
+              label="GST %"
+              type="number"
+              step="0.01"
+              min="0"
+              max="100"
+              value={formData.gstPercentage}
+              onChange={(e) => setFormData({ ...formData, gstPercentage: e.target.value })}
+              placeholder="Enter GST percentage"
+            />
+            <Input
+              label="Price"
+              type="number"
+              step="0.01"
+              min="0"
+              value={formData.price}
+              onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+              placeholder="Enter price"
+            />
+            <Input
+              label="Asset Id"
+              value={formData.assetId}
+              onChange={(e) => setFormData({ ...formData, assetId: e.target.value })}
+              placeholder="Enter asset ID"
+            />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Description
+              </label>
+              <textarea
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                rows={3}
+                placeholder="Enter description"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Material Property
+              </label>
+              <textarea
+                value={formData.materialProperty}
+                onChange={(e) => setFormData({ ...formData, materialProperty: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                rows={3}
+                placeholder="Enter material property"
+              />
+            </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Properties (JSON format)
@@ -496,14 +577,42 @@ const MaterialManagement = () => {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Description
+                Document Upload
               </label>
-              <textarea
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              <input
+                type="file"
+                multiple
+                accept="image/*,.pdf"
+                onChange={(e) => {
+                  const files = Array.from(e.target.files || [])
+                  setSelectedFiles(files)
+                }}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                rows={3}
               />
+              {selectedFiles.length > 0 && (
+                <div className="mt-2">
+                  <p className="text-sm text-gray-600">Selected files:</p>
+                  <ul className="list-disc list-inside text-sm text-gray-500">
+                    {selectedFiles.map((file, index) => (
+                      <li key={index}>{file.name}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {selectedMaterial?.documents && Array.isArray(selectedMaterial.documents) && selectedMaterial.documents.length > 0 && (
+                <div className="mt-2">
+                  <p className="text-sm text-gray-600">Existing documents:</p>
+                  <ul className="list-disc list-inside text-sm text-gray-500">
+                    {selectedMaterial.documents.map((doc, index) => (
+                      <li key={index}>
+                        <a href={doc} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                          {doc.split('/').pop()}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
             <div className="flex justify-end gap-3 pt-4">
               <Button

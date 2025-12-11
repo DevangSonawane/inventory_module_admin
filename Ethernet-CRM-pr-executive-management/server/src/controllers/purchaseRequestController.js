@@ -2,18 +2,89 @@ import PurchaseRequest from '../models/PurchaseRequest.js';
 import PurchaseRequestItem from '../models/PurchaseRequestItem.js';
 import Material from '../models/Material.js';
 import User from '../models/User.js';
+import BusinessPartner from '../models/BusinessPartner.js';
 import { validationResult } from 'express-validator';
 import { Op } from 'sequelize';
 import sequelize from '../config/database.js';
 
 /**
- * Generate PR number
+ * Generate PR number in format: PR-MONTH-YEAR-order
+ * e.g., PR-AUG-2025-001 (August 2025, first PR of the month)
+ * Month abbreviations: JAN, FEB, MAR, APR, MAY, JUN, JUL, AUG, SEP, OCT, NOV, DEC
  */
-const generatePRNumber = () => {
-  const year = new Date().getFullYear();
-  const month = String(new Date().getMonth() + 1).padStart(2, '0');
-  const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-  return `PR-${year}-${month}-${random}`;
+const generatePRNumber = async (requestedDate = null) => {
+  const date = requestedDate ? new Date(requestedDate) : new Date();
+  const year = date.getFullYear();
+  
+  // Month abbreviations
+  const monthAbbr = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+  const month = monthAbbr[date.getMonth()];
+  
+  // Find the last PR number for this month
+  const lastPR = await PurchaseRequest.findOne({
+    where: {
+      pr_number: {
+        [Op.like]: `PR-${month}-${year}-%`
+      },
+      is_active: true
+    },
+    order: [['pr_number', 'DESC']]
+  });
+  
+  let orderNumber = 1;
+  if (lastPR) {
+    // Extract order number from last PR (format: PR-MONTH-YYYY-XXX)
+    const parts = lastPR.pr_number.split('-');
+    if (parts.length === 4) {
+      const lastOrder = parseInt(parts[3], 10);
+      if (!isNaN(lastOrder)) {
+        orderNumber = lastOrder + 1;
+      }
+    }
+  }
+  
+  const orderStr = String(orderNumber).padStart(3, '0');
+  return `PR-${month}-${year}-${orderStr}`;
+};
+
+/**
+ * Generate PR number based on requested date
+ * GET /api/inventory/purchase-requests/generate-pr-number
+ */
+export const generatePRNumberEndpoint = async (req, res) => {
+  try {
+    const { requestedDate } = req.query;
+
+    if (!requestedDate) {
+      return res.status(400).json({
+        success: false,
+        message: 'Requested date is required'
+      });
+    }
+
+    // Validate date format
+    const date = new Date(requestedDate);
+    if (isNaN(date.getTime())) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid date format'
+      });
+    }
+
+    const prNumber = await generatePRNumber(requestedDate);
+
+    return res.status(200).json({
+      success: true,
+      data: { prNumber }
+    });
+  } catch (error) {
+    console.error('Error generating PR number:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to generate PR number',
+      error: error.message
+    });
+  }
 };
 
 /**
@@ -104,7 +175,14 @@ export const getPurchaseRequestById = async (req, res) => {
             {
               model: Material,
               as: 'material',
-              attributes: ['material_id', 'material_name', 'product_code', 'material_type', 'uom']
+              attributes: ['material_id', 'material_name', 'product_code', 'material_type', 'uom'],
+              required: false
+            },
+            {
+              model: BusinessPartner,
+              as: 'businessPartner',
+              attributes: ['partner_id', 'partner_name', 'partner_type'],
+              required: false
             }
           ]
         },
@@ -168,11 +246,11 @@ export const createPurchaseRequest = async (req, res) => {
       prNumber,
       requestedDate,
       items,
-      remarks,
-      orgId
+      remarks
     } = req.body;
 
     const userId = req.user?.id || req.user?.user_id;
+    const orgId = req.orgId; // Use orgId from middleware instead of request body
 
     // Validate items array
     if (!items || !Array.isArray(items) || items.length === 0) {
@@ -186,24 +264,16 @@ export const createPurchaseRequest = async (req, res) => {
     // Generate PR number if not provided
     let finalPRNumber = prNumber;
     if (!finalPRNumber) {
-      let isUnique = false;
-      let attempts = 0;
-      while (!isUnique && attempts < 10) {
-        finalPRNumber = generatePRNumber();
-        const existing = await PurchaseRequest.findOne({
-          where: { pr_number: finalPRNumber }
-        });
-        if (!existing) {
-          isUnique = true;
-        } else {
-          attempts++;
-        }
-      }
-      if (!isUnique) {
+      finalPRNumber = await generatePRNumber(requestedDate);
+      // Double-check uniqueness (shouldn't happen with sequential numbering, but safety check)
+      const existing = await PurchaseRequest.findOne({
+        where: { pr_number: finalPRNumber }
+      });
+      if (existing) {
         await transaction.rollback();
         return res.status(500).json({
           success: false,
-          message: 'Failed to generate unique PR number'
+          message: 'Failed to generate unique PR number. Please try again.'
         });
       }
     }
@@ -215,34 +285,93 @@ export const createPurchaseRequest = async (req, res) => {
       requested_date: requestedDate || new Date().toISOString().split('T')[0],
       status: 'DRAFT',
       remarks: remarks || null,
-      org_id: orgId || null,
+      org_id: orgId || null, // Use orgId from middleware (req.orgId)
       is_active: true
     }, { transaction });
 
     // Create items
     const createdItems = [];
     for (const item of items) {
-      const { materialId, requestedQuantity, uom, remarks: itemRemarks } = item;
+      const { 
+        materialId, 
+        requestedQuantity, 
+        uom, 
+        remarks: itemRemarks,
+        prName,
+        businessPartnerId,
+        materialType,
+        shippingAddress,
+        description
+      } = item;
 
-      // Validate material exists
-      const material = await Material.findOne({
-        where: { material_id: materialId, is_active: true }
-      });
-
-      if (!material) {
+      // Validate required fields
+      if (!prName) {
         await transaction.rollback();
         return res.status(400).json({
           success: false,
-          message: `Material with ID ${materialId} not found`
+          message: 'PR name is required for each item'
         });
+      }
+
+      if (!materialType) {
+        await transaction.rollback();
+        return res.status(400).json({
+          success: false,
+          message: 'Material type is required for each item'
+        });
+      }
+
+      // Validate material type enum
+      const validMaterialTypes = ['components', 'raw material', 'finish product', 'supportive material', 'cable'];
+      if (!validMaterialTypes.includes(materialType)) {
+        await transaction.rollback();
+        return res.status(400).json({
+          success: false,
+          message: `Invalid material type. Must be one of: ${validMaterialTypes.join(', ')}`
+        });
+      }
+
+      // Validate material exists (if materialId is provided)
+      if (materialId) {
+        const material = await Material.findOne({
+          where: { material_id: materialId, is_active: true }
+        });
+
+        if (!material) {
+          await transaction.rollback();
+          return res.status(400).json({
+            success: false,
+            message: `Material with ID ${materialId} not found`
+          });
+        }
+      }
+
+      // Validate business partner exists (if provided)
+      if (businessPartnerId) {
+        const businessPartner = await BusinessPartner.findOne({
+          where: { partner_id: businessPartnerId, is_active: true }
+        });
+
+        if (!businessPartner) {
+          await transaction.rollback();
+          return res.status(400).json({
+            success: false,
+            message: `Business partner with ID ${businessPartnerId} not found`
+          });
+        }
       }
 
       const prItem = await PurchaseRequestItem.create({
         pr_id: purchaseRequest.pr_id,
-        material_id: materialId,
+        material_id: materialId || null,
         requested_quantity: parseInt(requestedQuantity) || 1,
-        uom: uom || material.uom || 'PIECE(S)',
-        remarks: itemRemarks || null
+        uom: uom || 'PIECE(S)',
+        remarks: itemRemarks || null,
+        pr_name: prName,
+        business_partner_id: businessPartnerId || null,
+        material_type: materialType,
+        shipping_address: shippingAddress || null,
+        description: description || null
       }, { transaction });
 
       createdItems.push(prItem);
@@ -351,26 +480,86 @@ export const updatePurchaseRequest = async (req, res) => {
 
       // Create new items
       for (const item of items) {
-        const { materialId, requestedQuantity, uom, remarks: itemRemarks } = item;
+        const { 
+          materialId, 
+          requestedQuantity, 
+          uom, 
+          remarks: itemRemarks,
+          prName,
+          businessPartnerId,
+          materialType,
+          shippingAddress,
+          description
+        } = item;
 
-        const material = await Material.findOne({
-          where: { material_id: materialId, is_active: true }
-        });
-
-        if (!material) {
+        // Validate required fields
+        if (!prName) {
           await transaction.rollback();
           return res.status(400).json({
             success: false,
-            message: `Material with ID ${materialId} not found`
+            message: 'PR name is required for each item'
           });
+        }
+
+        if (!materialType) {
+          await transaction.rollback();
+          return res.status(400).json({
+            success: false,
+            message: 'Material type is required for each item'
+          });
+        }
+
+        // Validate material type enum
+        const validMaterialTypes = ['components', 'raw material', 'finish product', 'supportive material', 'cable'];
+        if (!validMaterialTypes.includes(materialType)) {
+          await transaction.rollback();
+          return res.status(400).json({
+            success: false,
+            message: `Invalid material type. Must be one of: ${validMaterialTypes.join(', ')}`
+          });
+        }
+
+        // Validate material exists (if materialId is provided)
+        if (materialId) {
+          const material = await Material.findOne({
+            where: { material_id: materialId, is_active: true }
+          });
+
+          if (!material) {
+            await transaction.rollback();
+            return res.status(400).json({
+              success: false,
+              message: `Material with ID ${materialId} not found`
+            });
+          }
+        }
+
+        // Validate business partner exists (if provided)
+        if (businessPartnerId) {
+          const businessPartner = await BusinessPartner.findOne({
+            where: { partner_id: businessPartnerId, is_active: true }
+          });
+
+          if (!businessPartner) {
+            await transaction.rollback();
+            return res.status(400).json({
+              success: false,
+              message: `Business partner with ID ${businessPartnerId} not found`
+            });
+          }
         }
 
         await PurchaseRequestItem.create({
           pr_id: id,
-          material_id: materialId,
+          material_id: materialId || null,
           requested_quantity: parseInt(requestedQuantity) || 1,
-          uom: uom || material.uom || 'PIECE(S)',
-          remarks: itemRemarks || null
+          uom: uom || 'PIECE(S)',
+          remarks: itemRemarks || null,
+          pr_name: prName,
+          business_partner_id: businessPartnerId || null,
+          material_type: materialType,
+          shipping_address: shippingAddress || null,
+          description: description || null
         }, { transaction });
       }
     }
