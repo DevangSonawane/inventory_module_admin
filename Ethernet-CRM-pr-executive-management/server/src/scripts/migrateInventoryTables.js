@@ -1,4 +1,4 @@
-import sequelize from '../config/database.js';
+ import sequelize from '../config/database.js';
 import { QueryTypes } from 'sequelize';
 
 /**

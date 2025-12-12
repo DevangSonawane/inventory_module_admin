@@ -2,7 +2,7 @@
 
 **Version:** 1.0  
 **Date:** December 2025  
-**Based on:** flowchartG.png
+**Flow Diagram:** See [flowchartG.png](../flowchartG.png) for visual representation
 
 ---
 
