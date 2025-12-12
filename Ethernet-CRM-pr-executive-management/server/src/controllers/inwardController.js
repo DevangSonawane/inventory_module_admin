@@ -775,6 +775,26 @@ export const markInwardAsCompleted = async (req, res) => {
       updated_by: userId
     }, { transaction });
 
+    // Update Purchase Order status to DELIVERED if PO is linked
+    if (inward.po_id) {
+      try {
+        await PurchaseOrder.update(
+          { 
+            status: 'DELIVERED'
+          },
+          {
+            where: req.withOrg
+              ? req.withOrg({ po_id: inward.po_id })
+              : { po_id: inward.po_id },
+            transaction
+          }
+        );
+      } catch (poError) {
+        // Log error but don't fail the completion
+        console.error('Error updating Purchase Order status to DELIVERED:', poError);
+      }
+    }
+
     await transaction.commit();
 
     // Fetch updated inward with all relations

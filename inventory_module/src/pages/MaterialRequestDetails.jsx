@@ -13,7 +13,11 @@ import { materialRequestService } from '../services/materialRequestService.js'
 import { materialService } from '../services/materialService.js'
 import { stockAreaService } from '../services/stockAreaService.js'
 import { materialAllocationService } from '../services/materialAllocationService.js'
+import { groupService } from '../services/groupService.js'
+import { teamService } from '../services/teamService.js'
+import { userService } from '../services/userService.js'
 import { useAuth } from '../utils/useAuth.js'
+import { generateMRPreview } from '../utils/formatters.js'
 
 const MaterialRequestDetails = () => {
   const { id } = useParams()
@@ -26,6 +30,9 @@ const MaterialRequestDetails = () => {
   const [loading, setLoading] = useState(false)
   const [materials, setMaterials] = useState([])
   const [stockAreas, setStockAreas] = useState([])
+  const [groups, setGroups] = useState([])
+  const [teams, setTeams] = useState([])
+  const [users, setUsers] = useState([])
   const [isAddItemModalOpen, setIsAddItemModalOpen] = useState(false)
   
   // Allocation state
@@ -38,14 +45,20 @@ const MaterialRequestDetails = () => {
     materialId: '',
   })
   const [materialRequestStatus, setMaterialRequestStatus] = useState(null)
+  const [mrNumber, setMrNumber] = useState('')
 
-  const [prFields, setPrFields] = useState([
-    { id: 1, prNumber: '', prDate: '' },
+  const [mrFields, setMrFields] = useState([
+    { id: 1, mrNumber: '', mrDate: '' },
   ])
 
   const [formData, setFormData] = useState({
     ticketId: '',
     fromStockArea: '',
+    requestDate: new Date().toISOString().split('T')[0], // Default to current date
+    requestorId: '',
+    groupId: '',
+    teamId: '',
+    serviceArea: '',
   })
 
   const [requestedItems, setRequestedItems] = useState([])
@@ -61,10 +74,33 @@ const MaterialRequestDetails = () => {
   useEffect(() => {
     fetchMaterials()
     fetchStockAreas()
+    fetchGroups()
+    fetchUsers()
     if (isEditMode) {
       fetchMaterialRequest()
     }
   }, [id])
+
+  useEffect(() => {
+    if (formData.groupId) {
+      fetchTeamsByGroup(formData.groupId)
+    } else {
+      setTeams([])
+      setFormData(prev => ({ ...prev, teamId: '' }))
+    }
+  }, [formData.groupId])
+
+  // Update MR numbers when request date changes
+  useEffect(() => {
+    if (formData.requestDate && !isEditMode) {
+      const updatedMrFields = mrFields.map((field, index) => ({
+        ...field,
+        mrNumber: generateMRPreview(formData.requestDate, index + 1), // Preview with sequence based on index
+        mrDate: formData.requestDate
+      }))
+      setMrFields(updatedMrFields)
+    }
+  }, [formData.requestDate, isEditMode])
 
   const fetchMaterials = async () => {
     try {
@@ -91,6 +127,42 @@ const MaterialRequestDetails = () => {
     }
   }
 
+  const fetchGroups = async () => {
+    try {
+      const response = await groupService.getAll({ limit: 100 })
+      if (response.success) {
+        setGroups(response.data?.groups || [])
+      }
+    } catch (error) {
+      console.error('Error fetching groups:', error)
+      setGroups([])
+    }
+  }
+
+  const fetchTeamsByGroup = async (groupId) => {
+    try {
+      const response = await teamService.getByGroup(groupId)
+      if (response.success) {
+        setTeams(response.data?.teams || [])
+      }
+    } catch (error) {
+      console.error('Error fetching teams:', error)
+      setTeams([])
+    }
+  }
+
+  const fetchUsers = async () => {
+    try {
+      const response = await userService.getAll({ limit: 1000 })
+      if (response.success) {
+        setUsers(response.data?.users || response.data?.data || [])
+      }
+    } catch (error) {
+      console.error('Error fetching users:', error)
+      setUsers([])
+    }
+  }
+
   const fetchMaterialRequest = async () => {
     try {
       setLoading(true)
@@ -105,19 +177,38 @@ const MaterialRequestDetails = () => {
         if (request) {
           const statusValue = request.status || request.request_status
           setMaterialRequestStatus(statusValue)
+          setMrNumber(request.mr_number || request.mrNumber || 'Auto-generated')
           
           setFormData({
             ticketId: request.ticket_id || request.ticketId || '',
             fromStockArea: request.from_stock_area_id || request.fromStockAreaId || '',
+            requestDate: request.request_date || request.requestDate || new Date().toISOString().split('T')[0],
+            requestorId: request.requestor_id || request.requestorId || '',
+            groupId: request.group_id || request.groupId || '',
+            teamId: request.team_id || request.teamId || '',
+            serviceArea: request.service_area || request.serviceArea || '',
           })
           
+          // Fetch teams for the selected group
+          if (request.group_id || request.groupId) {
+            fetchTeamsByGroup(request.group_id || request.groupId)
+          }
+          
+          // Handle MR numbers if they exist (for backward compatibility with PR numbers)
           if ((request.pr_numbers && Array.isArray(request.pr_numbers)) || (request.prNumbers && Array.isArray(request.prNumbers))) {
             const source = request.pr_numbers || request.prNumbers
-            setPrFields(source.map((pr, index) => ({
+            setMrFields(source.map((mr, index) => ({
               id: index + 1,
-              prNumber: pr.prNumber || pr.pr_number || '',
-              prDate: pr.prDate || pr.pr_date || '',
+              mrNumber: mr.mrNumber || mr.prNumber || mr.mr_number || mr.pr_number || generateMRPreview(request.request_date || request.requestDate || formData.requestDate, index + 1),
+              mrDate: mr.mrDate || mr.prDate || mr.mr_date || mr.pr_date || request.request_date || request.requestDate || formData.requestDate,
             })))
+          } else {
+            // Initialize with MR number based on request date
+            setMrFields([{
+              id: 1,
+              mrNumber: generateMRPreview(request.request_date || request.requestDate || formData.requestDate, 1),
+              mrDate: request.request_date || request.requestDate || formData.requestDate,
+            }])
           }
           
           if (request.items && Array.isArray(request.items)) {
@@ -193,10 +284,15 @@ const MaterialRequestDetails = () => {
     }))
   ]
 
-  const handleAddPrField = () => {
-    setPrFields([
-      ...prFields,
-      { id: Date.now(), prNumber: 'PR-SEP-2025-23', prDate: '' },
+  const handleAddMrField = () => {
+    const nextSequence = mrFields.length + 1
+    setMrFields([
+      ...mrFields,
+      { 
+        id: Date.now(), 
+        mrNumber: generateMRPreview(formData.requestDate, nextSequence),
+        mrDate: formData.requestDate || new Date().toISOString().split('T')[0]
+      },
     ])
   }
 
@@ -248,8 +344,8 @@ const MaterialRequestDetails = () => {
   }
 
   const handleSave = async () => {
-    if (prFields.some(f => !f.prNumber)) {
-      toast.error('Please fill all PR Number fields')
+    if (mrFields.some(f => !f.mrNumber)) {
+      toast.error('Please ensure all MR Number fields are filled')
       return
     }
     if (requestedItems.length === 0) {
@@ -270,9 +366,16 @@ const MaterialRequestDetails = () => {
       const requestData = {
         ticketId: formData.ticketId || undefined,
         fromStockAreaId: formData.fromStockArea || undefined,
-        prNumbers: prFields.map(f => ({
-          prNumber: f.prNumber,
-          prDate: f.prDate || new Date().toISOString().split('T')[0],
+        requestDate: formData.requestDate || new Date().toISOString().split('T')[0],
+        requestorId: formData.requestorId || undefined,
+        groupId: formData.groupId || undefined,
+        teamId: formData.teamId || undefined,
+        serviceArea: formData.serviceArea || undefined,
+        // Note: MR numbers are auto-generated by backend, but we send the preview for reference
+        // The backend will generate the actual sequential MR number
+        prNumbers: mrFields.map(f => ({
+          prNumber: f.mrNumber, // Backend expects prNumber field but we're sending MR number
+          prDate: f.mrDate || formData.requestDate || new Date().toISOString().split('T')[0],
         })),
         items: requestedItems.map(item => ({
           itemId: item.itemId || item.id, // send back item id for updates if present
@@ -485,10 +588,63 @@ const MaterialRequestDetails = () => {
         
         <div className="grid grid-cols-2 gap-6 mb-6">
           <Input
-            label="Ticket ID (Optional)"
-            placeholder="e.g., TKT-55S"
-            value={formData.ticketId}
-            onChange={(e) => setFormData({ ...formData, ticketId: e.target.value })}
+            label="Request Date"
+            type="date"
+            value={formData.requestDate}
+            onChange={(e) => setFormData({ ...formData, requestDate: e.target.value })}
+            required
+          />
+          <Dropdown
+            label="Requestor (Employee/Technician)"
+            options={[
+              { value: '', label: 'Select Requestor' },
+              ...users.map(user => ({
+                value: user.id || user.user_id,
+                label: `${user.name || ''} ${user.employeCode ? `(${user.employeCode})` : ''}`.trim()
+              }))
+            ]}
+            value={formData.requestorId}
+            onChange={(e) => setFormData({ ...formData, requestorId: e.target.value })}
+          />
+          <Dropdown
+            label="Group"
+            options={[
+              { value: '', label: 'Select Group' },
+              ...groups.map(group => ({
+                value: group.group_id,
+                label: group.group_name
+              }))
+            ]}
+            value={formData.groupId}
+            onChange={(e) => setFormData({ ...formData, groupId: e.target.value, teamId: '' })}
+          />
+          <Dropdown
+            label="Team"
+            options={[
+              { value: '', label: 'Select Team' },
+              ...teams.map(team => ({
+                value: team.team_id,
+                label: team.team_name
+              }))
+            ]}
+            value={formData.teamId}
+            onChange={(e) => setFormData({ ...formData, teamId: e.target.value })}
+            disabled={!formData.groupId}
+          />
+          <Dropdown
+            label="Service Area (States in Goa)"
+            options={[
+              { value: '', label: 'Select Service Area' },
+              { value: 'North Goa', label: 'North Goa' },
+              { value: 'South Goa', label: 'South Goa' },
+              { value: 'Panaji', label: 'Panaji' },
+              { value: 'Margao', label: 'Margao' },
+              { value: 'Vasco', label: 'Vasco' },
+              { value: 'Mapusa', label: 'Mapusa' },
+              { value: 'Ponda', label: 'Ponda' },
+            ]}
+            value={formData.serviceArea}
+            onChange={(e) => setFormData({ ...formData, serviceArea: e.target.value })}
           />
           <Dropdown
             label="From Stock Area"
@@ -502,33 +658,80 @@ const MaterialRequestDetails = () => {
             value={formData.fromStockArea}
             onChange={(e) => setFormData({ ...formData, fromStockArea: e.target.value })}
           />
-          {prFields.map((field, index) => (
-            <div key={field.id} className="space-y-4">
-              <Input
-                label="MR Number"
-                required
-                value={field.prNumber}
-                onChange={(e) =>
-                  setPrFields(
-                    prFields.map((f) =>
-                      f.id === field.id ? { ...f, prNumber: e.target.value } : f
-                    )
-                  )
-                }
-              />
-              <Input
-                label="MR Date"
-                placeholder="Enter MR Date"
-                type="date"
-                value={field.prDate}
-                onChange={(e) =>
-                  setPrFields(
-                    prFields.map((f) =>
-                      f.id === field.id ? { ...f, prDate: e.target.value } : f
-                    )
-                  )
-                }
-              />
+          <Input
+            label="Ticket ID (Optional)"
+            placeholder="e.g., TKT-55S"
+            value={formData.ticketId}
+            onChange={(e) => setFormData({ ...formData, ticketId: e.target.value })}
+          />
+          {isEditMode && mrNumber && (
+            <Input
+              label="MR Number (Auto-generated)"
+              value={mrNumber}
+              disabled
+              className="bg-gray-50"
+            />
+          )}
+          
+          {!isEditMode && (
+            <div className="border-t border-gray-200 pt-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-semibold text-gray-900">MR Numbers</h2>
+                <Button variant="primary" onClick={handleAddMrField}>
+                  <Plus className="w-4 h-4 mr-2 inline" />
+                  Add MR Number
+                </Button>
+              </div>
+            </div>
+          )}
+          
+          {mrFields.map((field, index) => (
+            <div key={field.id} className="space-y-4 mb-4">
+              <div className="flex items-end gap-4">
+                <div className="flex-1">
+                  <Input
+                    label="MR Number"
+                    required
+                    value={field.mrNumber}
+                    // MR number is auto-generated, no onChange needed
+                    placeholder="Auto-generated based on date"
+                    className="bg-gray-50"
+                    readOnly={true} // Always read-only as it's auto-generated
+                  />
+                </div>
+                <div className="flex-1">
+                  <Input
+                    label="MR Date"
+                    placeholder="Enter MR Date"
+                    type="date"
+                    value={field.mrDate || formData.requestDate}
+                    onChange={(e) => {
+                      const newDate = e.target.value
+                      // Update this field's date and regenerate MR number
+                      setMrFields(
+                        mrFields.map((f) =>
+                          f.id === field.id 
+                            ? { ...f, mrDate: newDate, mrNumber: generateMRPreview(newDate, index + 1) }
+                            : f
+                        )
+                      )
+                      // Also update the main request date if this is the first field
+                      if (index === 0) {
+                        setFormData(prev => ({ ...prev, requestDate: newDate }))
+                      }
+                    }}
+                  />
+                </div>
+                {mrFields.length > 1 && (
+                  <button
+                    onClick={() => setMrFields(mrFields.filter(f => f.id !== field.id))}
+                    className="text-red-600 hover:text-red-700 mb-1"
+                    type="button"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
             </div>
           ))}
         </div>

@@ -13,7 +13,6 @@ import { stockAreaService } from '../services/stockAreaService.js'
 import { materialRequestService } from '../services/materialRequestService.js'
 import { materialService } from '../services/materialService.js'
 import { userService } from '../services/userService.js'
-import { validationService } from '../services/validationService.js'
 
 const StockTransfer = () => {
   const { id } = useParams()
@@ -21,31 +20,32 @@ const StockTransfer = () => {
   const isEditMode = id && id !== 'new'
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage, setItemsPerPage] = useState(10)
-  const [activeTab, setActiveTab] = useState('requested-items')
+  const [activeTab, setActiveTab] = useState('requested-items') // 'requested-items' or 'allocate-items'
   const [loading, setLoading] = useState(false)
   const [stockAreas, setStockAreas] = useState([])
   const [materialRequests, setMaterialRequests] = useState([])
   const [selectedMaterialRequest, setSelectedMaterialRequest] = useState(null)
   const [materials, setMaterials] = useState([])
+  const [users, setUsers] = useState([])
   const [isAddItemModalOpen, setIsAddItemModalOpen] = useState(false)
   const [newItem, setNewItem] = useState({ materialId: '', quantity: 1, serialNumbers: '' })
 
   const formatDateDisplay = () => {
-    // Use ISO date to satisfy backend validation
     return new Date().toISOString().split('T')[0] // yyyy-mm-dd
   }
 
   const [basicDetails, setBasicDetails] = useState({
     date: formatDateDisplay(),
     slipNo: '',
-    transferType: '',
+    transferType: '', // 'material-request' or 'reconciliation'
     materialRequestNo: '',
     fromStockArea: '',
-    toStockArea: '',
+    toPerson: '',
+    toWarehouse: '',
     description: '',
   })
 
-  // Fetch stock areas and material requests on mount
+  // Fetch stock areas, material requests, users, and materials on mount
   useEffect(() => {
     fetchStockAreas()
     fetchMaterialRequests()
@@ -53,18 +53,73 @@ const StockTransfer = () => {
     fetchMaterials()
     if (isEditMode) {
       fetchStockTransfer()
+    } else {
+      // Auto-generate slip number for new transfers
+      generateSlipNumber()
     }
   }, [id])
 
   // Fetch material request details when selected
   useEffect(() => {
-    if (basicDetails.materialRequestNo) {
+    if (basicDetails.transferType === 'material-request' && basicDetails.materialRequestNo) {
       fetchMaterialRequestDetails(basicDetails.materialRequestNo)
     } else {
       setSelectedMaterialRequest(null)
       setAllocateItemsData([])
     }
-  }, [basicDetails.materialRequestNo])
+  }, [basicDetails.materialRequestNo, basicDetails.transferType])
+
+  // Regenerate slip number when date changes (only for new transfers)
+  const [isInitialMount, setIsInitialMount] = useState(true)
+  
+  useEffect(() => {
+    if (isInitialMount) {
+      setIsInitialMount(false)
+      return
+    }
+    if (!isEditMode && basicDetails.date) {
+      generateSlipNumber(basicDetails.date)
+    }
+  }, [basicDetails.date])
+
+  // Generate slip number in format: ST-MONTH-YEAR-NUMBER
+  const generateSlipNumber = async (dateValue = null) => {
+    try {
+      const date = dateValue ? new Date(dateValue) : new Date()
+      const month = date.toLocaleString('default', { month: 'short' }).toUpperCase()
+      const year = date.getFullYear()
+      
+      // Fetch existing transfers to get the next number
+      const response = await stockTransferService.getAll({ limit: 1000 })
+      if (response.success) {
+        const transfers = response.data?.transfers || []
+        const prefix = `ST-${month}-${year}`
+        const pattern = new RegExp(`^${prefix}-(\\d+)$`)
+        
+        let maxNumber = 0
+        transfers.forEach(transfer => {
+          const slipNo = transfer.transfer_number || transfer.slip_number || ''
+          const match = slipNo.match(pattern)
+          if (match) {
+            const num = parseInt(match[1], 10)
+            if (num > maxNumber) maxNumber = num
+          }
+        })
+        
+        const nextNumber = (maxNumber + 1).toString().padStart(3, '0')
+        const slipNumber = `${prefix}-${nextNumber}`
+        setBasicDetails(prev => ({ ...prev, slipNo: slipNumber }))
+      }
+    } catch (error) {
+      console.error('Error generating slip number:', error)
+      // Fallback to simple format
+      const date = dateValue ? new Date(dateValue) : new Date()
+      const month = date.toLocaleString('default', { month: 'short' }).toUpperCase()
+      const year = date.getFullYear()
+      const slipNumber = `ST-${month}-${year}-001`
+      setBasicDetails(prev => ({ ...prev, slipNo: slipNumber }))
+    }
+  }
 
   const fetchStockAreas = async () => {
     try {
@@ -79,13 +134,6 @@ const StockTransfer = () => {
           }))
         ]
         setStockAreas(options)
-        // auto-select first available destination for non-person transfers if empty
-        if (!basicDetails.toStockArea && basicDetails.transferType !== 'warehouse-to-person') {
-          const first = areas[0]?.area_id || areas[0]?.id || ''
-          if (first) {
-            setBasicDetails(prev => ({ ...prev, toStockArea: first }))
-          }
-        }
       }
     } catch (error) {
       console.error('Error fetching stock areas:', error)
@@ -96,21 +144,21 @@ const StockTransfer = () => {
 
   const fetchMaterialRequests = async () => {
     try {
-      const response = await materialRequestService.getAll({ limit: 100, status: 'APPROVED' })
+      const response = await materialRequestService.getAll({ limit: 1000, status: 'APPROVED' })
       if (response.success) {
         const mrs = response.data?.materialRequests || response.data?.data || []
         const options = [
-          { value: '', label: 'Select Material Request No' },
+          { value: '', label: 'Select Material Request' },
           ...mrs.map(mr => ({
             value: mr.request_id || mr.id,
-            label: mr.slip_number || `MR-${(mr.request_id || mr.id)?.substring(0, 8).toUpperCase()}`
+            label: mr.mr_number || mr.mrNumber || mr.slip_number || `MR-${(mr.request_id || mr.id)?.substring(0, 8).toUpperCase()}`
           }))
         ]
         setMaterialRequests(options)
       }
     } catch (error) {
       console.error('Error fetching material requests:', error)
-      setMaterialRequests([{ value: '', label: 'Select Material Request No' }])
+      setMaterialRequests([{ value: '', label: 'Select Material Request' }])
     }
   }
 
@@ -192,77 +240,35 @@ const StockTransfer = () => {
           response.data
 
         if (transfer) {
-          try {
-            const normalize = (t) => ({
-              date: t.transfer_date || t.transferDate || t.date,
-              slipNo: t.transfer_number || t.slip_number || t.slipNo || '',
-              transferTypeRaw: t.transfer_type || t.transferType,
-              materialRequestNo: t.material_request_id || t.materialRequestId || '',
-              fromStockArea: t.from_stock_area_id || t.fromStockAreaId || t.from_stock_area || '',
-              toStockArea: t.to_stock_area_id || t.toStockAreaId || t.to_stock_area || '',
-              toUserId: t.to_user_id || t.toUserId || '',
-              ticketId: t.ticket_id || t.ticketId || '',
-              description: t.remarks || t.description || '',
-              items: t.items || t.transfer_items || [],
-              materialRequest: t.material_request || t.materialRequest,
-            })
+          // Determine transfer type: material-request if material_request_id exists, else reconciliation
+          const transferType = transfer.material_request_id || transfer.materialRequestId ? 'material-request' : 'reconciliation'
+          
+          const transferDate = transfer.transfer_date || transfer.transferDate || new Date()
+          setBasicDetails({
+            date: new Date(transferDate).toISOString().split('T')[0],
+            slipNo: transfer.transfer_number || transfer.slip_number || '',
+            transferType,
+            materialRequestNo: transfer.material_request_id || transfer.materialRequestId || '',
+            fromStockArea: transfer.from_stock_area_id || transfer.fromStockAreaId || '',
+            toPerson: transfer.to_user_id || transfer.toUserId || '',
+            toWarehouse: transfer.to_stock_area_id || transfer.toStockAreaId || '',
+            description: transfer.remarks || transfer.description || '',
+          })
 
-            const normalized = normalize(transfer)
-
-            // map backend transfer type to UI value
-            const transferType =
-              normalized.materialRequestNo
-                ? 'material-request'
-                : normalized.toUserId
-                  ? 'warehouse-to-person'
-                  : normalized.transferTypeRaw === 'other'
-                    ? 'other'
-                    : 'warehouse-to-warehouse'
-
-            const transferDate = normalized.date ? new Date(normalized.date) : new Date()
-            setBasicDetails({
-              date: transferDate.toISOString().split('T')[0],
-              slipNo: normalized.slipNo,
-              transferType,
-              materialRequestNo: normalized.materialRequestNo,
-              fromStockArea: normalized.fromStockArea,
-              toStockArea: normalized.toStockArea,
-              description: normalized.description,
-            })
-            setToUserId(normalized.toUserId)
-            setTicketId(normalized.ticketId)
-
-            // Prefill allocated items (if API returns them)
-            if (Array.isArray(normalized.items) && normalized.items.length > 0) {
-              setAllocateItemsData(normalized.items.map((item, idx) => ({
-                id: item.id || item.item_id || `${idx}`,
-                materialId: item.material_id || item.materialId,
-                itemName: item.material?.material_name || item.materialName || '-',
-                properties: item.material?.product_code || item.properties || '-',
-                grnNo: item.grn_number || item.grnNo || '-',
-                assetId: item.asset_id || item.assetId || '-',
-                requestedQuantity: item.requested_quantity || item.quantity || 0,
-                remarks: item.remarks || '',
-                quantity: item.quantity || 0,
-                selected: true,
-              })))
-            }
-
-            // Prefill requested items from material request (if already embedded)
-            const mr = normalized.materialRequest
-            if (mr && Array.isArray(mr.items)) {
-              setRequestedItemsData(mr.items.map((item) => ({
-                id: item.item_id,
-                itemName: item.material?.material_name || '-',
-                uom: item.uom || 'PIECE(S)',
-                properties: item.material?.product_code || '-',
-                requestedQuantity: item.requested_quantity,
-                remainingQuantity: item.requested_quantity - (item.approved_quantity || 0),
-              })))
-            }
-          } catch (err) {
-            console.error('Error processing transfer data:', err)
-            toast.error('Error loading transfer data')
+          // Prefill allocated items
+          if (Array.isArray(transfer.items) && transfer.items.length > 0) {
+            setAllocateItemsData(transfer.items.map((item, idx) => ({
+              id: item.id || item.item_id || `${idx}`,
+              materialId: item.material_id || item.materialId,
+              itemName: item.material?.material_name || item.materialName || '-',
+              properties: item.material?.product_code || item.properties || '-',
+              grnNo: item.grn_number || item.grnNo || '-',
+              assetId: item.asset_id || item.assetId || '-',
+              requestedQuantity: item.requested_quantity || item.quantity || 0,
+              remarks: item.remarks || '',
+              quantity: item.quantity || 0,
+              selected: true,
+            })))
           }
         }
       }
@@ -277,21 +283,8 @@ const StockTransfer = () => {
   const transferTypeOptions = [
     { value: '', label: 'Select Transfer Type' },
     { value: 'material-request', label: 'Material Request' },
-    { value: 'warehouse-to-warehouse', label: 'Warehouse to Warehouse' },
-    { value: 'warehouse-to-person', label: 'Warehouse to Person' },
-    { value: 'other', label: 'Other' },
+    { value: 'reconciliation', label: 'Reconciliation' },
   ]
-
-  const [users, setUsers] = useState([])
-  const [toUserId, setToUserId] = useState('')
-  const [ticketId, setTicketId] = useState('')
-
-  const toStockAreaOptionsPerson = [
-    { value: 'PERSON', label: 'Person (Technician Holding)' },
-    { value: 'VAN', label: 'Van' },
-    ...stockAreas,
-  ]
-  const toStockAreaOptionsWarehouse = stockAreas
 
   // Requested Items from material request
   const [requestedItemsData, setRequestedItemsData] = useState([])
@@ -304,43 +297,57 @@ const StockTransfer = () => {
       ...basicDetails,
       transferType: value,
       materialRequestNo: value === 'material-request' ? basicDetails.materialRequestNo : '',
-      // Always keep destination selectable; backend allows both user and stock area
-      toStockArea: value === 'warehouse-to-person'
-        ? (basicDetails.toStockArea || 'PERSON')
-        : (basicDetails.toStockArea || stockAreas.find(s => s.value)?.value || ''),
+      toPerson: '',
+      toWarehouse: '',
     })
-    if (value !== 'warehouse-to-person') {
-      setToUserId('')
-      setTicketId('')
+    if (value !== 'material-request') {
+      setSelectedMaterialRequest(null)
+      setRequestedItemsData([])
     }
   }
 
-  const handleSave = async () => {
-    if (!basicDetails.transferType || !basicDetails.fromStockArea) {
-      toast.error('Please fill all required fields')
-      return
-    }
-    const isPersonTransfer = basicDetails.transferType === 'warehouse-to-person'
-    const toStockAreaValue = isPersonTransfer
-      ? (basicDetails.toStockArea || 'PERSON')
-      : (basicDetails.toStockArea || '')
+  const handleToPersonChange = (value) => {
+    setBasicDetails({
+      ...basicDetails,
+      toPerson: value,
+      toWarehouse: '', // Clear warehouse when person is selected
+    })
+  }
 
-    // Destination stock area is required for all types; technician required for person transfer
-    if (!toStockAreaValue) {
-      toast.error('Please select destination stock area')
+  const handleToWarehouseChange = (value) => {
+    setBasicDetails({
+      ...basicDetails,
+      toWarehouse: value,
+      toPerson: '', // Clear person when warehouse is selected
+    })
+  }
+
+  const handleSave = async () => {
+    // Validation
+    if (!basicDetails.transferType) {
+      toast.error('Please select Transfer Type')
       return
     }
-    if (isPersonTransfer && !toUserId) {
-      toast.error('Please select a technician')
+    if (!basicDetails.fromStockArea) {
+      toast.error('Please select From Stock Area')
       return
     }
     if (basicDetails.transferType === 'material-request' && !basicDetails.materialRequestNo) {
-      toast.error('Please select Material Request No.')
+      toast.error('Please select Material Request Number')
       return
     }
+    if (!basicDetails.toPerson && !basicDetails.toWarehouse) {
+      toast.error('Please select either To Person or To Warehouse')
+      return
+    }
+    if (basicDetails.toPerson && basicDetails.toWarehouse) {
+      toast.error('Please select either To Person OR To Warehouse, not both')
+      return
+    }
+    
     const selectedItems = allocateItemsData.filter(item => item.selected !== false)
     if (selectedItems.length === 0) {
-      toast.error('Please allocate at least one item')
+      toast.error('Please add at least one item')
       return
     }
 
@@ -349,14 +356,11 @@ const StockTransfer = () => {
       
       const transferData = {
         fromStockAreaId: basicDetails.fromStockArea,
-        toStockAreaId: toStockAreaValue || undefined,
-        to_stock_area_id: toStockAreaValue || undefined, // send snake_case to satisfy backend
-        toUserId: isPersonTransfer ? toUserId : undefined,
-        to_user_id: isPersonTransfer ? toUserId : undefined, // snake_case for backend
-        ticketId: isPersonTransfer ? (ticketId || undefined) : undefined,
-        materialRequestId: basicDetails.materialRequestNo || undefined,
-        transferNumber: basicDetails.slipNo || undefined,
-        slipNumber: basicDetails.slipNo || undefined,
+        toStockAreaId: basicDetails.toWarehouse || undefined,
+        toUserId: basicDetails.toPerson || undefined,
+        materialRequestId: basicDetails.transferType === 'material-request' ? basicDetails.materialRequestNo : undefined,
+        transferNumber: basicDetails.slipNo,
+        slipNumber: basicDetails.slipNo,
         transferDate: basicDetails.date,
         items: selectedItems.map(item => ({
           materialId: item.materialId,
@@ -386,17 +390,17 @@ const StockTransfer = () => {
     }
   }
 
-  const paginatedRequestedItems = requestedItemsData.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  )
-  const requestedTotalPages = Math.ceil(requestedItemsData.length / itemsPerPage)
-
   const paginatedAllocateItems = allocateItemsData.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
   )
   const allocateTotalPages = Math.ceil(allocateItemsData.length / itemsPerPage)
+
+  const paginatedRequestedItems = requestedItemsData.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  )
+  const requestedTotalPages = Math.ceil(requestedItemsData.length / itemsPerPage)
 
   const resetNewItem = () => setNewItem({ materialId: '', quantity: 1, serialNumbers: '' })
 
@@ -428,27 +432,42 @@ const StockTransfer = () => {
     setIsAddItemModalOpen(false)
   }
 
+  // User options for dropdown
+  const userOptions = [
+    { value: '', label: 'Select Person' },
+    ...users.map(user => ({
+      value: user.id || user.user_id,
+      label: `${user.name || user.username || 'User'} (${user.employeCode || user.employee_code || 'N/A'})`
+    }))
+  ]
+
+  // Warehouse options (stock areas)
+  const warehouseOptions = stockAreas.filter(area => area.value !== '')
+
   return (
     <div className="space-y-6">
       <div className="bg-white rounded-lg shadow p-6">
-        <h2 className="text-xl font-semibold text-gray-900 mb-6">Basic Details</h2>
+        <h2 className="text-xl font-semibold text-gray-900 mb-6">Stock Transfer</h2>
         
         <div className="grid grid-cols-2 gap-6 mb-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
             <input
-              type="text"
+              type="date"
               value={basicDetails.date}
-              readOnly
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50"
+              onChange={(e) => setBasicDetails({ ...basicDetails, date: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
+          
           <Input
-            label="Slip No"
+            label="Slip Number"
             required
             value={basicDetails.slipNo}
             onChange={(e) => setBasicDetails({ ...basicDetails, slipNo: e.target.value })}
+            placeholder="ST-MONTH-YEAR-NUMBER"
           />
+          
           <Dropdown
             label="Transfer Type"
             required
@@ -456,15 +475,20 @@ const StockTransfer = () => {
             value={basicDetails.transferType}
             onChange={(e) => handleTransferTypeChange(e.target.value)}
           />
+
+          {/* Conditional fields based on transfer type */}
           {basicDetails.transferType === 'material-request' && (
-            <Dropdown
-              label="Material Request No."
-              required
-              options={materialRequests}
-              value={basicDetails.materialRequestNo}
-              onChange={(e) => setBasicDetails({ ...basicDetails, materialRequestNo: e.target.value })}
-            />
+            <>
+              <Dropdown
+                label="Material Request Number"
+                required
+                options={materialRequests}
+                value={basicDetails.materialRequestNo}
+                onChange={(e) => setBasicDetails({ ...basicDetails, materialRequestNo: e.target.value })}
+              />
+            </>
           )}
+
           <Dropdown
             label="From Stock Area"
             required
@@ -472,117 +496,95 @@ const StockTransfer = () => {
             value={basicDetails.fromStockArea}
             onChange={(e) => setBasicDetails({ ...basicDetails, fromStockArea: e.target.value })}
           />
-          {basicDetails.transferType === 'warehouse-to-person' ? (
+
+          {/* To Person or Warehouse - one must be selected, other grayed */}
+          {basicDetails.transferType && (
             <>
               <Dropdown
-                label="Destination Stock Area"
-                required
-                options={toStockAreaOptionsPerson}
-                value={basicDetails.toStockArea}
-                onChange={(e) => setBasicDetails({ ...basicDetails, toStockArea: e.target.value })}
+                label="To Person"
+                required={!basicDetails.toWarehouse}
+                options={userOptions}
+                value={basicDetails.toPerson}
+                onChange={(e) => handleToPersonChange(e.target.value)}
+                disabled={!!basicDetails.toWarehouse}
               />
+              
               <Dropdown
-                label="To Technician"
-                required
-                options={[
-                  { value: '', label: 'Select Technician' },
-                  ...users.map(user => ({
-                    value: user.id || user.user_id,
-                    label: `${user.name || user.username || 'User'} (${user.employeCode || user.employee_code || 'N/A'})`
-                  }))
-                ]}
-                value={toUserId}
-                onChange={(e) => setToUserId(e.target.value)}
-              />
-              <Input
-                label="Ticket ID (Optional)"
-                placeholder="e.g., TKT-55S"
-                value={ticketId}
-                onChange={(e) => setTicketId(e.target.value)}
+                label="To Warehouse"
+                required={!basicDetails.toPerson}
+                options={warehouseOptions}
+                value={basicDetails.toWarehouse}
+                onChange={(e) => handleToWarehouseChange(e.target.value)}
+                disabled={!!basicDetails.toPerson}
               />
             </>
-          ) : (
-            <Dropdown
-              label="To Stock Area"
-              required
-              options={toStockAreaOptionsWarehouse}
-              value={basicDetails.toStockArea}
-              onChange={(e) => setBasicDetails({ ...basicDetails, toStockArea: e.target.value })}
-            />
           )}
         </div>
 
-        <div className="border-t border-gray-200 pt-6">
-          {basicDetails.transferType === 'material-request' && basicDetails.materialRequestNo ? (
+        {/* Material Request Items Section - Only show when MR is selected */}
+        {basicDetails.transferType === 'material-request' && basicDetails.materialRequestNo && (
+          <div className="border-t border-gray-200 pt-6 mt-6">
+            {/* Tabs - Side by Side */}
             <div className="flex border-b border-gray-200 mb-4">
               <button
                 onClick={() => setActiveTab('requested-items')}
-                className={`px-6 py-3 font-medium text-sm ${
+                className={`px-6 py-3 font-medium text-sm border-b-2 transition-colors ${
                   activeTab === 'requested-items'
-                    ? 'border-b-2 border-blue-600 text-blue-600'
-                    : 'text-gray-600 hover:text-gray-900'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-gray-600 hover:text-gray-900'
                 }`}
               >
                 Requested Items
               </button>
               <button
                 onClick={() => setActiveTab('allocate-items')}
-                className={`px-6 py-3 font-medium text-sm ${
+                className={`px-6 py-3 font-medium text-sm border-b-2 transition-colors ${
                   activeTab === 'allocate-items'
-                    ? 'border-b-2 border-blue-600 text-blue-600'
-                    : 'text-gray-600 hover:text-gray-900'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-gray-600 hover:text-gray-900'
                 }`}
               >
                 Allocate Items
               </button>
             </div>
-          ) : (
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900">Allocate Items</h3>
-              <Button variant="primary" onClick={() => setIsAddItemModalOpen(true)}>
-                <PlusIcon className="w-4 h-4 mr-2 inline" />
-                Add Item
-              </Button>
-            </div>
-          )}
 
-          {basicDetails.transferType === 'material-request' && basicDetails.materialRequestNo && activeTab === 'requested-items' ? (
-            <>
-              <Table
-                headers={['ITEM NAME', 'UOM', 'PROPERTIES', 'REQUESTED QUANTITY', 'REMAINING QUANTITY']}
-              >
-                {paginatedRequestedItems.length > 0 ? (
-                  paginatedRequestedItems.map((item) => (
-                    <tr key={item.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.itemName}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.uom}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.properties}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.requestedQuantity}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.remainingQuantity}</td>
+            {/* Items List based on active tab */}
+            {activeTab === 'requested-items' ? (
+              <div>
+                <Table
+                  headers={['ITEM NAME', 'UOM', 'PROPERTIES', 'REQUESTED QUANTITY', 'REMAINING QUANTITY']}
+                >
+                  {paginatedRequestedItems.length > 0 ? (
+                    paginatedRequestedItems.map((item) => (
+                      <tr key={item.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.itemName}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.uom}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.properties}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.requestedQuantity}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.remainingQuantity}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
+                        No requested items found
+                      </td>
                     </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
-                      No data found
-                    </td>
-                  </tr>
+                  )}
+                </Table>
+                {requestedItemsData.length > 0 && (
+                  <Pagination
+                    currentPage={currentPage}
+                    totalPages={requestedTotalPages}
+                    itemsPerPage={itemsPerPage}
+                    totalItems={requestedItemsData.length}
+                    onPageChange={setCurrentPage}
+                    onItemsPerPageChange={setItemsPerPage}
+                  />
                 )}
-              </Table>
-              {requestedItemsData.length > 0 && (
-                <Pagination
-                  currentPage={currentPage}
-                  totalPages={requestedTotalPages}
-                  itemsPerPage={itemsPerPage}
-                  totalItems={requestedItemsData.length}
-                  onPageChange={setCurrentPage}
-                  onItemsPerPageChange={setItemsPerPage}
-                />
-              )}
-            </>
-          ) : (
-            <>
-              {basicDetails.transferType === 'material-request' && basicDetails.materialRequestNo && (
+              </div>
+            ) : (
+              <div>
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-semibold text-gray-900">Allocate Items</h3>
                   <Button variant="primary" onClick={() => setIsAddItemModalOpen(true)}>
@@ -590,55 +592,113 @@ const StockTransfer = () => {
                     Add Item
                   </Button>
                 </div>
-              )}
-              <Table
-                headers={['SELECT', 'ITEM NAME', 'PROPERTIES', 'GRN NO.', 'ASSET ID', 'QUANTITY', 'REMARKS']}
-              >
-                {paginatedAllocateItems.length > 0 ? (
-                  paginatedAllocateItems.map((item) => (
-                    <tr key={item.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-center">
-                        <input
-                          type="checkbox"
-                          checked={item.selected}
-                          onChange={(e) => {
-                            setAllocateItemsData(allocateItemsData.map(i =>
-                              i.id === item.id ? { ...i, selected: e.target.checked } : i
-                            ))
-                          }}
-                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                        />
+                <Table
+                  headers={['SELECT', 'ITEM NAME', 'PROPERTIES', 'GRN NO.', 'ASSET ID', 'QUANTITY', 'REMARKS']}
+                >
+                  {paginatedAllocateItems.length > 0 ? (
+                    paginatedAllocateItems.map((item) => (
+                      <tr key={item.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-center">
+                          <input
+                            type="checkbox"
+                            checked={item.selected}
+                            onChange={(e) => {
+                              setAllocateItemsData(allocateItemsData.map(i =>
+                                i.id === item.id ? { ...i, selected: e.target.checked } : i
+                              ))
+                            }}
+                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                          />
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.itemName}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.properties}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.grnNo}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.assetId}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.quantity || item.requestedQuantity}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.remarks}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
+                        No items added. Click "Add Item" to add items.
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.itemName}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.properties}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.grnNo}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.assetId}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.quantity || item.requestedQuantity}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.remarks}</td>
                     </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
-                      No items added. Click "Add Item" to allocate.
-                    </td>
-                  </tr>
+                  )}
+                </Table>
+                {allocateItemsData.length > 0 && (
+                  <Pagination
+                    currentPage={currentPage}
+                    totalPages={allocateTotalPages}
+                    itemsPerPage={itemsPerPage}
+                    totalItems={allocateItemsData.length}
+                    onPageChange={setCurrentPage}
+                    onItemsPerPageChange={setItemsPerPage}
+                  />
                 )}
-              </Table>
-              {allocateItemsData.length > 0 && (
-                <Pagination
-                  currentPage={currentPage}
-                  totalPages={allocateTotalPages}
-                  itemsPerPage={itemsPerPage}
-                  totalItems={allocateItemsData.length}
-                  onPageChange={setCurrentPage}
-                  onItemsPerPageChange={setItemsPerPage}
-                />
-              )}
-            </>
-          )}
-        </div>
+              </div>
+            )}
+          </div>
+        )}
 
+        {/* Items Section for Reconciliation type */}
+        {basicDetails.transferType === 'reconciliation' && (
+          <div className="border-t border-gray-200 pt-6 mt-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Items</h3>
+              <Button variant="primary" onClick={() => setIsAddItemModalOpen(true)}>
+                <PlusIcon className="w-4 h-4 mr-2 inline" />
+                Add Item
+              </Button>
+            </div>
+            <Table
+              headers={['SELECT', 'ITEM NAME', 'PROPERTIES', 'GRN NO.', 'ASSET ID', 'QUANTITY', 'REMARKS']}
+            >
+              {paginatedAllocateItems.length > 0 ? (
+                paginatedAllocateItems.map((item) => (
+                  <tr key={item.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-center">
+                      <input
+                        type="checkbox"
+                        checked={item.selected}
+                        onChange={(e) => {
+                          setAllocateItemsData(allocateItemsData.map(i =>
+                            i.id === item.id ? { ...i, selected: e.target.checked } : i
+                          ))
+                        }}
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.itemName}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.properties}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.grnNo}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.assetId}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.quantity || item.requestedQuantity}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.remarks}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
+                    No items added. Click "Add Item" to add items.
+                  </td>
+                </tr>
+              )}
+            </Table>
+            {allocateItemsData.length > 0 && (
+              <Pagination
+                currentPage={currentPage}
+                totalPages={allocateTotalPages}
+                itemsPerPage={itemsPerPage}
+                totalItems={allocateItemsData.length}
+                onPageChange={setCurrentPage}
+                onItemsPerPageChange={setItemsPerPage}
+              />
+            )}
+          </div>
+        )}
+
+        {/* Description Field - Below all items */}
         <div className="border-t border-gray-200 pt-6 mt-6">
           <Input
             label="Description"

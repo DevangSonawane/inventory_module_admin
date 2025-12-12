@@ -35,13 +35,15 @@ const AddInward = () => {
   const [basicDetails, setBasicDetails] = useState({
     date: new Date().toISOString().split('T')[0],
     vehicleNumber: '',
-    slipNumber: '',
+    grnNumber: '',
     invoiceNumber: '',
     partyName: '',
     purchaseOrder: '',
     stockArea: '',
     remark: '',
   })
+  const [editingItemId, setEditingItemId] = useState(null)
+  const [editingItemData, setEditingItemData] = useState({})
 
   const [inwardItems, setInwardItems] = useState([])
   const [uploadedFiles, setUploadedFiles] = useState([])
@@ -289,11 +291,38 @@ const AddInward = () => {
       const response = await purchaseOrderService.getAll({ limit: 1000, status: '' })
       if (response.success && (response.data?.purchaseOrders || response.data?.data)) {
         const pos = response.data?.purchaseOrders || response.data?.data || []
-        // Filter to show SENT and RECEIVED status POs
+        // Filter to show SENT and RECEIVED status POs (exclude DELIVERED)
         const filteredPOs = pos.filter(po => po.status === 'SENT' || po.status === 'RECEIVED')
+        
+        // Get ALL inward entries (DRAFT and COMPLETED) to filter out POs that are already used
+        const inwardResponse = await inwardService.getAll({ limit: 1000 })
+        const usedPOIds = new Set()
+        if (inwardResponse.success && inwardResponse.data?.inwards) {
+          inwardResponse.data.inwards.forEach(inward => {
+            // Exclude the current inward entry if we're in edit mode
+            // This allows editing existing inward entries while filtering out used POs
+            if (inward.po_id) {
+              if (isEditMode && id && inward.inward_id === id) {
+                // Skip current inward entry - allow it to be shown for editing
+              } else {
+                usedPOIds.add(inward.po_id)
+              }
+            }
+          })
+        }
+        
+        // Filter out POs that are already used in any inward entry
+        // But keep the current PO if we're editing this inward
+        const currentPOId = isEditMode && basicDetails.purchaseOrder ? basicDetails.purchaseOrder : null
+        const availablePOs = filteredPOs.filter(po => {
+          const poId = po.po_id || po.id
+          // Include if not used, or if it's the current PO we're editing
+          return !usedPOIds.has(poId) || (currentPOId && poId === currentPOId)
+        })
+        
         const poOptions = [
           { value: '', label: 'Select Purchase Order' },
-          ...filteredPOs.map(po => {
+          ...availablePOs.map(po => {
             const vendorName = po.vendor?.partner_name || po.vendor_name || 'Vendor'
             const vendorType = po.vendor?.partner_type || po.vendor?.partnerType || po.vendor?.type || ''
             const typeSuffix = vendorType ? ` (${vendorType})` : ''
@@ -435,7 +464,7 @@ const AddInward = () => {
           setBasicDetails({
             date: inward.date || new Date().toISOString().split('T')[0],
             vehicleNumber: inward.vehicle_number || '',
-            slipNumber: inward.slip_number || '',
+            grnNumber: inward.slip_number || '', // GRN number is stored as slip_number
             invoiceNumber: inward.invoice_number || '',
             partyName: inward.party_name || '',
             purchaseOrder: inward.po_id || inward.purchase_order || '', // Use po_id if available, fallback to purchase_order
@@ -604,7 +633,6 @@ const AddInward = () => {
         stockAreaId: basicDetails.stockArea,
         purchaseOrder: basicDetails.purchaseOrder || undefined,
         poId: basicDetails.purchaseOrder && basicDetails.purchaseOrder.length > 20 ? basicDetails.purchaseOrder : undefined, // UUID if it's a PO ID
-        slipNumber: basicDetails.slipNumber || undefined,
         vehicleNumber: basicDetails.vehicleNumber || undefined,
         remark: basicDetails.remark || undefined,
         items: inwardItems.map(item => ({
@@ -660,20 +688,30 @@ const AddInward = () => {
 
       if (response.success) {
         toast.success(`Inward entry ${isEditMode ? 'updated' : 'created'} successfully!`)
+        
+        // Update GRN number if it was generated (in create mode)
+        const inwardData = response.data?.inward || response.data?.data || response.data
+        if (!isEditMode && inwardData?.slip_number) {
+          setBasicDetails(prev => ({ ...prev, grnNumber: inwardData.slip_number }))
+        }
+        
         if (shouldExit || isEditMode) {
           navigate('/inward-list')
         } else {
-          // Reset form only in create mode
-          setBasicDetails({
+          // Refresh PO list to exclude the one we just used (if applicable)
+          // This will filter out the PO from future dropdowns
+          fetchPurchaseOrders()
+          // Reset form only in create mode (except GRN number)
+          setBasicDetails(prev => ({
             date: new Date().toISOString().split('T')[0],
             vehicleNumber: '',
-            slipNumber: '',
+            grnNumber: prev.grnNumber, // Keep GRN number
             invoiceNumber: '',
             partyName: '',
             purchaseOrder: '',
             stockArea: '',
             remark: '',
-          })
+          }))
           setInwardItems([])
           setUploadedFiles([])
         }
@@ -708,6 +746,64 @@ const AddInward = () => {
 
   const handleDeleteItem = (id) => {
     setInwardItems(inwardItems.filter((item) => item.id !== id))
+  }
+
+  const handleEditItem = (item) => {
+    setEditingItemId(item.id)
+    setEditingItemData({
+      serialNumber: item.serialNumber || '',
+      macId: item.macId || '',
+    })
+  }
+
+  const handleSaveItemEdit = (itemId) => {
+    setInwardItems(inwardItems.map(item => 
+      item.id === itemId 
+        ? { ...item, serialNumber: editingItemData.serialNumber || null, macId: editingItemData.macId || null }
+        : item
+    ))
+    setEditingItemId(null)
+    setEditingItemData({})
+    toast.success('Item updated successfully')
+  }
+
+  const handleCancelItemEdit = () => {
+    setEditingItemId(null)
+    setEditingItemData({})
+  }
+
+  const handleCompleteInward = async () => {
+    if (!id || !isEditMode) {
+      toast.error('Please save the inward entry first before completing')
+      return
+    }
+
+    if (!basicDetails.invoiceNumber || !basicDetails.partyName || !basicDetails.stockArea) {
+      toast.error('Please fill all required fields')
+      return
+    }
+    if (inwardItems.length === 0) {
+      toast.error('Please add at least one inward item')
+      return
+    }
+
+    try {
+      setLoading(true)
+      const response = await inwardService.complete(id)
+      if (response.success) {
+        toast.success('Inward entry completed successfully!')
+        // Refresh PO list to exclude the completed one
+        fetchPurchaseOrders()
+        navigate('/inward-list')
+      } else {
+        toast.error(response.message || 'Failed to complete inward entry')
+      }
+    } catch (error) {
+      console.error('Error completing inward:', error)
+      toast.error(error.message || 'Failed to complete inward entry')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleAddFile = () => {
@@ -830,12 +926,15 @@ const AddInward = () => {
             value={basicDetails.vehicleNumber}
             onChange={(e) => setBasicDetails({ ...basicDetails, vehicleNumber: e.target.value })}
           />
-          <Input
-            label="Slip Number"
-            placeholder="Auto-generated if left blank"
-            value={basicDetails.slipNumber}
-            onChange={(e) => setBasicDetails({ ...basicDetails, slipNumber: e.target.value })}
-          />
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">GRN Number</label>
+            <input
+              type="text"
+              value={basicDetails.grnNumber || 'Will be generated on save'}
+              readOnly
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50"
+            />
+          </div>
           <Input
             label="Invoice Number"
             required
@@ -919,23 +1018,80 @@ const AddInward = () => {
           </div>
 
           <Table
-            headers={['MATERIAL NAME', 'PROPERTIES', 'SERIAL NUMBER', 'MAC ID', 'PRICE (/PER QTY)', 'QUANTITY', 'UOM']}
+            headers={['MATERIAL NAME', 'PROPERTIES', 'SERIAL NUMBER', 'MAC ID', 'PRICE (/PER QTY)', 'QUANTITY', 'UOM', 'ACTION']}
           >
             {paginatedItems.length > 0 ? (
               paginatedItems.map((item) => (
                 <tr key={item.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.materialName}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.properties || item.productCode || '-'}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.serialNumber || '-'}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.macId || '-'}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {editingItemId === item.id ? (
+                      <input
+                        type="text"
+                        value={editingItemData.serialNumber}
+                        onChange={(e) => setEditingItemData({ ...editingItemData, serialNumber: e.target.value })}
+                        className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                        placeholder="Enter serial number"
+                      />
+                    ) : (
+                      item.serialNumber || '-'
+                    )}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {editingItemId === item.id ? (
+                      <input
+                        type="text"
+                        value={editingItemData.macId}
+                        onChange={(e) => setEditingItemData({ ...editingItemData, macId: e.target.value })}
+                        className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                        placeholder="Enter MAC ID"
+                      />
+                    ) : (
+                      item.macId || '-'
+                    )}
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.price.toFixed(2)}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.quantity}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.uom}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm">
+                    {editingItemId === item.id ? (
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleSaveItemEdit(item.id)}
+                          className="text-green-600 hover:text-green-700 font-medium"
+                        >
+                          Save
+                        </button>
+                        <button
+                          onClick={handleCancelItemEdit}
+                          className="text-gray-600 hover:text-gray-700 font-medium"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleEditItem(item)}
+                          className="text-blue-600 hover:text-blue-700 font-medium"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDeleteItem(item.id)}
+                          className="text-red-600 hover:text-red-700 font-medium"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    )}
+                  </td>
                 </tr>
               ))
             ) : (
               <tr>
-                <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
+                <td colSpan={8} className="px-6 py-12 text-center text-gray-500">
                   No items added yet. Click "Add" to add materials.
                 </td>
               </tr>
@@ -1065,7 +1221,7 @@ const AddInward = () => {
                 Saving...
               </>
             ) : (
-              'Save'
+              'Save as Draft'
             )}
           </Button>
           <Button variant="success" onClick={handleSaveAndExit} disabled={loading}>
@@ -1078,6 +1234,18 @@ const AddInward = () => {
               'Save & Exit'
             )}
           </Button>
+          {isEditMode && (
+            <Button variant="success" onClick={handleCompleteInward} disabled={loading}>
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 inline animate-spin" />
+                  Completing...
+                </>
+              ) : (
+                'Complete & Submit'
+              )}
+            </Button>
+          )}
         </div>
       </div>
 

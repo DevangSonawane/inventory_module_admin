@@ -51,17 +51,27 @@ const StockTransferList = () => {
           const date = new Date(transfer.transfer_date)
           const formattedDate = `${String(date.getDate()).padStart(2, '0')}-${String(date.getMonth() + 1).padStart(2, '0')}-${date.getFullYear()}`
 
-          // Determine transfer type
-          const transferType = transfer.material_request_id ? 'Material Request' : 'Direct Transfer'
+          // Determine transfer type: Material Request or Reconciliation
+          const transferType = transfer.material_request_id || transfer.materialRequestId ? 'Material Request' : 'Reconciliation'
+
+          // Determine destination
+          let destination = '-'
+          if (transfer.to_user_id || transfer.toUserId) {
+            destination = `Person (ID: ${transfer.to_user_id || transfer.toUserId})`
+          } else if (transfer.toStockArea?.area_name) {
+            destination = transfer.toStockArea.area_name
+          } else if (transfer.to_stock_area_id || transfer.toStockAreaId) {
+            destination = `Warehouse (${transfer.to_stock_area_id || transfer.toStockAreaId})`
+          }
 
           return {
             id: transfer.transfer_id,
             srNo: (currentPage - 1) * itemsPerPage + index + 1,
             date: formattedDate,
-            slipNo: transfer.transfer_number || `ST-${transfer.transfer_id?.substring(0, 8).toUpperCase()}`,
+            slipNo: transfer.transfer_number || transfer.slip_number || `ST-${transfer.transfer_id?.substring(0, 8).toUpperCase()}`,
             transferType: transferType,
             fromStockArea: transfer.fromStockArea?.area_name || '-',
-            toStockArea: transfer.toStockArea?.area_name || '-',
+            destination: destination,
           }
         })
         
@@ -101,7 +111,7 @@ const StockTransferList = () => {
       {
         title: 'Stock Transfer List',
         data: stockTransfers,
-        headers: ['SR. NO.', 'DATE', 'SLIP NO.', 'TRANSFER TYPE', 'FROM STOCK AREA', 'TO STOCK AREA'],
+        headers: ['SR. NO.', 'DATE', 'SLIP NO.', 'TRANSFER TYPE', 'FROM STOCK AREA', 'DESTINATION'],
       },
       (data) => `
         <div class="header">
@@ -183,7 +193,7 @@ const StockTransferList = () => {
         ) : (
           <>
             <Table
-              headers={['SR. NO.', 'DATE', 'SLIP NO.', 'TRANSFER TYPE', 'FROM STOCK AREA', 'TO STOCK AREA', 'ACTIONS']}
+              headers={['SR. NO.', 'DATE', 'SLIP NO.', 'TRANSFER TYPE', 'FROM STOCK AREA', 'DESTINATION', 'ACTIONS']}
             >
               {stockTransfers.length > 0 ? (
                 stockTransfers.map((item) => (
@@ -193,7 +203,7 @@ const StockTransferList = () => {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.slipNo}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.transferType}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.fromStockArea}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.toStockArea}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.destination}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
                       <button
                         onClick={() => navigate(`/stock-transfer/${item.id}`)}

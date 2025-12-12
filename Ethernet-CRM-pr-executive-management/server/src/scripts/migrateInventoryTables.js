@@ -493,7 +493,7 @@ const runMigration = async (silent = false) => {
         CREATE TABLE \`groups\` (
           \`group_id\` CHAR(36) NOT NULL PRIMARY KEY,
           \`group_name\` VARCHAR(255) NOT NULL,
-          \`group_code\` VARCHAR(50) NULL,
+          \`description\` TEXT NULL,
           \`org_id\` CHAR(36) NULL,
           \`is_active\` BOOLEAN NOT NULL DEFAULT TRUE,
           \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -505,6 +505,165 @@ const runMigration = async (silent = false) => {
       if (!silent) console.log('   ✅ groups table created');
     } else {
       if (!silent) console.log('   ℹ️  groups table already exists');
+      
+      // Check and fix all required columns
+      try {
+        // Get all existing columns
+        const allColumns = await sequelize.query(`
+          SELECT COLUMN_NAME 
+          FROM INFORMATION_SCHEMA.COLUMNS 
+          WHERE TABLE_SCHEMA = DATABASE() 
+          AND TABLE_NAME = 'groups'
+        `, { type: QueryTypes.SELECT });
+        
+        const existingColumnNames = Array.isArray(allColumns) && allColumns.length > 0
+          ? allColumns.map(col => col.COLUMN_NAME || col[0] || col)
+          : [];
+        
+        // Check and add group_id if missing (this is the primary key)
+        if (!existingColumnNames.includes('group_id')) {
+          if (!silent) console.log('   ⚠️  group_id column missing! Adding it...');
+          
+          // Check if there's an 'id' column we should rename
+          if (existingColumnNames.includes('id')) {
+            // Rename id to group_id
+            await sequelize.query(`
+              ALTER TABLE \`groups\`
+              CHANGE COLUMN \`id\` \`group_id\` CHAR(36) NOT NULL
+            `, { type: QueryTypes.RAW });
+            if (!silent) console.log('   ✅ Renamed id column to group_id');
+          } else {
+            // Add group_id as primary key
+            await sequelize.query(`
+              ALTER TABLE \`groups\`
+              ADD COLUMN \`group_id\` CHAR(36) NOT NULL PRIMARY KEY FIRST
+            `, { type: QueryTypes.RAW });
+            if (!silent) console.log('   ✅ Added group_id column as primary key');
+          }
+        }
+        
+        // Check and add group_name if missing
+        if (!existingColumnNames.includes('group_name')) {
+          if (!silent) console.log('   Adding group_name column to groups table...');
+          await sequelize.query(`
+            ALTER TABLE \`groups\`
+            ADD COLUMN \`group_name\` VARCHAR(255) NOT NULL AFTER \`group_id\`
+          `, { type: QueryTypes.RAW });
+          if (!silent) console.log('   ✅ group_name column added to groups table');
+        }
+        
+        // Check and add description if missing
+        if (!existingColumnNames.includes('description')) {
+          if (!silent) console.log('   Adding description column to groups table...');
+          await sequelize.query(`
+            ALTER TABLE \`groups\`
+            ADD COLUMN \`description\` TEXT NULL AFTER \`group_name\`
+          `, { type: QueryTypes.RAW });
+          if (!silent) console.log('   ✅ description column added to groups table');
+        }
+        
+        // Check and add org_id if missing
+        if (!existingColumnNames.includes('org_id')) {
+          if (!silent) console.log('   Adding org_id column to groups table...');
+          await sequelize.query(`
+            ALTER TABLE \`groups\`
+            ADD COLUMN \`org_id\` CHAR(36) NULL AFTER \`description\`
+          `, { type: QueryTypes.RAW });
+          if (!silent) console.log('   ✅ org_id column added to groups table');
+        }
+        
+        // Check and add is_active if missing
+        if (!existingColumnNames.includes('is_active')) {
+          if (!silent) console.log('   Adding is_active column to groups table...');
+          await sequelize.query(`
+            ALTER TABLE \`groups\`
+            ADD COLUMN \`is_active\` BOOLEAN NOT NULL DEFAULT TRUE AFTER \`org_id\`
+          `, { type: QueryTypes.RAW });
+          if (!silent) console.log('   ✅ is_active column added to groups table');
+        }
+        
+        // Check and add timestamps if missing
+        if (!existingColumnNames.includes('created_at')) {
+          if (!silent) console.log('   Adding created_at column to groups table...');
+          await sequelize.query(`
+            ALTER TABLE \`groups\`
+            ADD COLUMN \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+          `, { type: QueryTypes.RAW });
+          if (!silent) console.log('   ✅ created_at column added to groups table');
+        }
+        
+        if (!existingColumnNames.includes('updated_at')) {
+          if (!silent) console.log('   Adding updated_at column to groups table...');
+          await sequelize.query(`
+            ALTER TABLE \`groups\`
+            ADD COLUMN \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+          `, { type: QueryTypes.RAW });
+          if (!silent) console.log('   ✅ updated_at column added to groups table');
+        }
+        
+        // Add indexes if they don't exist
+        const indexes = await sequelize.query(`
+          SELECT INDEX_NAME 
+          FROM INFORMATION_SCHEMA.STATISTICS 
+          WHERE TABLE_SCHEMA = DATABASE() 
+          AND TABLE_NAME = 'groups'
+        `, { type: QueryTypes.SELECT });
+        
+        const existingIndexNames = Array.isArray(indexes) && indexes.length > 0
+          ? indexes.map(idx => idx.INDEX_NAME || idx[0] || idx)
+          : [];
+        
+        if (!existingIndexNames.includes('idx_group_name')) {
+          if (!silent) console.log('   Adding index on group_name...');
+          await sequelize.query(`
+            ALTER TABLE \`groups\`
+            ADD INDEX \`idx_group_name\` (\`group_name\`)
+          `, { type: QueryTypes.RAW });
+          if (!silent) console.log('   ✅ index added on group_name');
+        }
+        
+        if (!existingIndexNames.includes('idx_org_id')) {
+          if (!silent) console.log('   Adding index on org_id...');
+          await sequelize.query(`
+            ALTER TABLE \`groups\`
+            ADD INDEX \`idx_org_id\` (\`org_id\`)
+          `, { type: QueryTypes.RAW });
+          if (!silent) console.log('   ✅ index added on org_id');
+        }
+        
+        // Migrate data from 'name' to 'group_name' if 'name' column exists, then drop it
+        if (existingColumnNames.includes('name')) {
+          try {
+            // First, migrate any data from 'name' to 'group_name'
+            await sequelize.query(`
+              UPDATE \`groups\`
+              SET \`group_name\` = \`name\`
+              WHERE (\`group_name\` IS NULL OR \`group_name\` = '') 
+              AND \`name\` IS NOT NULL 
+              AND \`name\` != ''
+            `, { type: QueryTypes.UPDATE });
+            if (!silent) console.log('   ✅ Migrated data from "name" to "group_name"');
+            
+            // Now drop the legacy 'name' column since we're using 'group_name'
+            try {
+              await sequelize.query(`
+                ALTER TABLE \`groups\`
+                DROP COLUMN \`name\`
+              `, { type: QueryTypes.RAW });
+              if (!silent) console.log('   ✅ Dropped legacy "name" column from groups table');
+            } catch (dropError) {
+              if (!silent) console.log('   ⚠️  Could not drop "name" column (may be in use):', dropError.message);
+            }
+          } catch (e) {
+            if (!silent) console.log('   ⚠️  Could not migrate data:', e.message);
+          }
+        }
+        
+        if (!silent) console.log('   ✅ groups table structure verified and fixed');
+      } catch (e) {
+        if (!silent) console.log('   ⚠️  Could not update groups table:', e.message);
+        if (!silent && e.stack) console.log('   Stack:', e.stack);
+      }
     }
 
     // 5. TEAMS
@@ -515,6 +674,7 @@ const runMigration = async (silent = false) => {
           \`team_id\` CHAR(36) NOT NULL PRIMARY KEY,
           \`team_name\` VARCHAR(255) NOT NULL,
           \`group_id\` CHAR(36) NULL,
+          \`description\` TEXT NULL,
           \`org_id\` CHAR(36) NULL,
           \`is_active\` BOOLEAN NOT NULL DEFAULT TRUE,
           \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -528,6 +688,231 @@ const runMigration = async (silent = false) => {
       if (!silent) console.log('   ✅ teams table created');
     } else {
       if (!silent) console.log('   ℹ️  teams table already exists');
+      
+      // Check and fix all required columns
+      try {
+        // Get all existing columns
+        const allColumns = await sequelize.query(`
+          SELECT COLUMN_NAME 
+          FROM INFORMATION_SCHEMA.COLUMNS 
+          WHERE TABLE_SCHEMA = DATABASE() 
+          AND TABLE_NAME = 'teams'
+        `, { type: QueryTypes.SELECT });
+        
+        const existingColumnNames = Array.isArray(allColumns) && allColumns.length > 0
+          ? allColumns.map(col => col.COLUMN_NAME || col[0] || col)
+          : [];
+        
+        // Check and add team_id if missing (this is the primary key)
+        if (!existingColumnNames.includes('team_id')) {
+          if (!silent) console.log('   ⚠️  team_id column missing! Adding it...');
+          
+          // Check if there's an 'id' column we should rename
+          if (existingColumnNames.includes('id')) {
+            // Rename id to team_id
+            await sequelize.query(`
+              ALTER TABLE \`teams\`
+              CHANGE COLUMN \`id\` \`team_id\` CHAR(36) NOT NULL
+            `, { type: QueryTypes.RAW });
+            if (!silent) console.log('   ✅ Renamed id column to team_id');
+          } else {
+            // Add team_id as primary key
+            await sequelize.query(`
+              ALTER TABLE \`teams\`
+              ADD COLUMN \`team_id\` CHAR(36) NOT NULL PRIMARY KEY FIRST
+            `, { type: QueryTypes.RAW });
+            if (!silent) console.log('   ✅ Added team_id column as primary key');
+          }
+        }
+        
+        // Check and add team_name if missing
+        if (!existingColumnNames.includes('team_name')) {
+          if (!silent) console.log('   Adding team_name column to teams table...');
+          await sequelize.query(`
+            ALTER TABLE \`teams\`
+            ADD COLUMN \`team_name\` VARCHAR(255) NOT NULL AFTER \`team_id\`
+          `, { type: QueryTypes.RAW });
+          if (!silent) console.log('   ✅ team_name column added to teams table');
+        }
+        
+        // Check and add/fix group_id column
+        if (!existingColumnNames.includes('group_id')) {
+          if (!silent) console.log('   Adding group_id column to teams table...');
+          await sequelize.query(`
+            ALTER TABLE \`teams\`
+            ADD COLUMN \`group_id\` CHAR(36) NULL AFTER \`team_name\`
+          `, { type: QueryTypes.RAW });
+          if (!silent) console.log('   ✅ group_id column added to teams table');
+        } else {
+          // Check if group_id is INTEGER and needs to be changed to CHAR(36)
+          try {
+            const [columnInfo] = await sequelize.query(`
+              SELECT DATA_TYPE, COLUMN_TYPE
+              FROM INFORMATION_SCHEMA.COLUMNS 
+              WHERE TABLE_SCHEMA = DATABASE() 
+              AND TABLE_NAME = 'teams'
+              AND COLUMN_NAME = 'group_id'
+            `, { type: QueryTypes.SELECT });
+            
+            if (columnInfo && (columnInfo.DATA_TYPE === 'int' || columnInfo.DATA_TYPE === 'integer' || (columnInfo.COLUMN_TYPE && columnInfo.COLUMN_TYPE.includes('int')))) {
+              if (!silent) console.log('   ⚠️  group_id is INTEGER, changing to CHAR(36)...');
+              
+              // Drop foreign key if it exists
+              try {
+                const [fks] = await sequelize.query(`
+                  SELECT CONSTRAINT_NAME 
+                  FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
+                  WHERE TABLE_SCHEMA = DATABASE() 
+                  AND TABLE_NAME = 'teams'
+                  AND COLUMN_NAME = 'group_id'
+                  AND REFERENCED_TABLE_NAME = 'groups'
+                `, { type: QueryTypes.SELECT });
+                
+                if (fks && fks.length > 0) {
+                  const fkName = (Array.isArray(fks[0]) ? fks[0][0] : fks[0].CONSTRAINT_NAME) || 'fk_team_group';
+                  await sequelize.query(`
+                    ALTER TABLE \`teams\`
+                    DROP FOREIGN KEY \`${fkName}\`
+                  `, { type: QueryTypes.RAW });
+                  if (!silent) console.log('   ✅ Dropped foreign key before changing column type');
+                }
+              } catch (fkError) {
+                if (!silent) console.log('   ⚠️  Could not drop foreign key (may not exist):', fkError.message);
+              }
+              
+              // Change column type from INTEGER to CHAR(36)
+              await sequelize.query(`
+                ALTER TABLE \`teams\`
+                MODIFY COLUMN \`group_id\` CHAR(36) NULL
+              `, { type: QueryTypes.RAW });
+              
+              if (!silent) console.log('   ✅ Changed group_id from INTEGER to CHAR(36)');
+              
+              // Re-add foreign key
+              try {
+                await sequelize.query(`
+                  ALTER TABLE \`teams\`
+                  ADD CONSTRAINT \`fk_team_group\` FOREIGN KEY (\`group_id\`) REFERENCES \`groups\`(\`group_id\`) ON DELETE SET NULL
+                `, { type: QueryTypes.RAW });
+                if (!silent) console.log('   ✅ Re-added foreign key constraint');
+              } catch (fkError) {
+                if (!silent) console.log('   ⚠️  Could not re-add foreign key:', fkError.message);
+              }
+            }
+          } catch (checkError) {
+            if (!silent) console.log('   ⚠️  Could not check group_id column type:', checkError.message);
+          }
+        }
+        
+        // Check and add description if missing
+        if (!existingColumnNames.includes('description')) {
+          if (!silent) console.log('   Adding description column to teams table...');
+          await sequelize.query(`
+            ALTER TABLE \`teams\`
+            ADD COLUMN \`description\` TEXT NULL AFTER \`team_name\`
+          `, { type: QueryTypes.RAW });
+          if (!silent) console.log('   ✅ description column added to teams table');
+        }
+        
+        // Check and add org_id if missing
+        if (!existingColumnNames.includes('org_id')) {
+          if (!silent) console.log('   Adding org_id column to teams table...');
+          await sequelize.query(`
+            ALTER TABLE \`teams\`
+            ADD COLUMN \`org_id\` CHAR(36) NULL AFTER \`description\`
+          `, { type: QueryTypes.RAW });
+          if (!silent) console.log('   ✅ org_id column added to teams table');
+        }
+        
+        // Check and add is_active if missing
+        if (!existingColumnNames.includes('is_active')) {
+          if (!silent) console.log('   Adding is_active column to teams table...');
+          await sequelize.query(`
+            ALTER TABLE \`teams\`
+            ADD COLUMN \`is_active\` BOOLEAN NOT NULL DEFAULT TRUE AFTER \`org_id\`
+          `, { type: QueryTypes.RAW });
+          if (!silent) console.log('   ✅ is_active column added to teams table');
+        }
+        
+        // Check and add timestamps if missing
+        if (!existingColumnNames.includes('created_at')) {
+          if (!silent) console.log('   Adding created_at column to teams table...');
+          await sequelize.query(`
+            ALTER TABLE \`teams\`
+            ADD COLUMN \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+          `, { type: QueryTypes.RAW });
+          if (!silent) console.log('   ✅ created_at column added to teams table');
+        }
+        
+        if (!existingColumnNames.includes('updated_at')) {
+          if (!silent) console.log('   Adding updated_at column to teams table...');
+          await sequelize.query(`
+            ALTER TABLE \`teams\`
+            ADD COLUMN \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+          `, { type: QueryTypes.RAW });
+          if (!silent) console.log('   ✅ updated_at column added to teams table');
+        }
+        
+        // Add indexes if they don't exist
+        const indexes = await sequelize.query(`
+          SELECT INDEX_NAME 
+          FROM INFORMATION_SCHEMA.STATISTICS 
+          WHERE TABLE_SCHEMA = DATABASE() 
+          AND TABLE_NAME = 'teams'
+        `, { type: QueryTypes.SELECT });
+        
+        const existingIndexNames = Array.isArray(indexes) && indexes.length > 0
+          ? indexes.map(idx => idx.INDEX_NAME || idx[0] || idx)
+          : [];
+        
+        if (!existingIndexNames.includes('idx_team_name')) {
+          if (!silent) console.log('   Adding index on team_name...');
+          await sequelize.query(`
+            ALTER TABLE \`teams\`
+            ADD INDEX \`idx_team_name\` (\`team_name\`)
+          `, { type: QueryTypes.RAW });
+          if (!silent) console.log('   ✅ index added on team_name');
+        }
+        
+        if (!existingIndexNames.includes('idx_group_id')) {
+          if (!silent) console.log('   Adding index on group_id...');
+          await sequelize.query(`
+            ALTER TABLE \`teams\`
+            ADD INDEX \`idx_group_id\` (\`group_id\`)
+          `, { type: QueryTypes.RAW });
+          if (!silent) console.log('   ✅ index added on group_id');
+        }
+        
+        if (!existingIndexNames.includes('idx_org_id')) {
+          if (!silent) console.log('   Adding index on org_id...');
+          await sequelize.query(`
+            ALTER TABLE \`teams\`
+            ADD INDEX \`idx_org_id\` (\`org_id\`)
+          `, { type: QueryTypes.RAW });
+          if (!silent) console.log('   ✅ index added on org_id');
+        }
+        
+        // Migrate data from 'name' to 'team_name' if 'name' column exists
+        if (existingColumnNames.includes('name')) {
+          try {
+            await sequelize.query(`
+              UPDATE \`teams\`
+              SET \`team_name\` = \`name\`
+              WHERE (\`team_name\` IS NULL OR \`team_name\` = '') 
+              AND \`name\` IS NOT NULL 
+              AND \`name\` != ''
+            `, { type: QueryTypes.UPDATE });
+            if (!silent) console.log('   ✅ Migrated data from "name" to "team_name"');
+          } catch (e) {
+            if (!silent) console.log('   ⚠️  Could not migrate data:', e.message);
+          }
+        }
+        
+        if (!silent) console.log('   ✅ teams table structure verified and fixed');
+      } catch (e) {
+        if (!silent) console.log('   ⚠️  Could not update teams table:', e.message);
+        if (!silent && e.stack) console.log('   Stack:', e.stack);
+      }
     }
 
     // 6. PURCHASE REQUESTS
@@ -924,72 +1309,165 @@ const runMigration = async (silent = false) => {
       }
     }
 
-    // Add missing columns to Material Requests
-    if (!(await columnExists('material_requests', 'from_stock_area_id'))) {
-      if (!silent) console.log('   Adding from_stock_area_id, group_id, team_id to material_requests...');
-      
-      const stockAreaIdInfo = await getColumnType('stock_areas', 'area_id');
-      const stockAreaIdType = stockAreaIdInfo.fullType || 'CHAR(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci';
-      
-      try {
-        await sequelize.query(`
-          ALTER TABLE \`material_requests\`
-          ADD COLUMN \`from_stock_area_id\` ${stockAreaIdType} NULL COMMENT 'Which stock area to request from' AFTER \`pr_numbers\`,
-          ADD COLUMN \`group_id\` CHAR(36) NULL AFTER \`requested_by\`,
-          ADD COLUMN \`team_id\` CHAR(36) NULL AFTER \`group_id\`;
-        `, { type: QueryTypes.RAW });
-      } catch (e) {
-        // Column might already exist (race condition or previous partial migration)
-        if (e.message && (e.message.includes('Duplicate column') || e.message.includes('already exists'))) {
-          if (!silent) console.log('   ℹ️  Columns already exist, skipping...');
-        } else {
-          throw e; // Re-throw if it's a different error
+    // Add missing columns to Material Requests (comprehensive check)
+    if (!silent) console.log('   Checking material_requests table for new columns...');
+    
+    const stockAreaIdInfo = await getColumnType('stock_areas', 'area_id');
+    const stockAreaIdType = stockAreaIdInfo.fullType || 'CHAR(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci';
+    
+    // Define all columns that need to be added
+    const materialRequestColumns = [
+      { 
+        name: 'mr_number', 
+        sql: `ADD COLUMN \`mr_number\` VARCHAR(50) NULL UNIQUE COMMENT 'Auto-generated MR number: MR-month(abv)-year-number' AFTER \`request_id\``,
+        index: 'idx_mr_number'
+      },
+      { 
+        name: 'request_date', 
+        sql: `ADD COLUMN \`request_date\` DATE NULL COMMENT 'Request date (user selection or current day)' AFTER \`mr_number\``
+      },
+      { 
+        name: 'requestor_id', 
+        sql: `ADD COLUMN \`requestor_id\` INT NULL COMMENT 'Employee/Technician ID who is requesting' AFTER \`request_date\``,
+        index: 'idx_requestor_id',
+        fk: { name: 'fk_mr_requestor', table: 'users', column: 'id' }
+      },
+      { 
+        name: 'from_stock_area_id', 
+        sql: `ADD COLUMN \`from_stock_area_id\` ${stockAreaIdType} NULL COMMENT 'Which stock area to request from' AFTER \`requestor_id\``,
+        index: 'idx_from_stock_area',
+        fk: { name: 'fk_mr_stock_area', table: 'stock_areas', column: 'area_id' }
+      },
+      { 
+        name: 'group_id', 
+        sql: `ADD COLUMN \`group_id\` CHAR(36) NULL AFTER \`requested_by\``,
+        index: 'idx_group_id',
+        fk: { name: 'fk_mr_group', table: 'groups', column: 'group_id' }
+      },
+      { 
+        name: 'team_id', 
+        sql: `ADD COLUMN \`team_id\` CHAR(36) NULL AFTER \`group_id\``,
+        index: 'idx_team_id',
+        fk: { name: 'fk_mr_team', table: 'teams', column: 'team_id' }
+      },
+      { 
+        name: 'service_area', 
+        sql: `ADD COLUMN \`service_area\` VARCHAR(100) NULL COMMENT 'Service area (states in Goa)' AFTER \`team_id\``
+      },
+      { 
+        name: 'created_by', 
+        sql: `ADD COLUMN \`created_by\` INT NULL COMMENT 'User ID who created the MR' AFTER \`approved_by\``,
+        index: 'idx_created_by',
+        fk: { name: 'fk_mr_created_by', table: 'users', column: 'id' }
+      },
+    ];
+
+    // Add missing columns one by one
+    for (const col of materialRequestColumns) {
+      if (!(await columnExists('material_requests', col.name))) {
+        try {
+          await sequelize.query(`
+            ALTER TABLE \`material_requests\`
+            ${col.sql};
+          `, { type: QueryTypes.RAW });
+          if (!silent) console.log(`   ✅ Added ${col.name} to material_requests`);
+        } catch (e) {
+          if (e.message && (e.message.includes('Duplicate column') || e.message.includes('already exists'))) {
+            if (!silent) console.log(`   ℹ️  ${col.name} already exists`);
+          } else {
+            if (!silent) console.log(`   ⚠️  Could not add ${col.name}: ${e.message}`);
+          }
+        }
+      } else {
+        if (!silent) console.log(`   ℹ️  ${col.name} already exists in material_requests`);
+      }
+    }
+
+    // Add indexes for columns that need them
+    for (const col of materialRequestColumns) {
+      if (col.index && await columnExists('material_requests', col.name)) {
+        try {
+          const indexes = await sequelize.query(`
+            SELECT INDEX_NAME 
+            FROM INFORMATION_SCHEMA.STATISTICS 
+            WHERE TABLE_SCHEMA = DATABASE() 
+            AND TABLE_NAME = 'material_requests'
+            AND INDEX_NAME = '${col.index}'
+          `, { type: QueryTypes.SELECT });
+          
+          const indexExists = Array.isArray(indexes) && indexes.length > 0;
+          
+          if (!indexExists) {
+            await sequelize.query(`
+              ALTER TABLE \`material_requests\`
+              ADD INDEX \`${col.index}\` (\`${col.name}\`);
+            `, { type: QueryTypes.RAW });
+            if (!silent) console.log(`   ✅ Added index ${col.index} on ${col.name}`);
+          }
+        } catch (e) {
+          // Index might already exist or column might not exist
+          if (!silent && !e.message.includes('Duplicate key')) {
+            console.log(`   ⚠️  Could not add index ${col.index}: ${e.message}`);
+          }
         }
       }
-      
-      // Add indexes
+    }
+
+    // Add foreign keys for columns that need them
+    for (const col of materialRequestColumns) {
+      if (col.fk && await columnExists('material_requests', col.name)) {
+        try {
+          const [fks] = await sequelize.query(`
+            SELECT CONSTRAINT_NAME 
+            FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
+            WHERE TABLE_SCHEMA = DATABASE() 
+            AND TABLE_NAME = 'material_requests'
+            AND CONSTRAINT_NAME = '${col.fk.name}'
+          `, { type: QueryTypes.SELECT });
+          
+          const fkExists = Array.isArray(fks) && fks.length > 0;
+          
+          if (!fkExists && await tableExists(col.fk.table)) {
+            await sequelize.query(`
+              ALTER TABLE \`material_requests\`
+              ADD CONSTRAINT \`${col.fk.name}\` FOREIGN KEY (\`${col.name}\`) REFERENCES \`${col.fk.table}\`(\`${col.fk.column}\`) ON DELETE SET NULL;
+            `, { type: QueryTypes.RAW });
+            if (!silent) console.log(`   ✅ Added foreign key ${col.fk.name}`);
+          }
+        } catch (e) {
+          if (!silent && !e.message.includes('Duplicate key') && !e.message.includes('already exists')) {
+            console.log(`   ⚠️  Could not add foreign key ${col.fk.name}: ${e.message}`);
+          }
+        }
+      }
+    }
+    
+    if (!silent) console.log('   ✅ material_requests table structure verified');
+
+    // Add description column to groups if missing
+    if (!(await columnExists('groups', 'description'))) {
       try {
         await sequelize.query(`
-          ALTER TABLE \`material_requests\`
-          ADD INDEX \`idx_from_stock_area\` (\`from_stock_area_id\`),
-          ADD INDEX \`idx_group_id\` (\`group_id\`),
-          ADD INDEX \`idx_team_id\` (\`team_id\`);
+          ALTER TABLE \`groups\`
+          ADD COLUMN \`description\` TEXT NULL;
         `, { type: QueryTypes.RAW });
+        if (!silent) console.log('   ✅ Added description to groups');
       } catch (e) {
-        // Indexes might already exist
+        if (!silent) console.log('   ⚠️  Could not add description to groups');
       }
-      
-      // Add foreign keys
+    }
+
+    // Add description column to teams if missing
+    if (!(await columnExists('teams', 'description'))) {
       try {
         await sequelize.query(`
-          ALTER TABLE \`material_requests\`
-          ADD CONSTRAINT \`fk_mr_stock_area\` FOREIGN KEY (\`from_stock_area_id\`) REFERENCES \`stock_areas\`(\`area_id\`) ON DELETE SET NULL;
+          ALTER TABLE \`teams\`
+          ADD COLUMN \`description\` TEXT NULL;
         `, { type: QueryTypes.RAW });
+        if (!silent) console.log('   ✅ Added description to teams');
       } catch (e) {
-        if (!silent) console.log('   ⚠️  Could not add stock_area foreign key');
+        if (!silent) console.log('   ⚠️  Could not add description to teams');
       }
-      
-      try {
-        await sequelize.query(`
-          ALTER TABLE \`material_requests\`
-          ADD CONSTRAINT \`fk_mr_group\` FOREIGN KEY (\`group_id\`) REFERENCES \`groups\`(\`group_id\`) ON DELETE SET NULL;
-        `, { type: QueryTypes.RAW });
-      } catch (e) {
-        if (!silent) console.log('   ⚠️  Could not add group foreign key');
-      }
-      
-      try {
-        await sequelize.query(`
-          ALTER TABLE \`material_requests\`
-          ADD CONSTRAINT \`fk_mr_team\` FOREIGN KEY (\`team_id\`) REFERENCES \`teams\`(\`team_id\`) ON DELETE SET NULL;
-        `, { type: QueryTypes.RAW });
-      } catch (e) {
-        if (!silent) console.log('   ⚠️  Could not add team foreign key');
-      }
-      
-      if (!silent) console.log('   ✅ Added columns to material_requests');
-    } else {
-      if (!silent) console.log('   ℹ️  Columns already exist in material_requests');
     }
 
     // Add missing columns to Stock Transfers
@@ -1130,6 +1608,22 @@ const runMigration = async (silent = false) => {
           if (!silent) console.log('   ℹ️  ticket_id already exists in material_requests');
         } else {
           throw e;
+        }
+      }
+    }
+
+    // Make pr_numbers nullable in material_requests (PR numbers are now optional)
+    if (await columnExists('material_requests', 'pr_numbers')) {
+      try {
+        await sequelize.query(`
+          ALTER TABLE \`material_requests\`
+          MODIFY COLUMN \`pr_numbers\` JSON NULL COMMENT 'Array of PR numbers and dates: [{prNumber, prDate}]';
+        `, { type: QueryTypes.RAW });
+        if (!silent) console.log('   ✅ Made pr_numbers nullable in material_requests');
+      } catch (e) {
+        // Column might already be nullable, ignore error
+        if (!silent && !e.message.includes('same as') && !e.message.includes('Duplicate')) {
+          console.log(`   ⚠️  Could not modify pr_numbers: ${e.message}`);
         }
       }
     }

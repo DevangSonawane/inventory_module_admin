@@ -1,5 +1,11 @@
 // API Configuration
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api/v1';
+// In production, set VITE_API_BASE_URL environment variable
+// Development default: http://localhost:3000/api/v1
+// Production: https://api.your-domain.com/api/v1
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 
+  (import.meta.env.MODE === 'production' 
+    ? 'https://api.your-domain.com/api/v1' 
+    : 'http://localhost:3000/api/v1');
 
 // API Endpoints
 export const API_ENDPOINTS = {
@@ -27,6 +33,7 @@ export const API_ENDPOINTS = {
   // Inward
   INWARD: '/inventory/inward',
   INWARD_BY_ID: (id) => `/inventory/inward/${id}`,
+  INWARD_COMPLETE: (id) => `/inventory/inward/${id}/complete`,
   
   // Material Requests
   MATERIAL_REQUEST: '/inventory/material-request',
@@ -119,6 +126,15 @@ export const API_ENDPOINTS = {
   MATERIAL_ALLOCATION: (id) => `/inventory/material-request/${id}/allocations`,
   MATERIAL_ALLOCATION_ALLOCATE: (id) => `/inventory/material-request/${id}/allocate`,
   MATERIAL_ALLOCATION_CANCEL: (mrId, allocId) => `/inventory/material-request/${mrId}/allocations/${allocId}`,
+  
+  // Admin - Groups
+  ADMIN_GROUPS: '/admin/groups',
+  ADMIN_GROUP_BY_ID: (id) => `/admin/groups/${id}`,
+  
+  // Admin - Teams
+  ADMIN_TEAMS: '/admin/teams',
+  ADMIN_TEAM_BY_ID: (id) => `/admin/teams/${id}`,
+  ADMIN_TEAMS_BY_GROUP: (groupId) => `/admin/teams/group/${groupId}`,
 };
 
 // Status codes

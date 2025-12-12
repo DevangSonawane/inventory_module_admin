@@ -75,6 +75,11 @@ export const inwardService = {
   delete: async (id) => {
     return await del(API_ENDPOINTS.INWARD_BY_ID(id));
   },
+
+  // Complete inward entry
+  complete: async (id) => {
+    return await put(API_ENDPOINTS.INWARD_COMPLETE(id));
+  },
 };
 
 

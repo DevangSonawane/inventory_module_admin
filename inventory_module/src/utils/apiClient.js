@@ -8,6 +8,8 @@ const apiClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  // Production: enable credentials for CORS
+  withCredentials: import.meta.env.MODE === 'production',
 });
 
 // Request interceptor - Add auth token to requests
@@ -79,17 +81,28 @@ export const handleApiError = (error) => {
   if (error.response) {
     // Server responded with error status
     const { status, data } = error.response;
-    return {
+    const errorObj = {
       message: data?.message || 'An error occurred',
       status,
       errors: data?.errors || [],
+      response: error.response, // Keep full response for debugging
+      data: data // Keep full data for debugging
     };
+    
+    // If validation errors exist, format them
+    if (data?.errors && Array.isArray(data.errors) && data.errors.length > 0) {
+      const errorMessages = data.errors.map(err => err.message || err.msg || JSON.stringify(err)).join(', ');
+      errorObj.message = errorMessages || errorObj.message;
+    }
+    
+    return errorObj;
   } else if (error.request) {
     // Request made but no response received
     return {
       message: 'Network error. Please check your connection.',
       status: 0,
       errors: [],
+      request: error.request
     };
   } else {
     // Something else happened
@@ -97,6 +110,7 @@ export const handleApiError = (error) => {
       message: error.message || 'An unexpected error occurred',
       status: 0,
       errors: [],
+      originalError: error
     };
   }
 };

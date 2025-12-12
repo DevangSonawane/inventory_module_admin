@@ -7,9 +7,45 @@ const MaterialRequest = sequelize.define('material_request', {
     defaultValue: DataTypes.UUIDV4,
     primaryKey: true,
   },
+  mr_number: {
+    type: DataTypes.STRING(50),
+    allowNull: true,
+    unique: true,
+    comment: 'Auto-generated MR number: MR-month(abv)-year-number'
+  },
+  request_date: {
+    type: DataTypes.DATEONLY,
+    allowNull: true,
+    comment: 'Request date (user selection or current day)'
+  },
+  requestor_id: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    comment: 'Employee/Technician ID who is requesting'
+  },
+  group_id: {
+    type: DataTypes.UUID,
+    allowNull: true,
+    comment: 'Reference to group'
+  },
+  team_id: {
+    type: DataTypes.UUID,
+    allowNull: true,
+    comment: 'Reference to team'
+  },
+  service_area: {
+    type: DataTypes.STRING(100),
+    allowNull: true,
+    comment: 'Service area (states in Goa)'
+  },
+  from_stock_area_id: {
+    type: DataTypes.UUID,
+    allowNull: true,
+    comment: 'Source stock area ID'
+  },
   pr_numbers: {
     type: DataTypes.JSON,
-    allowNull: false,
+    allowNull: true,
     comment: 'Array of PR numbers and dates: [{prNumber, prDate}]'
   },
   status: {
@@ -21,6 +57,11 @@ const MaterialRequest = sequelize.define('material_request', {
     type: DataTypes.INTEGER,
     allowNull: false,
     comment: 'User ID who requested'
+  },
+  created_by: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    comment: 'User ID who created the MR'
   },
   approved_by: {
     type: DataTypes.INTEGER,
@@ -75,6 +116,24 @@ const MaterialRequest = sequelize.define('material_request', {
     },
     {
       fields: ['ticket_id']
+    },
+    {
+      fields: ['mr_number']
+    },
+    {
+      fields: ['requestor_id']
+    },
+    {
+      fields: ['group_id']
+    },
+    {
+      fields: ['team_id']
+    },
+    {
+      fields: ['from_stock_area_id']
+    },
+    {
+      fields: ['created_by']
     }
   ]
 });

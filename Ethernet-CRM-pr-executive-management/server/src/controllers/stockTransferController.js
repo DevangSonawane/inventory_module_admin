@@ -8,7 +8,7 @@ import User from '../models/User.js';
 import { validationResult } from 'express-validator';
 import { Op } from 'sequelize';
 import sequelize from '../config/database.js';
-import { generateST } from '../utils/slipGenerator.js';
+import { generateST, generateSTSequential } from '../utils/slipGenerator.js';
 
 /**
  * Create new stock transfer
@@ -141,22 +141,24 @@ export const createStockTransfer = async (req, res) => {
       });
     }
 
-    // Use provided slip/transfer number if given, else generate
-    let transferNumber = req.body.transferNumber || req.body.slipNumber || generateST();
-    let isUnique = false;
-    let attempts = 0;
-    
-    while (!isUnique && attempts < 10) {
+    // Use provided slip/transfer number if given, else generate sequential
+    let transferNumber = req.body.transferNumber || req.body.slipNumber;
+    if (!transferNumber) {
+      // Generate sequential ST number: ST-MONTH-YEAR-NUMBER
+      transferNumber = await generateSTSequential(StockTransfer);
+    } else {
+      // Validate uniqueness if provided
       const existing = await StockTransfer.findOne({
         where: req.withOrg
           ? req.withOrg({ transfer_number: transferNumber })
           : { transfer_number: transferNumber }
       });
-      if (!existing) {
-        isUnique = true;
-      } else {
-        transferNumber = generateST();
-        attempts++;
+      if (existing) {
+        await transaction.rollback();
+        return res.status(400).json({
+          success: false,
+          message: 'Slip number already exists'
+        });
       }
     }
 

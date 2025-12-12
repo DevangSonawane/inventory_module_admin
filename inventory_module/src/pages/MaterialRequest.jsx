@@ -146,6 +146,31 @@ const MaterialRequest = () => {
             request.from_stock_area_name ||
             '-'
 
+          const requestor =
+            request.requestor?.name ||
+            request.requestor_name ||
+            '-'
+
+          const group =
+            request.group?.group_name ||
+            request.group_name ||
+            '-'
+
+          const team =
+            request.team?.team_name ||
+            request.team_name ||
+            '-'
+
+          const serviceArea =
+            request.service_area ||
+            '-'
+
+          const createdBy =
+            request.creator?.name ||
+            request.created_by_name ||
+            request.requester?.name ||
+            '-'
+
           return {
             id: request.request_id || request.id,
             srNo: (currentPage - 1) * itemsPerPage + index + 1,
@@ -154,6 +179,11 @@ const MaterialRequest = () => {
             mrNo,
             approvalStatus,
             fromStockArea,
+            requestor,
+            group,
+            team,
+            serviceArea,
+            createdBy,
           }
         })
         
@@ -400,7 +430,7 @@ const MaterialRequest = () => {
         ) : (
           <>
             <Table
-              headers={['SR. NO.', 'APPROVAL ACTION', 'DATE', 'MR. NO.', 'MR APPROVAL STATUS', 'FROM STOCK AREA', 'ACTIONS']}
+              headers={['SR. NO.', 'APPROVAL ACTION', 'DATE', 'MR. NO.', 'REQUESTOR', 'GROUP', 'TEAM', 'SERVICE AREA', 'FROM STOCK AREA', 'CREATED BY', 'MR APPROVAL STATUS', 'ACTIONS']}
             >
               {materialRequests.length > 0 ? (
                 materialRequests.map((item) => (
@@ -427,12 +457,17 @@ const MaterialRequest = () => {
                         {item.mrNo}
                       </button>
                     </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.requestor}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.group}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.team}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.serviceArea}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.fromStockArea}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.createdBy}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
                       <Badge variant={getStatusVariant(item.approvalStatus)}>
                         {item.approvalStatus}
                       </Badge>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.fromStockArea}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
                       <div className="flex gap-2">
                         <button
@@ -453,7 +488,7 @@ const MaterialRequest = () => {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
+                  <td colSpan={12} className="px-6 py-12 text-center text-gray-500">
                     No material requests found
                   </td>
                 </tr>

@@ -716,9 +716,9 @@ router.put(
 /**
  * @route   PUT /api/inventory/inward/:id/complete
  * @desc    Mark inward entry as completed
- * @access  Private (Admin only)
+ * @access  Private
  */
-router.put('/inward/:id/complete', roleGuard('admin'), markInwardAsCompleted);
+router.put('/inward/:id/complete', markInwardAsCompleted);
 
 /**
  * @route   DELETE /api/inventory/inward/:id
@@ -748,12 +748,14 @@ router.post(
   '/material-request',
   [
     body('prNumbers')
-      .isArray({ min: 1 })
-      .withMessage('At least one PR number is required'),
+      .optional()
+      .isArray()
+      .withMessage('PR numbers must be an array if provided'),
     body('prNumbers.*.prNumber')
+      .optional()
       .notEmpty()
       .trim()
-      .withMessage('PR number is required'),
+      .withMessage('PR number is required if PR numbers array is provided'),
     body('items')
       .isArray({ min: 1 })
       .withMessage('At least one item is required'),
@@ -773,6 +775,27 @@ router.post(
       .optional()
       .isUUID()
       .withMessage('Invalid source stock area ID'),
+    body('requestDate')
+      .optional()
+      .isISO8601()
+      .withMessage('Invalid request date format'),
+    body('requestorId')
+      .optional()
+      .isInt()
+      .withMessage('Invalid requestor ID'),
+    body('groupId')
+      .optional()
+      .isUUID()
+      .withMessage('Invalid group ID'),
+    body('teamId')
+      .optional()
+      .isUUID()
+      .withMessage('Invalid team ID'),
+    body('serviceArea')
+      .optional()
+      .trim()
+      .isLength({ max: 100 })
+      .withMessage('Service area must be 100 characters or less'),
   ],
   validate,
   createMaterialRequest
@@ -821,6 +844,27 @@ router.put(
       .optional()
       .isUUID()
       .withMessage('Invalid source stock area ID'),
+    body('requestDate')
+      .optional()
+      .isISO8601()
+      .withMessage('Invalid request date format'),
+    body('requestorId')
+      .optional()
+      .isInt()
+      .withMessage('Invalid requestor ID'),
+    body('groupId')
+      .optional()
+      .isUUID()
+      .withMessage('Invalid group ID'),
+    body('teamId')
+      .optional()
+      .isUUID()
+      .withMessage('Invalid team ID'),
+    body('serviceArea')
+      .optional()
+      .trim()
+      .isLength({ max: 100 })
+      .withMessage('Service area must be 100 characters or less'),
   ],
   validate,
   updateMaterialRequest

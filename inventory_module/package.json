@@ -5,9 +5,10 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "build:prod": "NODE_ENV=production vite build",
+    "build:prod": "NODE_ENV=production vite build --mode production",
     "preview": "vite preview",
-    "build:analyze": "vite build --mode analyze"
+    "build:analyze": "vite build --mode analyze",
+    "deploy": "bash scripts/build-prod.sh"
   },
   "dependencies": {
     "axios": "^1.13.2",

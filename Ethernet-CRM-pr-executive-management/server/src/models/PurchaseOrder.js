@@ -29,7 +29,7 @@ const PurchaseOrder = sequelize.define('purchase_order', {
     comment: 'Purchase Order date'
   },
   status: {
-    type: DataTypes.ENUM('DRAFT', 'SENT', 'RECEIVED', 'CANCELLED'),
+    type: DataTypes.ENUM('DRAFT', 'SENT', 'RECEIVED', 'DELIVERED', 'CANCELLED'),
     defaultValue: 'DRAFT',
     allowNull: false,
     comment: 'Status of purchase order'

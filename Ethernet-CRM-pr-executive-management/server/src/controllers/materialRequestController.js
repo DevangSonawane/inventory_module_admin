@@ -2,6 +2,9 @@ import MaterialRequest from '../models/MaterialRequest.js';
 import MaterialRequestItem from '../models/MaterialRequestItem.js';
 import Material from '../models/Material.js';
 import User from '../models/User.js';
+import Group from '../models/Group.js';
+import Team from '../models/Team.js';
+import StockArea from '../models/StockArea.js';
 import { validationResult } from 'express-validator';
 import { Op } from 'sequelize';
 import sequelize from '../config/database.js';
@@ -26,19 +29,21 @@ export const createMaterialRequest = async (req, res) => {
       items, // Array of {materialId, requestedQuantity, uom, remarks}
       remarks,
       ticketId, // External system ticket ID
-      fromStockAreaId // Source stock area ID
+      fromStockAreaId, // Source stock area ID
+      requestDate, // Request date (user selection or current day)
+      requestorId, // Employee/Technician ID
+      groupId, // Group ID
+      teamId, // Team ID
+      serviceArea // Service area (states in Goa)
     } = req.body;
 
     const userId = req.user?.id || req.user?.user_id;
-
-    // Validate PR numbers
-    if (!prNumbers || !Array.isArray(prNumbers) || prNumbers.length === 0) {
-      await transaction.rollback();
-      return res.status(400).json({
-        success: false,
-        message: 'At least one PR number is required'
-      });
-    }
+    
+    // Set request date (user selection or current day)
+    const requestDateValue = requestDate ? new Date(requestDate) : new Date();
+    
+    // Generate MR number based on the request date (month and year from selected date)
+    const mrNumber = await generateMR(MaterialRequest, requestDateValue);
 
     // Validate items
     if (!items || !Array.isArray(items) || items.length === 0) {
@@ -49,11 +54,89 @@ export const createMaterialRequest = async (req, res) => {
       });
     }
 
+    // Validate group if provided
+    if (groupId) {
+      const group = await Group.findOne({
+        where: req.withOrg
+          ? req.withOrg({ group_id: groupId, is_active: true })
+          : { group_id: groupId, is_active: true }
+      });
+      if (!group) {
+        await transaction.rollback();
+        return res.status(400).json({
+          success: false,
+          message: 'Group not found'
+        });
+      }
+    }
+
+    // Validate team if provided
+    if (teamId) {
+      const team = await Team.findOne({
+        where: req.withOrg
+          ? req.withOrg({ team_id: teamId, is_active: true })
+          : { team_id: teamId, is_active: true }
+      });
+      if (!team) {
+        await transaction.rollback();
+        return res.status(400).json({
+          success: false,
+          message: 'Team not found'
+        });
+      }
+      // Validate team belongs to group if group is provided
+      if (groupId && team.group_id !== groupId) {
+        await transaction.rollback();
+        return res.status(400).json({
+          success: false,
+          message: 'Team does not belong to the selected group'
+        });
+      }
+    }
+
+    // Validate stock area if provided
+    if (fromStockAreaId) {
+      const stockArea = await StockArea.findOne({
+        where: req.withOrg
+          ? req.withOrg({ area_id: fromStockAreaId, is_active: true })
+          : { area_id: fromStockAreaId, is_active: true }
+      });
+      if (!stockArea) {
+        await transaction.rollback();
+        return res.status(400).json({
+          success: false,
+          message: 'Stock area not found'
+        });
+      }
+    }
+
+    // Validate requestor if provided
+    if (requestorId) {
+      const requestor = await User.findOne({
+        where: { id: requestorId, isActive: true }
+      });
+      if (!requestor) {
+        await transaction.rollback();
+        return res.status(400).json({
+          success: false,
+          message: 'Requestor not found'
+        });
+      }
+    }
+
     // Create material request (auto-submit to SUBMITTED status)
     const materialRequest = await MaterialRequest.create({
-      pr_numbers: prNumbers,
+      mr_number: mrNumber,
+      request_date: requestDateValue,
+      requestor_id: requestorId || null,
+      group_id: groupId || null,
+      team_id: teamId || null,
+      service_area: serviceArea || null,
+      from_stock_area_id: fromStockAreaId || null,
+      pr_numbers: prNumbers && Array.isArray(prNumbers) && prNumbers.length > 0 ? prNumbers : null,
       status: 'SUBMITTED', // Auto-submit on create so it appears in Approval Center
       requested_by: userId,
+      created_by: userId, // User creating the MR
       remarks: remarks || null,
       ticket_id: ticketId || null,
       org_id: req.orgId || null,
@@ -94,7 +177,7 @@ export const createMaterialRequest = async (req, res) => {
 
     await transaction.commit();
 
-    // Fetch complete request with items
+    // Fetch complete request with items and all associations
     const completeRequest = await MaterialRequest.findOne({
       where: { request_id: materialRequest.request_id },
       include: [
@@ -112,6 +195,34 @@ export const createMaterialRequest = async (req, res) => {
           model: User,
           as: 'requester',
           attributes: ['id', 'name', 'employeCode', 'email']
+        },
+        {
+          model: User,
+          as: 'requestor',
+          foreignKey: 'requestor_id',
+          attributes: ['id', 'name', 'employeCode', 'email']
+        },
+        {
+          model: User,
+          as: 'creator',
+          foreignKey: 'created_by',
+          attributes: ['id', 'name', 'employeCode', 'email']
+        },
+        {
+          model: Group,
+          as: 'group',
+          attributes: ['group_id', 'group_name']
+        },
+        {
+          model: Team,
+          as: 'team',
+          attributes: ['team_id', 'team_name']
+        },
+        {
+          model: StockArea,
+          as: 'fromStockArea',
+          foreignKey: 'from_stock_area_id',
+          attributes: ['area_id', 'area_name', 'location_code']
         }
       ]
     });
@@ -180,9 +291,38 @@ export const getAllMaterialRequests = async (req, res) => {
           model: User,
           as: 'approver',
           attributes: ['id', 'name', 'employeCode', 'email']
+        },
+        {
+          model: User,
+          as: 'requestor',
+          foreignKey: 'requestor_id',
+          attributes: ['id', 'name', 'employeCode', 'email']
+        },
+        {
+          model: User,
+          as: 'creator',
+          foreignKey: 'created_by',
+          attributes: ['id', 'name', 'employeCode', 'email']
+        },
+        {
+          model: Group,
+          as: 'group',
+          required: false,
+          attributes: ['group_id', 'group_name']
+        },
+        {
+          model: Team,
+          as: 'team',
+          required: false,
+          attributes: ['team_id', 'team_name']
+        },
+        {
+          model: StockArea,
+          as: 'fromStockArea',
+          foreignKey: 'from_stock_area_id',
+          attributes: ['area_id', 'area_name', 'location_code']
         }
       ],
-      distinct: true,
     });
 
     const totalRequests = typeof count === 'number' ? count : 0;
@@ -190,7 +330,8 @@ export const getAllMaterialRequests = async (req, res) => {
     return res.status(200).json({
       success: true,
       data: {
-        requests,
+        materialRequests: requests, // Use materialRequests for consistency with frontend
+        requests, // Keep for backward compatibility
         pagination: {
           currentPage: pageNumber,
           totalPages: limitNumber ? Math.max(Math.ceil(totalRequests / limitNumber), 1) : 1,
@@ -247,6 +388,36 @@ export const getMaterialRequestById = async (req, res) => {
           model: User,
           as: 'approver',
           attributes: ['id', 'name', 'employeCode', 'email']
+        },
+        {
+          model: User,
+          as: 'requestor',
+          foreignKey: 'requestor_id',
+          attributes: ['id', 'name', 'employeCode', 'email']
+        },
+        {
+          model: User,
+          as: 'creator',
+          foreignKey: 'created_by',
+          attributes: ['id', 'name', 'employeCode', 'email']
+        },
+        {
+          model: Group,
+          as: 'group',
+          required: false,
+          attributes: ['group_id', 'group_name']
+        },
+        {
+          model: Team,
+          as: 'team',
+          required: false,
+          attributes: ['team_id', 'team_name']
+        },
+        {
+          model: StockArea,
+          as: 'fromStockArea',
+          foreignKey: 'from_stock_area_id',
+          attributes: ['area_id', 'area_name', 'location_code']
         }
       ]
     });
@@ -293,7 +464,12 @@ export const updateMaterialRequest = async (req, res) => {
       remarks,
       status,
       ticketId,
-      fromStockAreaId
+      fromStockAreaId,
+      requestDate,
+      requestorId,
+      groupId,
+      teamId,
+      serviceArea
     } = req.body;
 
     const materialRequest = await MaterialRequest.findOne({
@@ -316,13 +492,97 @@ export const updateMaterialRequest = async (req, res) => {
       });
     }
 
+    // Validate group if provided
+    if (groupId && groupId !== materialRequest.group_id) {
+      const group = await Group.findOne({
+        where: req.withOrg
+          ? req.withOrg({ group_id: groupId, is_active: true })
+          : { group_id: groupId, is_active: true }
+      });
+      if (!group) {
+        await transaction.rollback();
+        return res.status(400).json({
+          success: false,
+          message: 'Group not found'
+        });
+      }
+    }
+
+    // Validate team if provided
+    if (teamId && teamId !== materialRequest.team_id) {
+      const team = await Team.findOne({
+        where: req.withOrg
+          ? req.withOrg({ team_id: teamId, is_active: true })
+          : { team_id: teamId, is_active: true }
+      });
+      if (!team) {
+        await transaction.rollback();
+        return res.status(400).json({
+          success: false,
+          message: 'Team not found'
+        });
+      }
+      // Validate team belongs to group if group is provided
+      if (groupId && team.group_id !== groupId) {
+        await transaction.rollback();
+        return res.status(400).json({
+          success: false,
+          message: 'Team does not belong to the selected group'
+        });
+      }
+    }
+
+    // Validate stock area if provided
+    if (fromStockAreaId && fromStockAreaId !== materialRequest.from_stock_area_id) {
+      const stockArea = await StockArea.findOne({
+        where: req.withOrg
+          ? req.withOrg({ area_id: fromStockAreaId, is_active: true })
+          : { area_id: fromStockAreaId, is_active: true }
+      });
+      if (!stockArea) {
+        await transaction.rollback();
+        return res.status(400).json({
+          success: false,
+          message: 'Stock area not found'
+        });
+      }
+    }
+
+    // Validate requestor if provided
+    if (requestorId && requestorId !== materialRequest.requestor_id) {
+      const requestor = await User.findOne({
+        where: { id: requestorId, isActive: true }
+      });
+      if (!requestor) {
+        await transaction.rollback();
+        return res.status(400).json({
+          success: false,
+          message: 'Requestor not found'
+        });
+      }
+    }
+
     // Update request
-    await materialRequest.update({
-      pr_numbers: prNumbers || materialRequest.pr_numbers,
+    const updateData = {
       remarks: remarks !== undefined ? remarks : materialRequest.remarks,
       status: status || materialRequest.status,
       ticket_id: ticketId !== undefined ? ticketId : materialRequest.ticket_id
-    }, { transaction });
+    };
+
+    // Handle PR numbers - allow null/empty to remove them
+    if (prNumbers !== undefined) {
+      updateData.pr_numbers = (prNumbers && Array.isArray(prNumbers) && prNumbers.length > 0) ? prNumbers : null;
+    }
+
+    // Add new fields if provided
+    if (requestDate) updateData.request_date = new Date(requestDate);
+    if (requestorId !== undefined) updateData.requestor_id = requestorId || null;
+    if (groupId !== undefined) updateData.group_id = groupId || null;
+    if (teamId !== undefined) updateData.team_id = teamId || null;
+    if (serviceArea !== undefined) updateData.service_area = serviceArea || null;
+    if (fromStockAreaId !== undefined) updateData.from_stock_area_id = fromStockAreaId || null;
+
+    await materialRequest.update(updateData, { transaction });
 
     // Update items if provided
     if (items && Array.isArray(items)) {
@@ -373,6 +633,39 @@ export const updateMaterialRequest = async (req, res) => {
               as: 'material'
             }
           ]
+        },
+        {
+          model: User,
+          as: 'requester',
+          attributes: ['id', 'name', 'employeCode', 'email']
+        },
+        {
+          model: User,
+          as: 'requestor',
+          foreignKey: 'requestor_id',
+          attributes: ['id', 'name', 'employeCode', 'email']
+        },
+        {
+          model: User,
+          as: 'creator',
+          foreignKey: 'created_by',
+          attributes: ['id', 'name', 'employeCode', 'email']
+        },
+        {
+          model: Group,
+          as: 'group',
+          attributes: ['group_id', 'group_name']
+        },
+        {
+          model: Team,
+          as: 'team',
+          attributes: ['team_id', 'team_name']
+        },
+        {
+          model: StockArea,
+          as: 'fromStockArea',
+          foreignKey: 'from_stock_area_id',
+          attributes: ['area_id', 'area_name', 'location_code']
         }
       ]
     });

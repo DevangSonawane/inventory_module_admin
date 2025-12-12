@@ -21,6 +21,9 @@ if (missingVars.length > 0) {
   process.exit(1);
 }
 
+// Production database configuration
+const isProduction = process.env.NODE_ENV === 'production';
+
 const sequelize = new Sequelize(
   process.env.DB_NAME,
   process.env.DB_USER,
@@ -31,15 +34,26 @@ const sequelize = new Sequelize(
     dialect: 'mysql',
     logging: process.env.NODE_ENV === 'development' ? console.log : false,
     pool: {
-      max: 5,
-      min: 0,
+      max: isProduction ? 10 : 5,
+      min: isProduction ? 2 : 0,
       acquire: 30000,
-      idle: 10000
+      idle: 10000,
+      evict: 1000
     },
+    dialectOptions: isProduction ? {
+      ssl: process.env.DB_SSL === 'true' ? {
+        require: true,
+        rejectUnauthorized: false
+      } : false,
+      connectTimeout: 60000
+    } : {},
     define: {
       timestamps: true,
       underscored: true,
       freezeTableName: true
+    },
+    retry: {
+      max: 3
     }
   }
 );
@@ -271,16 +285,34 @@ export const connectDB = async () => {
     await sequelize.authenticate();
     console.log('✅ Database connection established successfully.');
 
-    // Import models to ensure associations are loaded after database connection
-    // This must be done after authenticate() to ensure sequelize instance is ready
+    // Import models first to ensure they're loaded
     await import('../models/index.js');
 
-    // Sync models in development
-    if (process.env.NODE_ENV === 'development') {
-      // Use alter: false to avoid foreign key constraint issues
-      // Manually run migrations for schema changes instead
-      await sequelize.sync({ alter: false });
-      console.log('✅ Database models synchronized.');
+    // Run migrations to ensure schema is up to date (fixes missing columns, indexes, etc.)
+    try {
+      const { runMigration } = await import('../scripts/migrateInventoryTables.js');
+      const result = await runMigration(true); // Run silently
+      if (result && result.success === false) {
+        console.warn('⚠️  Migration completed with warnings:', result.error);
+      } else {
+        console.log('✅ Database migrations completed.');
+      }
+    } catch (migrationError) {
+      console.warn('⚠️  Migration warning:', migrationError.message);
+      // Continue even if migration has issues - table might already be correct
+    }
+
+    // Don't sync models - migrations handle all schema changes
+    // Sync can cause issues with indexes on non-existent columns
+    // Only sync if explicitly enabled via environment variable
+    if (process.env.NODE_ENV === 'development' && process.env.ENABLE_SYNC === 'true') {
+      try {
+        await sequelize.sync({ alter: false, force: false });
+        console.log('✅ Database models synchronized.');
+      } catch (syncError) {
+        console.warn('⚠️  Sync warning (non-critical):', syncError.message);
+        // Don't fail - migrations handle schema
+      }
     }
   } catch (error) {
     console.error('❌ Unable to connect to the database:', error);

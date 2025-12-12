@@ -28,6 +28,8 @@ import AuditLog from './AuditLog.js';
 import SystemSettings from './SystemSettings.js';
 import RolePagePermission from './RolePagePermission.js';
 import UserPagePermission from './UserPagePermission.js';
+import Group from './Group.js';
+import Team from './Team.js';
 
 // ==================== INVENTORY MODEL ASSOCIATIONS ====================
 
@@ -101,6 +103,11 @@ InwardEntry.belongsTo(User, { foreignKey: 'updated_by', as: 'updater' });
 User.hasMany(MaterialRequest, { foreignKey: 'requested_by', as: 'materialRequests' });
 MaterialRequest.belongsTo(User, { foreignKey: 'requested_by', as: 'requester' });
 MaterialRequest.belongsTo(User, { foreignKey: 'approved_by', as: 'approver' });
+MaterialRequest.belongsTo(User, { foreignKey: 'requestor_id', as: 'requestor' });
+MaterialRequest.belongsTo(User, { foreignKey: 'created_by', as: 'creator' });
+MaterialRequest.belongsTo(Group, { foreignKey: 'group_id', as: 'group' });
+MaterialRequest.belongsTo(Team, { foreignKey: 'team_id', as: 'team' });
+MaterialRequest.belongsTo(StockArea, { foreignKey: 'from_stock_area_id', as: 'fromStockArea' });
 
 User.hasMany(StockTransfer, { foreignKey: 'created_by', as: 'createdTransfers' });
 StockTransfer.belongsTo(User, { foreignKey: 'created_by', as: 'creator' });
@@ -193,6 +200,10 @@ Role.hasMany(RolePagePermission, { foreignKey: 'role_id', as: 'pagePermissions' 
 UserPagePermission.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 User.hasMany(UserPagePermission, { foreignKey: 'user_id', as: 'pagePermissions' });
 
+// Group and Team associations
+Group.hasMany(Team, { foreignKey: 'group_id', as: 'teams' });
+Team.belongsTo(Group, { foreignKey: 'group_id', as: 'group' });
+
 // Export all models
 const models = {
   User,
@@ -224,6 +235,8 @@ const models = {
   SystemSettings,
   RolePagePermission,
   UserPagePermission,
+  Group,
+  Team,
 };
 
 export default models;
