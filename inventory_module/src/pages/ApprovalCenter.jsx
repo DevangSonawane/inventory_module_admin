@@ -20,7 +20,7 @@ const ApprovalCenter = () => {
   const [totalItems, setTotalItems] = useState(0)
   const [data, setData] = useState([])
   const [actionLoading, setActionLoading] = useState({})
-  const [statusFilter, setStatusFilter] = useState('SUBMITTED') // Default to SUBMITTED to show items needing approval
+  const [statusFilter, setStatusFilter] = useState('') // Default to empty to show all items
   const [showApprovalModal, setShowApprovalModal] = useState(false)
   const [showRejectionModal, setShowRejectionModal] = useState(false)
   const [selectedItem, setSelectedItem] = useState(null)

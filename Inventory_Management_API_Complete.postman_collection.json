@@ -2,7 +2,7 @@
 	"info": {
 		"_postman_id": "40c2e582-b7ca-48b4-88ec-479d32785784",
 		"name": "Inventory Management API - Complete",
-		"description": "Complete API collection for Inventory Management System including all endpoints for Materials, Stock Areas, Inward, Material Requests, Material Allocation, Stock Transfers, Consumption, Person Stock, Returns, Reports, Stock Levels, Files, Audit, Notifications, Search, Bulk Operations, Export, Validation, Business Partners, Purchase Requests, and Purchase Orders. Admin-only routes are marked with [ADMIN ONLY].",
+		"description": "Complete API collection for Inventory Management System including all endpoints for Assets, Companies, Asset Types, Materials, Stock Areas, Inward, Material Requests, Material Allocation, Stock Transfers, Consumption, Person Stock, Returns, Reports, Stock Levels, Files, Audit, Notifications, Search, Bulk Operations, Export, Validation, Business Partners, Purchase Requests, and Purchase Orders. Admin-only routes are marked with [ADMIN ONLY]. Updated with latest endpoints including PR number generation, PO submission, document uploads, and additional export endpoints.",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"item": [
@@ -193,6 +193,295 @@
 							"host": ["{{baseUrl}}"],
 							"path": ["auth", "refresh"]
 						}
+					}
+				},
+				{
+					"name": "Get Preferences",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/auth/preferences",
+							"host": ["{{baseUrl}}"],
+							"path": ["auth", "preferences"]
+						}
+					}
+				},
+				{
+					"name": "Update Preferences",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"theme\": \"dark\",\n  \"language\": \"en\",\n  \"notifications\": true\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/auth/preferences",
+							"host": ["{{baseUrl}}"],
+							"path": ["auth", "preferences"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Assets",
+			"item": [
+				{
+					"name": "Get All Assets",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/assets?page=1&limit=10",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "assets"],
+							"query": [
+								{"key": "page", "value": "1"},
+								{"key": "limit", "value": "10"},
+								{"key": "search", "value": "", "disabled": true},
+								{"key": "assetType", "value": "", "disabled": true},
+								{"key": "company", "value": "", "disabled": true},
+								{"key": "orgId", "value": "", "disabled": true},
+								{"key": "showInactive", "value": "false", "disabled": true}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Asset By ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/assets/{{assetId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "assets", "{{assetId}}"]
+						}
+					}
+				},
+				{
+					"name": "Add Stock (Create/Update Asset)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"company\": \"Company ABC\",\n  \"assetType\": \"Fiber Cable\",\n  \"batchQty\": 100,\n  \"threshold\": 10,\n  \"orgId\": \"{{orgId}}\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/inventory/add-stock",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "add-stock"]
+						}
+					}
+				},
+				{
+					"name": "Update Asset",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"assetType\": \"Updated Asset Type\",\n  \"company\": \"Updated Company\",\n  \"threshold\": 20\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/inventory/assets/{{assetId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "assets", "{{assetId}}"]
+						}
+					}
+				},
+				{
+					"name": "Delete Asset",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/assets/{{assetId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "assets", "{{assetId}}"]
+						}
+					}
+				},
+				{
+					"name": "Get Low Stock Assets",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/low-stock",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "low-stock"]
+						},
+						"description": "Get assets with low stock (balance <= threshold)"
+					}
+				},
+				{
+					"name": "Get Dashboard Stats",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/dashboard",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "dashboard"]
+						},
+						"description": "Get dashboard statistics and analytics"
+					}
+				}
+			]
+		},
+		{
+			"name": "Companies",
+			"item": [
+				{
+					"name": "Get All Companies",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/companies",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "companies"]
+						}
+					}
+				},
+				{
+					"name": "Create Company [ADMIN ONLY]",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"companyCode\": \"COMP001\",\n  \"companyName\": \"Company ABC\",\n  \"orgId\": \"{{orgId}}\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/inventory/companies",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "companies"]
+						},
+						"description": "Add new company (Admin only)"
+					}
+				}
+			]
+		},
+		{
+			"name": "Asset Types",
+			"item": [
+				{
+					"name": "Get All Asset Types",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/asset-types",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "asset-types"]
+						}
+					}
+				},
+				{
+					"name": "Create Asset Type [ADMIN ONLY]",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"typeName\": \"Fiber Cable\",\n  \"typeCode\": \"FC\",\n  \"description\": \"Fiber optic cable type\",\n  \"orgId\": \"{{orgId}}\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/inventory/asset-types",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "asset-types"]
+						},
+						"description": "Add new asset type (Admin only)"
 					}
 				}
 			]
@@ -1689,6 +1978,76 @@
 							]
 						}
 					}
+				},
+				{
+					"name": "Export Stock Movement",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/export/stock-movement?format=csv&startDate=2025-01-01&endDate=2025-12-31&materialId={{materialId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "export", "stock-movement"],
+							"query": [
+								{"key": "format", "value": "csv"},
+								{"key": "startDate", "value": "2025-01-01"},
+								{"key": "endDate", "value": "2025-12-31"},
+								{"key": "materialId", "value": "{{materialId}}", "disabled": true}
+							]
+						},
+						"description": "Export stock movement report to CSV/JSON (Admin only)"
+					}
+				},
+				{
+					"name": "Export Consumption Analysis",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/export/consumption-analysis?format=csv&startDate=2025-01-01&endDate=2025-12-31",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "export", "consumption-analysis"],
+							"query": [
+								{"key": "format", "value": "csv"},
+								{"key": "startDate", "value": "2025-01-01"},
+								{"key": "endDate", "value": "2025-12-31"}
+							]
+						},
+						"description": "Export consumption analysis report to CSV/JSON (Admin only)"
+					}
+				},
+				{
+					"name": "Export Stock Valuation",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/export/stock-valuation?format=csv&materialId={{materialId}}&stockAreaId={{stockAreaId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "export", "stock-valuation"],
+							"query": [
+								{"key": "format", "value": "csv"},
+								{"key": "materialId", "value": "{{materialId}}", "disabled": true},
+								{"key": "stockAreaId", "value": "{{stockAreaId}}", "disabled": true}
+							]
+						},
+						"description": "Export stock valuation report to CSV/JSON (Admin only)"
+					}
 				}
 			]
 		},
@@ -1809,6 +2168,27 @@
 			"name": "Purchase Requests",
 			"item": [
 				{
+					"name": "Generate PR Number",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/purchase-requests/generate-pr-number?requestedDate=2025-12-06",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "purchase-requests", "generate-pr-number"],
+							"query": [
+								{"key": "requestedDate", "value": "2025-12-06", "description": "ISO date string (optional, defaults to today)"}
+							]
+						},
+						"description": "Generate PR number based on requested date in format PR-MONTH-YEAR-order"
+					}
+				},
+				{
 					"name": "Get All Purchase Requests",
 					"request": {
 						"method": "GET",
@@ -1864,7 +2244,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"prNumber\": \"PR-2025-001\",\n  \"requestedDate\": \"2025-12-06\",\n  \"items\": [\n    {\n      \"materialId\": \"{{materialId}}\",\n      \"requestedQuantity\": 100,\n      \"remarks\": \"Urgent requirement\"\n    }\n  ]\n}"
+							"raw": "{\n  \"prNumber\": \"PR-2025-001\",\n  \"requestedDate\": \"2025-12-06\",\n  \"items\": [\n    {\n      \"prName\": \"Fiber Patch Cord\",\n      \"materialType\": \"components\",\n      \"materialId\": \"{{materialId}}\",\n      \"requestedQuantity\": 100,\n      \"businessPartnerId\": \"{{partnerId}}\",\n      \"shippingAddress\": \"123 Main St, City\",\n      \"description\": \"Urgent requirement\"\n    }\n  ]\n}"
 						},
 						"url": {
 							"raw": "{{baseUrl}}/inventory/purchase-requests",
@@ -1889,7 +2269,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"requestedDate\": \"2025-12-07\",\n  \"items\": [\n    {\n      \"materialId\": \"{{materialId}}\",\n      \"requestedQuantity\": 150\n    }\n  ]\n}"
+							"raw": "{\n  \"requestedDate\": \"2025-12-07\",\n  \"items\": [\n    {\n      \"prName\": \"Updated Material Name\",\n      \"materialType\": \"components\",\n      \"materialId\": \"{{materialId}}\",\n      \"requestedQuantity\": 150,\n      \"businessPartnerId\": \"{{partnerId}}\",\n      \"shippingAddress\": \"123 Main St, City\",\n      \"description\": \"Updated description\"\n    }\n  ]\n}"
 						},
 						"url": {
 							"raw": "{{baseUrl}}/inventory/purchase-requests/{{prId}}",
@@ -2136,6 +2516,52 @@
 					}
 				},
 				{
+					"name": "Submit Purchase Order",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/purchase-orders/{{poId}}/submit",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "purchase-orders", "{{poId}}", "submit"]
+						},
+						"description": "Submit purchase order (sends email to vendor)"
+					}
+				},
+				{
+					"name": "Add Documents to Purchase Order",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "documents",
+									"type": "file",
+									"src": []
+								}
+							]
+						},
+						"url": {
+							"raw": "{{baseUrl}}/inventory/purchase-orders/{{poId}}/documents",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "purchase-orders", "{{poId}}", "documents"]
+						},
+						"description": "Add documents to purchase order"
+					}
+				},
+				{
 					"name": "Delete Purchase Order [ADMIN ONLY]",
 					"request": {
 						"method": "DELETE",
@@ -2334,6 +2760,11 @@
 				},
 				{
 					"key": "poId",
+					"value": "",
+					"type": "string"
+				},
+				{
+					"key": "assetId",
 					"value": "",
 					"type": "string"
 				}
