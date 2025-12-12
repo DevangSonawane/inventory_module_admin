@@ -117,7 +117,13 @@ export const getAllPurchaseRequests = async (req, res) => {
       where,
       limit: parseInt(limit),
       offset,
-      order: [['requested_date', 'DESC'], ['created_at', 'DESC']],
+      // Order by created_at first (always present, reflects actual creation time)
+      // Then by requested_date and pr_number for consistent ordering
+      order: [
+        ['created_at', 'DESC'],
+        ['requested_date', 'DESC'],
+        ['pr_number', 'DESC']
+      ],
       include: [
         {
           model: User,
@@ -653,8 +659,12 @@ export const approvePurchaseRequest = async (req, res) => {
 
     const userId = req.user?.id || req.user?.user_id;
 
+    // Since route has roleGuard('admin'), user is guaranteed to be admin
+    // Admins can approve any status - no status restriction needed
     const purchaseRequest = await PurchaseRequest.findOne({
-      where: { pr_id: id, is_active: true }
+      where: req.withOrg
+        ? req.withOrg({ pr_id: id, is_active: true })
+        : { pr_id: id, is_active: true }
     });
 
     if (!purchaseRequest) {
@@ -664,13 +674,7 @@ export const approvePurchaseRequest = async (req, res) => {
       });
     }
 
-    if (purchaseRequest.status !== 'SUBMITTED') {
-      return res.status(400).json({
-        success: false,
-        message: 'Only SUBMITTED purchase requests can be approved'
-      });
-    }
-
+    // Admins can approve any status (route is protected by roleGuard('admin'))
     await purchaseRequest.update({
       status: 'APPROVED',
       approved_by: userId,
@@ -711,6 +715,8 @@ export const rejectPurchaseRequest = async (req, res) => {
       });
     }
 
+    // Since route has roleGuard('admin'), user is guaranteed to be admin
+    // Admins can reject any status - no status restriction needed
     const purchaseRequest = await PurchaseRequest.findOne({
       where: req.withOrg
         ? req.withOrg({ pr_id: id, is_active: true })
@@ -724,13 +730,7 @@ export const rejectPurchaseRequest = async (req, res) => {
       });
     }
 
-    if (purchaseRequest.status !== 'SUBMITTED') {
-      return res.status(400).json({
-        success: false,
-        message: 'Only SUBMITTED purchase requests can be rejected'
-      });
-    }
-
+    // Admins can reject any status (route is protected by roleGuard('admin'))
     await purchaseRequest.update({
       status: 'REJECTED',
       approved_by: userId,

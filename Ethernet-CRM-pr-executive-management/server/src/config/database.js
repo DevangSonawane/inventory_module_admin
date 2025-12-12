@@ -271,24 +271,9 @@ export const connectDB = async () => {
     await sequelize.authenticate();
     console.log('✅ Database connection established successfully.');
 
-    // Run database migrations BEFORE syncing models
-    // This ensures all columns exist before Sequelize tries to create indexes
-    try {
-      const runMigration = (await import('../scripts/migrateInventoryTables.js')).default;
-      await runMigration(true); // Run silently
-      console.log('✅ Database migrations checked and applied (if needed)');
-    } catch (migrationError) {
-      console.warn('⚠️  Database migration check failed (non-critical):', migrationError.message);
-      // Don't exit - allow server to start even if migration fails
-    }
-
     // Import models to ensure associations are loaded after database connection
     // This must be done after authenticate() to ensure sequelize instance is ready
     await import('../models/index.js');
-
-    // Ensure required columns exist
-    // await ensureUserColumnsExist();
-    // await ensureSurveyColumnsExist();
 
     // Sync models in development
     if (process.env.NODE_ENV === 'development') {

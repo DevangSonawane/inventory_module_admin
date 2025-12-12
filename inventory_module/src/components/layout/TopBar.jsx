@@ -169,7 +169,7 @@ const TopBar = () => {
   const userName = user?.name || 'User'
 
   return (
-    <div className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between relative">
+    <div className="bg-white border-b border-gray-200 shadow-sm px-6 py-4 flex items-center justify-between relative z-30">
       <h1 className="text-2xl font-semibold text-gray-900">{pageTitle}</h1>
       <div className="flex items-center gap-4">
         {/* Global Search */}

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Search, RefreshCw, Eye, Edit, Trash2, Loader2, CheckCircle, XCircle } from 'lucide-react'
+import { Plus, Search, RefreshCw, Eye, Edit, Trash2, Loader2 } from 'lucide-react'
 import { toast } from 'react-toastify'
 import Button from '../components/common/Button'
 import Table from '../components/common/Table'
@@ -9,9 +9,11 @@ import Dropdown from '../components/common/Dropdown'
 import Badge from '../components/common/Badge'
 import ConfirmationModal from '../components/common/ConfirmationModal'
 import { purchaseRequestService } from '../services/purchaseRequestService.js'
+import { useAuth } from '../utils/useAuth.js'
 
 const PurchaseRequestList = () => {
   const navigate = useNavigate()
+  const { isAdmin } = useAuth()
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage, setItemsPerPage] = useState(10)
   const [searchTerm, setSearchTerm] = useState('')
@@ -83,34 +85,6 @@ const PurchaseRequestList = () => {
     }
   }
 
-  const handleApprove = async (id) => {
-    try {
-      setActionLoading(id)
-      await purchaseRequestService.approve(id)
-      toast.success('Purchase request approved successfully')
-      fetchPurchaseRequests()
-    } catch (error) {
-      toast.error(error.message || 'Failed to approve purchase request')
-    } finally {
-      setActionLoading(null)
-    }
-  }
-
-  const handleReject = async (id) => {
-    const remarks = prompt('Enter rejection remarks:')
-    if (!remarks) return
-    
-    try {
-      setActionLoading(id)
-      await purchaseRequestService.reject(id, remarks)
-      toast.success('Purchase request rejected')
-      fetchPurchaseRequests()
-    } catch (error) {
-      toast.error(error.message || 'Failed to reject purchase request')
-    } finally {
-      setActionLoading(null)
-    }
-  }
 
   const handleDelete = async () => {
     try {
@@ -154,36 +128,19 @@ const PurchaseRequestList = () => {
           >
             <Eye className="w-4 h-4" />
           </button>
-          {row.status === 'SUBMITTED' && (
-            <>
-              <button
-                onClick={() => handleApprove(row.id)}
-                disabled={actionLoading === row.id}
-                className="p-1 text-green-600 hover:bg-green-50 rounded disabled:opacity-50"
-                title="Approve"
-              >
-                {actionLoading === row.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
-              </button>
-              <button
-                onClick={() => handleReject(row.id)}
-                disabled={actionLoading === row.id}
-                className="p-1 text-red-600 hover:bg-red-50 rounded disabled:opacity-50"
-                title="Reject"
-              >
-                {actionLoading === row.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
-              </button>
-            </>
+          {/* Only show delete button for DRAFT status PRs that can be deleted */}
+          {row.status === 'DRAFT' && (
+            <button
+              onClick={() => {
+                setDeleteId(row.id)
+                setShowDeleteModal(true)
+              }}
+              className="p-1 text-red-600 hover:bg-red-50 rounded"
+              title="Delete"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
           )}
-          <button
-            onClick={() => {
-              setDeleteId(row.id)
-              setShowDeleteModal(true)
-            }}
-            className="p-1 text-red-600 hover:bg-red-50 rounded"
-            title="Delete"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
         </div>
       ),
     },

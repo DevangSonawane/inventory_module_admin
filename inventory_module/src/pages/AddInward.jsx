@@ -677,10 +677,26 @@ const AddInward = () => {
           setInwardItems([])
           setUploadedFiles([])
         }
+      } else {
+        // Handle validation errors from backend
+        if (response.errors && Array.isArray(response.errors)) {
+          const errorMessages = response.errors.map(err => err.message || err.msg).join(', ')
+          toast.error(errorMessages || response.message || 'Failed to save inward entry')
+        } else {
+          toast.error(response.message || 'Failed to save inward entry')
+        }
       }
     } catch (error) {
       console.error('Error saving inward:', error)
-      toast.error(error.message || 'Failed to save inward entry')
+      // Handle error response with validation errors
+      if (error.errors && Array.isArray(error.errors)) {
+        const errorMessages = error.errors.map(err => err.message || err.msg || err).join(', ')
+        toast.error(errorMessages || error.message || 'Failed to save inward entry')
+      } else if (error.message) {
+        toast.error(error.message || 'Failed to save inward entry')
+      } else {
+        toast.error('Failed to save inward entry')
+      }
     } finally {
       setLoading(false)
     }
@@ -726,7 +742,11 @@ const AddInward = () => {
         }
       } catch (error) {
         console.error('Error deleting file:', error)
-        toast.error('Failed to delete file')
+        if (error.message) {
+          toast.error(error.message || 'Failed to delete file')
+        } else {
+          toast.error('Failed to delete file')
+        }
       }
     } else {
       // If it's a new file (not yet uploaded), just remove from state
@@ -759,7 +779,14 @@ const AddInward = () => {
       }
     } catch (error) {
       console.error('Error adding documents:', error)
-      toast.error(error.message || 'Failed to add documents')
+      if (error.errors && Array.isArray(error.errors)) {
+        const errorMessages = error.errors.map(err => err.message || err.msg || err).join(', ')
+        toast.error(errorMessages || error.message || 'Failed to add documents')
+      } else if (error.message) {
+        toast.error(error.message || 'Failed to add documents')
+      } else {
+        toast.error('Failed to add documents')
+      }
     } finally {
       setLoading(false)
     }

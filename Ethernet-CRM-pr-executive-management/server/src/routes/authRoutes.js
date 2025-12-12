@@ -17,8 +17,13 @@ import {
 } from '../controllers/preferencesController.js';
 import { authenticate } from '../middleware/auth.js';
 import { validate } from '../middleware/validator.js';
+import { rateLimit } from '../middleware/rateLimit.js';
 
 const router = express.Router();
+
+// Apply stricter rate limiting to authentication endpoints
+const authRateLimit = rateLimit({ windowMs: 15 * 60 * 1000, max: 5 }); // 5 attempts per 15 minutes
+const loginRateLimit = rateLimit({ windowMs: 15 * 60 * 1000, max: 5 }); // 5 login attempts per 15 minutes
 
 // Validation rules
 const registerValidation = [
@@ -95,16 +100,16 @@ const resetPasswordValidation = [
     .withMessage('New password must be at least 6 characters long')
 ];
 
-// Routes
-router.post('/register', registerValidation, validate, register);
-router.post('/login', loginValidation, validate, login);
-router.post('/refresh', refreshTokenValidation, validate, refreshAccessToken);
+// Routes with rate limiting
+router.post('/register', authRateLimit, registerValidation, validate, register);
+router.post('/login', loginRateLimit, loginValidation, validate, login);
+router.post('/refresh', rateLimit({ windowMs: 60_000, max: 10 }), refreshTokenValidation, validate, refreshAccessToken);
 router.post('/logout', authenticate, logout);
 router.get('/profile', authenticate, getProfile);
 router.put('/profile', authenticate, updateProfileValidation, validate, updateProfile);
-router.post('/change-password', authenticate, changePasswordValidation, validate, changePassword);
-router.post('/forgot-password', forgotPasswordValidation, validate, forgotPassword);
-router.post('/reset-password', resetPasswordValidation, validate, resetPassword);
+router.post('/change-password', authenticate, rateLimit({ windowMs: 15 * 60 * 1000, max: 5 }), changePasswordValidation, validate, changePassword);
+router.post('/forgot-password', rateLimit({ windowMs: 60 * 60 * 1000, max: 3 }), forgotPasswordValidation, validate, forgotPassword);
+router.post('/reset-password', rateLimit({ windowMs: 60 * 60 * 1000, max: 5 }), resetPasswordValidation, validate, resetPassword);
 router.get('/preferences', authenticate, getPreferences);
 router.put('/preferences', authenticate, updatePreferences);
 

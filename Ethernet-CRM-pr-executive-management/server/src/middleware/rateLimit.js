@@ -21,6 +21,9 @@ export const rateLimit =
         return res.status(429).json({
           success: false,
           message: 'Too many requests. Please slow down.',
+          code: 'RATE_LIMIT_EXCEEDED',
+          retryAfter: Math.ceil(windowMs / 1000),
+          timestamp: new Date().toISOString()
         });
       }
 

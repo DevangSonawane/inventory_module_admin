@@ -50,44 +50,88 @@ const logAccessibleUrls = () => {
   }
 };
 
+/**
+ * Run all startup tasks in sequence
+ * This ensures database, migrations, and other setup tasks complete before starting the server
+ */
+const runStartupTasks = async () => {
+  const tasks = [];
+  
+  // Task 1: Connect to database
+  tasks.push({
+    name: 'Database Connection',
+    task: async () => {
+      await connectDB();
+    }
+  });
+  
+  // Task 2: Run database migrations
+  tasks.push({
+    name: 'Database Migrations',
+    task: async () => {
+      console.log('🔄 Running database migrations...');
+      try {
+        const migrationResult = await runMigration(true); // silent = true
+        if (migrationResult && migrationResult.success === false) {
+          console.warn('⚠️  Migration completed with warnings:', migrationResult.error);
+        } else {
+          console.log('✅ Database migrations completed');
+        }
+      } catch (migrationError) {
+        console.error('❌ Migration error:', migrationError.message);
+        // Don't exit - allow server to start even if migration has issues
+        // This is useful for development where some migrations might fail
+        console.warn('⚠️  Continuing server startup despite migration warnings...');
+      }
+    },
+    optional: true // Don't fail startup if migrations have issues
+  });
+  
+  // Task 3: Verify email configuration (non-blocking)
+  tasks.push({
+    name: 'Email Service Verification',
+    task: async () => {
+      if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+        try {
+          const { verifyEmailConfig } = await import('./utils/emailService.js');
+          const emailStatus = await verifyEmailConfig();
+          if (emailStatus.configured) {
+            console.log('✅ Email service configured and ready');
+          } else {
+            console.warn('⚠️  Email service configuration issue:', emailStatus.message);
+          }
+        } catch (emailError) {
+          console.warn('⚠️  Could not verify email configuration:', emailError.message);
+        }
+      } else {
+        console.log('ℹ️  Email service not configured (optional)');
+      }
+    },
+    optional: true
+  });
+  
+  // Execute all tasks in sequence
+  for (const { name, task, optional } of tasks) {
+    try {
+      await task();
+    } catch (error) {
+      if (optional) {
+        console.warn(`⚠️  ${name} failed (non-critical):`, error.message);
+      } else {
+        console.error(`❌ ${name} failed:`, error.message);
+        throw error; // Re-throw critical errors
+      }
+    }
+  }
+};
+
 // Connect to database and start server
 const startServer = async () => {
   try {
-    await connectDB();
+    // Run all startup tasks (database connection, migrations, email verification, etc.)
+    await runStartupTasks();
     
-    // Run database migrations silently
-    console.log('🔄 Running database migrations...');
-    try {
-      const migrationResult = await runMigration(true); // silent = true
-      if (migrationResult && migrationResult.success === false) {
-        console.warn('⚠️  Migration completed with warnings:', migrationResult.error);
-      } else {
-        console.log('✅ Database migrations completed');
-      }
-    } catch (migrationError) {
-      console.error('❌ Migration error:', migrationError.message);
-      // Don't exit - allow server to start even if migration has issues
-      // This is useful for development where some migrations might fail
-      console.warn('⚠️  Continuing server startup despite migration warnings...');
-    }
-    
-    // Verify email configuration (non-blocking)
-    if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
-      try {
-        const { verifyEmailConfig } = await import('./utils/emailService.js');
-        const emailStatus = await verifyEmailConfig();
-        if (emailStatus.configured) {
-          console.log('✅ Email service configured and ready');
-        } else {
-          console.warn('⚠️  Email service configuration issue:', emailStatus.message);
-        }
-      } catch (emailError) {
-        console.warn('⚠️  Could not verify email configuration:', emailError.message);
-      }
-    } else {
-      console.log('ℹ️  Email service not configured (optional)');
-    }
-    
+    // Start the HTTP server
     app.listen(PORT, HOST, () => {
       console.log(`🚀 Server is running on http://${HOST}:${PORT}`);
       console.log(`📝 Environment: ${process.env.NODE_ENV || 'development'}`);

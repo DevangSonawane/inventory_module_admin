@@ -190,6 +190,13 @@ Please acknowledge receipt of this Purchase Order.
 };
 
 /**
+ * Check if email service is configured
+ */
+export const isEmailConfigured = () => {
+  return !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
+};
+
+/**
  * Verify email configuration
  */
 export const verifyEmailConfig = async () => {

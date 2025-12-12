@@ -166,7 +166,12 @@ router.use(orgContext);
 
 // Health check
 router.get("/health", (req, res) => {
-  res.json({ message: "Inventory routes OK" });
+  res.json({ 
+    status: 'ok', 
+    message: "Inventory routes OK",
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime()
+  });
 });
 
 // ==================== ASSET ROUTES ====================
@@ -1206,7 +1211,7 @@ router.get(
  * @access  Private
  * @query   serialNumber, userId, ticketId
  */
-router.get('/person-stock/search', searchPersonStockBySerial);
+router.get('/person-stock/search', rateLimit({ windowMs: 60000, max: 30 }), searchPersonStockBySerial);
 
 // ==================== RETURN ROUTES ====================
 
@@ -1397,6 +1402,7 @@ router.delete('/documents/:filename', deleteDocument);
  */
 router.post(
   '/inward/:inwardId/documents',
+  rateLimit({ windowMs: 60000, max: 10 }), // Limit file uploads to 10 per minute
   uploadInwardDocuments,
   addDocumentsToInward
 );
@@ -2146,6 +2152,7 @@ router.delete(
 router.post(
   '/purchase-orders/:id/documents',
   authenticate,
+  rateLimit({ windowMs: 60000, max: 10 }), // Limit file uploads to 10 per minute
   [
     param('id')
       .isUUID()
@@ -2180,13 +2187,67 @@ router.post(
  * @desc    Validate if product code exists
  * @access  Private
  */
-router.post('/validate/product-code', validateProductCode);
+router.post('/validate/product-code', rateLimit({ windowMs: 60000, max: 30 }), validateProductCode);
 
 /**
  * @route   POST /api/inventory/validate/slip-number
  * @desc    Validate if slip number exists
  * @access  Private
  */
-router.post('/validate/slip-number', validateSlipNumber);
+router.post('/validate/slip-number', rateLimit({ windowMs: 60000, max: 30 }), validateSlipNumber);
+
+// ==================== HEALTH CHECK ROUTE ====================
+
+/**
+ * @route   GET /api/inventory/health
+ * @desc    Health check endpoint with database and email service status
+ * @access  Public
+ */
+router.get('/health', async (req, res) => {
+  const health = {
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    environment: process.env.NODE_ENV || 'development',
+    services: {}
+  };
+
+  // Check database connection
+  try {
+    const sequelize = (await import('../config/database.js')).default;
+    await sequelize.authenticate();
+    health.services.database = {
+      status: 'ok',
+      message: 'Database connection successful'
+    };
+  } catch (error) {
+    health.status = 'degraded';
+    health.services.database = {
+      status: 'error',
+      message: error.message || 'Database connection failed'
+    };
+  }
+
+  // Check email service
+  try {
+    const { isEmailConfigured } = await import('../utils/emailService.js');
+    const emailConfigured = isEmailConfigured();
+    health.services.email = {
+      status: emailConfigured ? 'ok' : 'not_configured',
+      message: emailConfigured 
+        ? 'Email service is configured' 
+        : 'Email service not configured (optional)'
+    };
+  } catch (error) {
+    health.services.email = {
+      status: 'error',
+      message: error.message || 'Email service check failed'
+    };
+  }
+
+  // Determine overall status
+  const statusCode = health.status === 'ok' ? 200 : 503;
+  res.status(statusCode).json(health);
+});
 
 export default router;

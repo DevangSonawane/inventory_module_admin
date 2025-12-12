@@ -12,6 +12,7 @@ import { purchaseRequestService } from '../services/purchaseRequestService.js'
 import { businessPartnerService } from '../services/businessPartnerService.js'
 import { materialService } from '../services/materialService.js'
 import { fileService } from '../services/fileService.js'
+import { API_BASE_URL } from '../utils/constants.js'
 
 const PurchaseOrderDetails = () => {
   const { id } = useParams()
@@ -100,13 +101,51 @@ const PurchaseOrderDetails = () => {
 
   const fetchPurchaseRequests = async () => {
     try {
-      const response = await purchaseRequestService.getAll({ limit: 1000, status: 'APPROVED' })
-      if (response.success) {
-        setPurchaseRequests(response.data?.purchaseRequests || response.data?.data || [])
+      setLoading(true)
+      let allPRs = []
+      let currentPage = 1
+      let hasMore = true
+      const pageSize = 1000 // Fetch in batches of 1000
+      
+      // Fetch ALL PRs (no status filter) with pagination to get all records
+      // This ensures all PRs from the PR list are available in the dropdown
+      while (hasMore) {
+        const response = await purchaseRequestService.getAll({ 
+          limit: pageSize,
+          page: currentPage,
+          // Don't filter by status - show all PRs like in the PR list
+          // Users can select any PR regardless of status
+        })
+        
+        if (response.success) {
+          const prs = response.data?.purchaseRequests || response.data?.data || []
+          allPRs = [...allPRs, ...prs]
+          
+          // Check if there are more pages
+          const pagination = response.data?.pagination || {}
+          const totalPages = pagination.totalPages || 1
+          hasMore = currentPage < totalPages && prs.length === pageSize
+          currentPage++
+        } else {
+          hasMore = false
+        }
       }
+      
+      // Sort by created_at descending (latest first) to show newest PRs first
+      const sortedPRs = allPRs.sort((a, b) => {
+        const dateA = new Date(a.created_at || a.requested_date || 0)
+        const dateB = new Date(b.created_at || b.requested_date || 0)
+        return dateB - dateA // Descending order (newest first)
+      })
+      
+      setPurchaseRequests(sortedPRs)
+      console.log(`✅ Fetched ${sortedPRs.length} purchase requests for dropdown`)
     } catch (error) {
       console.error('Error fetching purchase requests:', error)
+      toast.error('Failed to load purchase requests')
       setPurchaseRequests([])
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -199,9 +238,24 @@ const PurchaseOrderDetails = () => {
             remarks: po.remarks || '',
           })
           
-          // Set existing documents
-          if (po.documents && Array.isArray(po.documents)) {
-            setExistingDocuments(po.documents)
+          // Set existing documents (handle both array and string formats)
+          if (po.documents) {
+            if (Array.isArray(po.documents)) {
+              setExistingDocuments(po.documents)
+            } else if (typeof po.documents === 'string') {
+              // If documents is a JSON string, parse it
+              try {
+                const parsed = JSON.parse(po.documents)
+                setExistingDocuments(Array.isArray(parsed) ? parsed : [])
+              } catch {
+                // If not JSON, treat as single document path
+                setExistingDocuments([po.documents])
+              }
+            } else {
+              setExistingDocuments([])
+            }
+          } else {
+            setExistingDocuments([])
           }
           
           // Load items from PO (don't load PR if items already exist)
@@ -253,10 +307,20 @@ const PurchaseOrderDetails = () => {
 
   const prOptions = [
     { value: '', label: 'Select Purchase Request' },
-    ...purchaseRequests.map(pr => ({
-      value: pr.pr_id || pr.id,
-      label: `${pr.pr_number || 'PR-' + (pr.pr_id || pr.id).substring(0, 8)} - ${pr.requested_date ? new Date(pr.requested_date).toLocaleDateString() : ''}`
-    }))
+    ...purchaseRequests.map(pr => {
+      // Use created_at for date display (always present) as fallback to requested_date
+      const displayDate = pr.created_at 
+        ? new Date(pr.created_at).toLocaleDateString() 
+        : (pr.requested_date ? new Date(pr.requested_date).toLocaleDateString() : '')
+      const prNumber = pr.pr_number || `PR-${(pr.pr_id || pr.id)?.substring(0, 8)}`
+      const status = pr.status || 'DRAFT'
+      // Show status in label to help users identify approved PRs
+      const statusLabel = status !== 'APPROVED' ? ` [${status}]` : ''
+      return {
+        value: pr.pr_id || pr.id,
+        label: `${prNumber} - ${displayDate}${statusLabel}`
+      }
+    })
   ]
 
   const handleAddItem = () => {
@@ -359,14 +423,29 @@ const PurchaseOrderDetails = () => {
 
   const handleRemoveExistingDocument = async (filename) => {
     try {
-      const response = await fileService.delete(filename)
+      // Extract just the filename from the full path if needed
+      const docFilename = filename.includes('/') ? filename.split('/').pop() : filename
+      const response = await fileService.delete(docFilename)
       if (response.success) {
-        setExistingDocuments(existingDocuments.filter(doc => doc !== filename))
+        setExistingDocuments(existingDocuments.filter(doc => {
+          const docName = doc.includes('/') ? doc.split('/').pop() : doc
+          return docName !== docFilename
+        }))
         toast.success('Document removed successfully')
+        // Refresh to get updated file list
+        if (isEditMode) {
+          await fetchPurchaseOrder()
+        }
+      } else {
+        toast.error(response.message || 'Failed to remove document')
       }
     } catch (error) {
       console.error('Error removing document:', error)
-      toast.error('Failed to remove document')
+      if (error.message) {
+        toast.error(error.message || 'Failed to remove document')
+      } else {
+        toast.error('Failed to remove document')
+      }
     }
   }
 
@@ -410,14 +489,15 @@ const PurchaseOrderDetails = () => {
       if (response.success) {
         const poId = response.data?.purchaseOrder?.po_id || response.data?.data?.po_id || id
         
-        // Upload documents if any
+        // Upload documents if any (works for both create and edit mode)
         if (uploadedFiles.length > 0 && poId) {
           try {
             await fileService.addToPurchaseOrder(poId, uploadedFiles)
             setUploadedFiles([])
+            toast.success('Documents uploaded successfully')
           } catch (error) {
             console.error('Error uploading documents:', error)
-            toast.warning('PO saved but documents upload failed')
+            toast.warning('PO saved but documents upload failed. You can add documents later.')
           }
         }
 
@@ -428,13 +508,29 @@ const PurchaseOrderDetails = () => {
           localStorage.setItem('purchaseOrderCreated', Date.now().toString())
           navigate(`/purchase-order/${poId}`)
         } else {
-          // Reload to get updated data
+          // Reload to get updated data including new documents
           await fetchPurchaseOrder()
+        }
+      } else {
+        // Handle validation errors from backend
+        if (response.errors && Array.isArray(response.errors)) {
+          const errorMessages = response.errors.map(err => err.message || err.msg).join(', ')
+          toast.error(errorMessages || response.message || `Failed to ${isEditMode ? 'update' : 'create'} purchase order`)
+        } else {
+          toast.error(response.message || `Failed to ${isEditMode ? 'update' : 'create'} purchase order`)
         }
       }
     } catch (error) {
       console.error('Error saving purchase order:', error)
-      toast.error(error.message || `Failed to ${isEditMode ? 'update' : 'create'} purchase order`)
+      // Handle error response with validation errors
+      if (error.errors && Array.isArray(error.errors)) {
+        const errorMessages = error.errors.map(err => err.message || err.msg || err).join(', ')
+        toast.error(errorMessages || error.message || `Failed to ${isEditMode ? 'update' : 'create'} purchase order`)
+      } else if (error.message) {
+        toast.error(error.message || `Failed to ${isEditMode ? 'update' : 'create'} purchase order`)
+      } else {
+        toast.error(`Failed to ${isEditMode ? 'update' : 'create'} purchase order`)
+      }
     } finally {
       setLoading(false)
     }
@@ -480,7 +576,14 @@ const PurchaseOrderDetails = () => {
         }
 
         if (!createResponse.success) {
-          toast.error('Failed to save purchase order')
+          // Handle validation errors from backend
+          if (createResponse.errors && Array.isArray(createResponse.errors)) {
+            const errorMessages = createResponse.errors.map(err => err.message || err.msg).join(', ')
+            toast.error(errorMessages || createResponse.message || 'Failed to save purchase order')
+          } else {
+            toast.error(createResponse.message || 'Failed to save purchase order')
+          }
+          setSubmitting(false)
           return
         }
 
@@ -504,17 +607,32 @@ const PurchaseOrderDetails = () => {
       }
 
       // Submit PO (this will send email to business partner)
-      const response = await purchaseOrderService.submit(poId, {
-        documents: [...existingDocuments, ...uploadedFiles.map(f => f.name)]
-      })
+      // Note: Documents are already uploaded via addToPurchaseOrder, so we don't need to pass them
+      const response = await purchaseOrderService.submit(poId, {})
 
       if (response.success) {
         toast.success('Purchase order submitted and sent to vendor successfully!')
         navigate('/purchase-order')
+      } else {
+        // Handle validation errors from backend
+        if (response.errors && Array.isArray(response.errors)) {
+          const errorMessages = response.errors.map(err => err.message || err.msg).join(', ')
+          toast.error(errorMessages || response.message || 'Failed to submit purchase order')
+        } else {
+          toast.error(response.message || 'Failed to submit purchase order')
+        }
       }
     } catch (error) {
       console.error('Error submitting purchase order:', error)
-      toast.error(error.message || 'Failed to submit purchase order')
+      // Handle error response with validation errors
+      if (error.errors && Array.isArray(error.errors)) {
+        const errorMessages = error.errors.map(err => err.message || err.msg || err).join(', ')
+        toast.error(errorMessages || error.message || 'Failed to submit purchase order')
+      } else if (error.message) {
+        toast.error(error.message || 'Failed to submit purchase order')
+      } else {
+        toast.error('Failed to submit purchase order')
+      }
     } finally {
       setSubmitting(false)
     }
@@ -646,18 +764,32 @@ const PurchaseOrderDetails = () => {
             <div className="mb-4">
               <p className="text-sm font-medium text-gray-700 mb-2">Existing Documents:</p>
               <div className="flex flex-wrap gap-2">
-                {existingDocuments.map((doc, index) => (
-                  <div key={index} className="flex items-center gap-2 bg-gray-100 px-3 py-2 rounded">
-                    <FileText className="w-4 h-4 text-gray-600" />
-                    <span className="text-sm text-gray-700">{doc.split('/').pop()}</span>
-                    <button
-                      onClick={() => handleRemoveExistingDocument(doc)}
-                      className="text-red-600 hover:text-red-800"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
+                {existingDocuments.map((doc, index) => {
+                  const docFilename = doc.includes('/') ? doc.split('/').pop() : doc
+                  const docUrl = doc.startsWith('/') 
+                    ? `${API_BASE_URL.replace('/api/v1', '')}${doc}`
+                    : fileService.downloadUrl(docFilename)
+                  return (
+                    <div key={index} className="flex items-center gap-2 bg-gray-100 px-3 py-2 rounded">
+                      <FileText className="w-4 h-4 text-gray-600" />
+                      <a
+                        href={docUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm text-blue-600 hover:text-blue-800 underline"
+                      >
+                        {docFilename}
+                      </a>
+                      <button
+                        onClick={() => handleRemoveExistingDocument(doc)}
+                        className="text-red-600 hover:text-red-800"
+                        title="Remove document"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )
+                })}
               </div>
             </div>
           )}
@@ -727,6 +859,7 @@ const PurchaseOrderDetails = () => {
         isOpen={isAddItemModalOpen}
         onClose={() => setIsAddItemModalOpen(false)}
         title="Add Item"
+        size="sm"
       >
         <div className="space-y-4">
           <Dropdown
@@ -758,7 +891,7 @@ const PurchaseOrderDetails = () => {
             onChange={(e) => setItemForm({ ...itemForm, remarks: e.target.value })}
             placeholder="Optional"
           />
-          <div className="flex gap-2 justify-end">
+          <div className="flex gap-2 justify-end pt-2">
             <Button onClick={() => setIsAddItemModalOpen(false)} variant="outline">
               Cancel
             </Button>
@@ -777,6 +910,7 @@ const PurchaseOrderDetails = () => {
           setEditingItem(null)
         }}
         title="Edit Item"
+        size="sm"
       >
         <div className="space-y-4">
           <Dropdown
@@ -808,7 +942,7 @@ const PurchaseOrderDetails = () => {
             onChange={(e) => setItemForm({ ...itemForm, remarks: e.target.value })}
             placeholder="Optional"
           />
-          <div className="flex gap-2 justify-end">
+          <div className="flex gap-2 justify-end pt-2">
             <Button 
               onClick={() => {
                 setIsEditItemModalOpen(false)

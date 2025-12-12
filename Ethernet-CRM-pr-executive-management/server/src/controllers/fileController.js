@@ -21,11 +21,37 @@ export const downloadDocument = async (req, res, next) => {
       });
     }
 
-    // Construct file path - documents are stored in uploads/inward
-    const filePath = path.join(__dirname, '../../uploads/inward', filename);
+    // Try multiple upload directories (inward, purchase-orders, materials)
+    const uploadDirs = [
+      { dir: path.join(__dirname, '../../uploads/inward'), name: 'inward' },
+      { dir: path.join(__dirname, '../../uploads/purchase-orders'), name: 'purchase-orders' },
+      { dir: path.join(__dirname, '../../uploads/materials'), name: 'materials' }
+    ];
 
-    // Check if file exists
-    if (!fs.existsSync(filePath)) {
+    let filePath = null;
+    const justFilename = filename.includes('/') ? filename.split('/').pop() : filename;
+
+    // Find which directory contains the file
+    for (const { dir } of uploadDirs) {
+      const testPath = path.join(dir, justFilename);
+      if (fs.existsSync(testPath)) {
+        filePath = testPath;
+        break;
+      }
+    }
+
+    // If not found, try with full path
+    if (!filePath && filename.includes('/')) {
+      for (const { dir } of uploadDirs) {
+        const testPath = path.join(dir, filename.replace(/^\/uploads\/(inward|purchase-orders|materials)\//, ''));
+        if (fs.existsSync(testPath)) {
+          filePath = testPath;
+          break;
+        }
+      }
+    }
+
+    if (!filePath || !fs.existsSync(filePath)) {
       return res.status(404).json({
         success: false,
         message: 'File not found',
@@ -33,7 +59,7 @@ export const downloadDocument = async (req, res, next) => {
     }
 
     // Send file
-    res.download(filePath, filename, (err) => {
+    res.download(filePath, justFilename, (err) => {
       if (err) {
         console.error('Error downloading file:', err);
         if (!res.headersSent) {
@@ -63,10 +89,40 @@ export const deleteDocument = async (req, res, next) => {
       });
     }
 
-    const filePath = path.join(__dirname, '../../uploads/inward', filename);
+    // Try multiple upload directories (inward, purchase-orders, materials)
+    const uploadDirs = [
+      path.join(__dirname, '../../uploads/inward'),
+      path.join(__dirname, '../../uploads/purchase-orders'),
+      path.join(__dirname, '../../uploads/materials')
+    ];
 
-    // Check if file exists
-    if (!fs.existsSync(filePath)) {
+    let filePath = null;
+    let foundDir = null;
+
+    // Find which directory contains the file
+    for (const dir of uploadDirs) {
+      const testPath = path.join(dir, filename);
+      if (fs.existsSync(testPath)) {
+        filePath = testPath;
+        foundDir = dir;
+        break;
+      }
+    }
+
+    // If not found, try with just the filename in each directory
+    if (!filePath) {
+      const justFilename = filename.includes('/') ? filename.split('/').pop() : filename;
+      for (const dir of uploadDirs) {
+        const testPath = path.join(dir, justFilename);
+        if (fs.existsSync(testPath)) {
+          filePath = testPath;
+          foundDir = dir;
+          break;
+        }
+      }
+    }
+
+    if (!filePath || !fs.existsSync(filePath)) {
       return res.status(404).json({
         success: false,
         message: 'File not found',
@@ -76,7 +132,15 @@ export const deleteDocument = async (req, res, next) => {
     // Delete file
     fs.unlinkSync(filePath);
 
-    // Also remove from any inward entries that reference it
+    // Remove from any records that reference it
+    const justFilename = filename.includes('/') ? filename.split('/').pop() : filename;
+    const docPath = foundDir.includes('purchase-orders') 
+      ? `/uploads/purchase-orders/${justFilename}`
+      : foundDir.includes('materials')
+      ? `/uploads/materials/${justFilename}`
+      : `/uploads/inward/${justFilename}`;
+
+    // Remove from InwardEntry
     const inwardEntries = await InwardEntry.findAll({
       where: {
         is_active: true,
@@ -84,12 +148,73 @@ export const deleteDocument = async (req, res, next) => {
     });
 
     for (const entry of inwardEntries) {
-      if (entry.documents && Array.isArray(entry.documents)) {
-        const updatedDocuments = entry.documents.filter(
-          doc => doc !== filename && !doc.includes(filename)
-        );
-        if (updatedDocuments.length !== entry.documents.length) {
+      if (entry.documents) {
+        let updatedDocuments = [];
+        if (Array.isArray(entry.documents)) {
+          updatedDocuments = entry.documents.filter(
+            doc => {
+              const docName = doc.includes('/') ? doc.split('/').pop() : doc;
+              return docName !== justFilename && doc !== docPath && !doc.includes(justFilename);
+            }
+          );
+        } else if (typeof entry.documents === 'string') {
+          try {
+            const parsed = JSON.parse(entry.documents);
+            if (Array.isArray(parsed)) {
+              updatedDocuments = parsed.filter(
+                doc => {
+                  const docName = doc.includes('/') ? doc.split('/').pop() : doc;
+                  return docName !== justFilename && doc !== docPath && !doc.includes(justFilename);
+                }
+              );
+            }
+          } catch {
+            // If not JSON, skip
+          }
+        }
+        if (updatedDocuments.length !== (Array.isArray(entry.documents) ? entry.documents.length : 1)) {
           await entry.update({ documents: updatedDocuments });
+        }
+      }
+    }
+
+    // Remove from PurchaseOrder (if purchase-orders directory)
+    if (foundDir && foundDir.includes('purchase-orders')) {
+      const PurchaseOrder = (await import('../models/PurchaseOrder.js')).default;
+      const purchaseOrders = await PurchaseOrder.findAll({
+        where: {
+          is_active: true,
+        },
+      });
+
+      for (const po of purchaseOrders) {
+        if (po.documents) {
+          let updatedDocuments = [];
+          if (Array.isArray(po.documents)) {
+            updatedDocuments = po.documents.filter(
+              doc => {
+                const docName = doc.includes('/') ? doc.split('/').pop() : doc;
+                return docName !== justFilename && doc !== docPath && !doc.includes(justFilename);
+              }
+            );
+          } else if (typeof po.documents === 'string') {
+            try {
+              const parsed = JSON.parse(po.documents);
+              if (Array.isArray(parsed)) {
+                updatedDocuments = parsed.filter(
+                  doc => {
+                    const docName = doc.includes('/') ? doc.split('/').pop() : doc;
+                    return docName !== justFilename && doc !== docPath && !doc.includes(justFilename);
+                  }
+                );
+              }
+            } catch {
+              // If not JSON, skip
+            }
+          }
+          if (updatedDocuments.length !== (Array.isArray(po.documents) ? po.documents.length : 1)) {
+            await po.update({ documents: updatedDocuments });
+          }
         }
       }
     }

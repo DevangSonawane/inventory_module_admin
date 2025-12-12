@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Loader2, Lock, User } from 'lucide-react'
+import { Loader2, Lock, User, Eye, EyeOff } from 'lucide-react'
 import { toast } from 'react-toastify'
 import Button from '../components/common/Button'
 import Input from '../components/common/Input'
@@ -9,6 +9,7 @@ import { authService } from '../services/authService.js'
 const Login = () => {
   const navigate = useNavigate()
   const [loading, setLoading] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
   const [formData, setFormData] = useState({
     identifier: '',
     password: '',
@@ -166,16 +167,28 @@ const Login = () => {
                 </div>
                 <Input
                   id="password"
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   placeholder="Enter your password"
                   value={formData.password}
                   onChange={(e) => {
                     setFormData({ ...formData, password: e.target.value })
                     setErrors({ ...errors, password: '' })
                   }}
-                  className={`pl-10 ${errors.password ? 'border-red-500' : ''}`}
+                  className={`pl-10 pr-10 ${errors.password ? 'border-red-500' : ''}`}
                   required
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 focus:outline-none"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-5 w-5" />
+                  ) : (
+                    <Eye className="h-5 w-5" />
+                  )}
+                </button>
               </div>
               {errors.password && (
                 <p className="mt-1 text-sm text-red-600">{errors.password}</p>

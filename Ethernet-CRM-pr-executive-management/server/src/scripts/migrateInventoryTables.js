@@ -580,6 +580,8 @@ const runMigration = async (silent = false) => {
       const prIdType = prIdInfo.fullType || 'CHAR(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci';
       const matIdInfo = await getColumnType('materials', 'material_id');
       const matIdType = matIdInfo.fullType || 'CHAR(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci';
+      const bpIdInfo = await getColumnType('business_partners', 'partner_id');
+      const bpIdType = bpIdInfo.fullType || 'CHAR(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci';
       
       await sequelize.query(`
         CREATE TABLE \`purchase_request_items\` (
@@ -589,10 +591,17 @@ const runMigration = async (silent = false) => {
           \`requested_quantity\` INT NOT NULL DEFAULT 1,
           \`uom\` VARCHAR(50) NOT NULL DEFAULT 'PIECE(S)',
           \`remarks\` TEXT NULL,
+          \`pr_name\` VARCHAR(255) NOT NULL COMMENT 'Name of the product requested',
+          \`business_partner_id\` ${bpIdType} NULL COMMENT 'Reference to business partner (supplier)',
+          \`material_type\` ENUM('components', 'raw material', 'finish product', 'supportive material', 'cable') NOT NULL DEFAULT 'components' COMMENT 'Type of material',
+          \`shipping_address\` TEXT NULL COMMENT 'Shipping address (warehouse address)',
+          \`description\` TEXT NULL COMMENT 'Description of the item',
           \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
           \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
           INDEX \`idx_pr_id\` (\`pr_id\`),
-          INDEX \`idx_material_id\` (\`material_id\`)
+          INDEX \`idx_material_id\` (\`material_id\`),
+          INDEX \`idx_business_partner_id\` (\`business_partner_id\`),
+          INDEX \`idx_material_type\` (\`material_type\`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
       `, { type: QueryTypes.RAW });
       
@@ -610,6 +619,60 @@ const runMigration = async (silent = false) => {
       if (!silent) console.log('   ✅ purchase_request_items table created');
     } else {
       if (!silent) console.log('   ℹ️  purchase_request_items table already exists');
+      
+      // Add missing columns if table exists but columns don't
+      // Get business_partner_id type, default to CHAR(36) if business_partners table doesn't exist yet
+      let bpIdType = 'CHAR(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci';
+      try {
+        if (await tableExists('business_partners')) {
+          const bpIdInfo = await getColumnType('business_partners', 'partner_id');
+          bpIdType = bpIdInfo.fullType || bpIdType;
+        }
+      } catch (e) {
+        // Use default if we can't get the type
+      }
+      
+      const columnsToAdd = [
+        { name: 'pr_name', definition: 'VARCHAR(255) NOT NULL DEFAULT \'\' COMMENT \'Name of the product requested\' AFTER `remarks`' },
+        { name: 'business_partner_id', definition: `${bpIdType} NULL COMMENT 'Reference to business partner (supplier)' AFTER \`pr_name\`` },
+        { name: 'material_type', definition: `ENUM('components', 'raw material', 'finish product', 'supportive material', 'cable') NOT NULL DEFAULT 'components' COMMENT 'Type of material' AFTER \`business_partner_id\`` },
+        { name: 'shipping_address', definition: 'TEXT NULL COMMENT \'Shipping address (warehouse address)\' AFTER `material_type`' },
+        { name: 'description', definition: 'TEXT NULL COMMENT \'Description of the item\' AFTER `shipping_address`' },
+      ];
+
+      for (const column of columnsToAdd) {
+        if (!(await columnExists('purchase_request_items', column.name))) {
+          try {
+            await sequelize.query(`
+              ALTER TABLE \`purchase_request_items\` 
+              ADD COLUMN \`${column.name}\` ${column.definition}
+            `, { type: QueryTypes.RAW });
+            if (!silent) console.log(`   ✅ Added column: ${column.name}`);
+          } catch (error) {
+            if (!silent) console.log(`   ⚠️  Error adding column ${column.name}: ${error.message}`);
+          }
+        }
+      }
+      
+      // Add index for business_partner_id if column exists but index doesn't
+      if (await columnExists('purchase_request_items', 'business_partner_id')) {
+        try {
+          await ensureIndex('purchase_request_items', 'idx_business_partner_id', '(`business_partner_id`)');
+          if (!silent) console.log('   ✅ Added business_partner_id index');
+        } catch (error) {
+          // Index might already exist
+        }
+      }
+      
+      // Add index for material_type if column exists but index doesn't
+      if (await columnExists('purchase_request_items', 'material_type')) {
+        try {
+          await ensureIndex('purchase_request_items', 'idx_material_type', '(`material_type`)');
+          if (!silent) console.log('   ✅ Added material_type index');
+        } catch (error) {
+          // Index might already exist
+        }
+      }
     }
 
     // 8. PURCHASE ORDERS

@@ -67,8 +67,9 @@ export const purchaseRequestService = {
   },
 
   // Approve purchase request
-  approve: async (id) => {
-    return await put(API_ENDPOINTS.PURCHASE_REQUEST_APPROVE(id));
+  approve: async (id, remarks = null) => {
+    const body = remarks ? { remarks } : {};
+    return await put(API_ENDPOINTS.PURCHASE_REQUEST_APPROVE(id), body);
   },
 
   // Reject purchase request

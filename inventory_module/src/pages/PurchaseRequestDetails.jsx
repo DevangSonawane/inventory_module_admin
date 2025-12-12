@@ -32,6 +32,7 @@ const PurchaseRequestDetails = () => {
   const [generatingPRNumber, setGeneratingPRNumber] = useState(false)
 
   const [requestedItems, setRequestedItems] = useState([])
+  const [prStatus, setPrStatus] = useState('DRAFT') // Track PR status
   
   const [itemForm, setItemForm] = useState({
     prName: '',
@@ -147,6 +148,7 @@ const PurchaseRequestDetails = () => {
       if (response.success) {
         const pr = response.data?.purchaseRequest || response.data?.data
         if (pr) {
+          setPrStatus(pr.status || 'DRAFT') // Track the status
           setFormData({
             prNumber: pr.pr_number || '',
             requestedDate: pr.requested_date ? pr.requested_date.split('T')[0] : new Date().toISOString().split('T')[0],
@@ -313,7 +315,20 @@ const PurchaseRequestDetails = () => {
 
       if (response.success) {
         toast.success(`Purchase request ${isEditMode ? 'updated' : 'created'} successfully!`)
-        navigate('/purchase-request')
+        // If creating new PR, navigate to edit mode so user can submit it
+        if (isEditMode) {
+          // After update, refresh the PR data to get updated status
+          await fetchPurchaseRequest()
+        } else {
+          // For new PRs, get the ID and navigate to edit mode
+          const prId = response.data?.purchaseRequest?.pr_id || response.data?.data?.pr_id || response.data?.purchaseRequest?.id || response.data?.data?.id
+          if (prId) {
+            // Navigate to edit mode so user can submit
+            navigate(`/purchase-request/${prId}`, { replace: true })
+          } else {
+            navigate('/purchase-request')
+          }
+        }
       } else {
         // Handle validation errors from backend
         if (response.errors && Array.isArray(response.errors)) {
@@ -347,11 +362,33 @@ const PurchaseRequestDetails = () => {
 
     try {
       setLoading(true)
-      await purchaseRequestService.submit(id)
-      toast.success('Purchase request submitted successfully!')
-      navigate('/purchase-request')
+      const response = await purchaseRequestService.submit(id)
+      if (response.success) {
+        toast.success('Purchase request submitted successfully!')
+        // Update status to SUBMITTED
+        setPrStatus('SUBMITTED')
+        // Navigate back to list
+        navigate('/purchase-request')
+      } else {
+        // Handle validation errors from backend
+        if (response.errors && Array.isArray(response.errors)) {
+          const errorMessages = response.errors.map(err => err.message || err.msg).join(', ')
+          toast.error(errorMessages || response.message || 'Failed to submit purchase request')
+        } else {
+          toast.error(response.message || 'Failed to submit purchase request')
+        }
+      }
     } catch (error) {
-      toast.error(error.message || 'Failed to submit purchase request')
+      console.error('Error submitting purchase request:', error)
+      // Handle error response with validation errors
+      if (error.errors && Array.isArray(error.errors)) {
+        const errorMessages = error.errors.map(err => err.message || err.msg || err).join(', ')
+        toast.error(errorMessages || error.message || 'Failed to submit purchase request')
+      } else if (error.message) {
+        toast.error(error.message || 'Failed to submit purchase request')
+      } else {
+        toast.error('Failed to submit purchase request')
+      }
     } finally {
       setLoading(false)
     }
@@ -451,12 +488,17 @@ const PurchaseRequestDetails = () => {
 
         <div className="flex gap-4 pt-4 border-t">
           <Button onClick={handleSave} disabled={loading} icon={loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}>
-            {isEditMode ? 'Update' : 'Save Draft'}
+            {isEditMode ? (prStatus === 'DRAFT' ? 'Save Draft' : 'Update') : 'Save Draft'}
           </Button>
-          {isEditMode && (
+          {isEditMode && prStatus === 'DRAFT' && (
             <Button onClick={handleSubmit} disabled={loading} variant="primary">
               Submit for Approval
             </Button>
+          )}
+          {isEditMode && prStatus !== 'DRAFT' && (
+            <div className="px-3 py-2 text-sm text-gray-600 bg-gray-50 rounded-md border border-gray-200">
+              Status: <span className="font-medium">{prStatus}</span>
+            </div>
           )}
           <Button onClick={() => navigate('/purchase-request')} variant="outline">
             Cancel
@@ -468,9 +510,9 @@ const PurchaseRequestDetails = () => {
         isOpen={isAddItemModalOpen}
         onClose={() => setIsAddItemModalOpen(false)}
         title="Add Purchase Request Item"
-        size="large"
+        size="md"
       >
-        <div className="space-y-4">
+        <div className="space-y-3">
           <Input
             label="PR Name"
             required
@@ -478,13 +520,21 @@ const PurchaseRequestDetails = () => {
             onChange={(e) => setItemForm({ ...itemForm, prName: e.target.value })}
             placeholder="Name of the product requested"
           />
-          <Dropdown
-            label="Material Type"
-            required
-            options={materialTypeOptions}
-            value={itemForm.materialType}
-            onChange={(e) => setItemForm({ ...itemForm, materialType: e.target.value })}
-          />
+          <div className="grid grid-cols-2 gap-3">
+            <Dropdown
+              label="Material Type"
+              required
+              options={materialTypeOptions}
+              value={itemForm.materialType}
+              onChange={(e) => setItemForm({ ...itemForm, materialType: e.target.value })}
+            />
+            <Dropdown
+              label="Material (Optional)"
+              options={materialOptions}
+              value={itemForm.materialId}
+              onChange={(e) => setItemForm({ ...itemForm, materialId: e.target.value })}
+            />
+          </div>
           <Dropdown
             label="Business Partner"
             options={businessPartnerOptions}
@@ -504,33 +554,29 @@ const PurchaseRequestDetails = () => {
             placeholder="Auto-filled from warehouse, can be edited"
             disabled={!itemForm.warehouseId}
           />
-          <Input
-            label="Description"
-            value={itemForm.description}
-            onChange={(e) => setItemForm({ ...itemForm, description: e.target.value })}
-            placeholder="Optional description"
-          />
-          <Dropdown
-            label="Material (Optional)"
-            options={materialOptions}
-            value={itemForm.materialId}
-            onChange={(e) => setItemForm({ ...itemForm, materialId: e.target.value })}
-          />
-          <Input
-            label="Requested Quantity"
-            type="number"
-            value={itemForm.requestedQuantity}
-            onChange={(e) => setItemForm({ ...itemForm, requestedQuantity: e.target.value })}
-            min="1"
-            placeholder="Optional"
-          />
+          <div className="grid grid-cols-2 gap-3">
+            <Input
+              label="Requested Quantity"
+              type="number"
+              value={itemForm.requestedQuantity}
+              onChange={(e) => setItemForm({ ...itemForm, requestedQuantity: e.target.value })}
+              min="1"
+              placeholder="Optional"
+            />
+            <Input
+              label="Description"
+              value={itemForm.description}
+              onChange={(e) => setItemForm({ ...itemForm, description: e.target.value })}
+              placeholder="Optional description"
+            />
+          </div>
           <Input
             label="Remarks"
             value={itemForm.remarks}
             onChange={(e) => setItemForm({ ...itemForm, remarks: e.target.value })}
             placeholder="Optional"
           />
-          <div className="flex gap-2 justify-end pt-4">
+          <div className="flex gap-2 justify-end pt-2">
             <Button onClick={() => setIsAddItemModalOpen(false)} variant="outline">
               Cancel
             </Button>

@@ -294,10 +294,26 @@ const MaterialRequestDetails = () => {
       if (response.success) {
         toast.success(`Material request ${isEditMode ? 'updated' : 'created'} successfully!`)
         navigate('/material-request')
+      } else {
+        // Handle validation errors from backend
+        if (response.errors && Array.isArray(response.errors)) {
+          const errorMessages = response.errors.map(err => err.message || err.msg).join(', ')
+          toast.error(errorMessages || response.message || `Failed to ${isEditMode ? 'update' : 'create'} material request`)
+        } else {
+          toast.error(response.message || `Failed to ${isEditMode ? 'update' : 'create'} material request`)
+        }
       }
     } catch (error) {
       console.error('Error saving material request:', error)
-      toast.error(error.message || `Failed to ${isEditMode ? 'update' : 'create'} material request`)
+      // Handle error response with validation errors
+      if (error.errors && Array.isArray(error.errors)) {
+        const errorMessages = error.errors.map(err => err.message || err.msg || err).join(', ')
+        toast.error(errorMessages || error.message || `Failed to ${isEditMode ? 'update' : 'create'} material request`)
+      } else if (error.message) {
+        toast.error(error.message || `Failed to ${isEditMode ? 'update' : 'create'} material request`)
+      } else {
+        toast.error(`Failed to ${isEditMode ? 'update' : 'create'} material request`)
+      }
     } finally {
       setLoading(false)
     }
