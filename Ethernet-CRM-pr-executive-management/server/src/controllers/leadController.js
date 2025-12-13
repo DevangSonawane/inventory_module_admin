@@ -10,13 +10,13 @@ import CustomerDetails from '../models/CustomerDetails.js';
 import GIS from '../models/GIS.js';
 import LeadKyc from '../models/LeadKyc.js';
 import fs from 'fs'
-import { validationResult } from 'express-validator';
+// validationResult removed - using validate middleware in routes instead
 import bcrypt from 'bcryptjs';
 import { Op, Sequelize } from 'sequelize';
 import { leadStatus, gisStatus } from '../utils/leadHelpers.js';
 
 // Add Expense
-export const addExpense = async (req, res) => {
+export const addExpense = async (req, res, next) => {
   try {
     const { user, category, amount, distanceTravelled } = req.body;
     const billImages = req.files.map(file => {
@@ -35,11 +35,25 @@ export const addExpense = async (req, res) => {
       if (distanceTravelled < 30) {
         const hour = new Date().getHours();
         if (hour >= 21) {
-          return res.status(400).json({ message: 'Less than 30 Km travelled, bill rejected.' });
+          return res.status(400).json({
+            success: false,
+            message: 'Less than 30 Km travelled, bill rejected.',
+            code: 'VALIDATION_ERROR'
+          });
         }
-        return res.status(400).json({ message: 'Food expense allowed only if distance travelled > 30 km' });
+        return res.status(400).json({
+          success: false,
+          message: 'Food expense allowed only if distance travelled > 30 km',
+          code: 'VALIDATION_ERROR'
+        });
       }
-      if (amount > 120) return res.status(400).json({ message: 'Max amount for food is Rs. 120' });
+      if (amount > 120) {
+        return res.status(400).json({
+          success: false,
+          message: 'Max amount for food is Rs. 120',
+          code: 'VALIDATION_ERROR'
+        });
+      }
     }
     // user is already a JSON string from the frontend (e.g., '{"employeCode":"ABC123","name":"John"}')
     // Check if it's already a valid JSON string - if so, store it directly without stringifying again
@@ -66,15 +80,18 @@ export const addExpense = async (req, res) => {
       user: userToStore
     });
 
-    res.json({ message: 'Expense added', expense });
+    res.status(201).json({
+      success: true,
+      message: 'Expense added',
+      data: expense
+    });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Issue in adding Expense- ' + err });
+    next(err);
   }
 };
 
 // Get Expenses (paginated + optional employeCode filter)
-export const getExpenses = async (req, res) => {
+export const getExpenses = async (req, res, next) => {
   try {
     const { employeCode, page = 1, limit = 10 } = req.query;
 
@@ -113,25 +130,26 @@ export const getExpenses = async (req, res) => {
       console.log('Sample expense user field:', expenses[0].user);
     }
 
-    res.json({
-      expenses,
-      pagination: {
-        total,
-        page: parseInt(page),
-        limit: parseInt(limit),
-        totalPages: Math.ceil(total / limit)
+    res.status(200).json({
+      success: true,
+      data: {
+        expenses,
+        pagination: {
+          total,
+          page: parseInt(page),
+          limit: parseInt(limit),
+          totalPages: Math.ceil(total / limit)
+        }
       }
     });
-
   } catch (err) {
-    console.error('Error in getExpenses:', err);
-    res.status(500).json({ message: 'Error in fetching - ' + err.message });
+    next(err);
   }
 };
 
 
 // Get Expenses (all or by employeCode)
-export const getSurvey = async (req, res) => {
+export const getSurvey = async (req, res, next) => {
   try {
     const { page = 1, limit = 10 } = req.query;
     const offset = (parseInt(page) - 1) * parseInt(limit);
@@ -141,24 +159,24 @@ export const getSurvey = async (req, res) => {
       limit: parseInt(limit)
     });
 
-    res.json({
-      survey: rows,
-      pagination: {
-        total,
-        page: parseInt(page),
-        limit: parseInt(limit),
-        totalPages: Math.ceil(total / limit)
+    res.status(200).json({
+      success: true,
+      data: {
+        survey: rows,
+        pagination: {
+          total,
+          page: parseInt(page),
+          limit: parseInt(limit),
+          totalPages: Math.ceil(total / limit)
+        }
       }
     });
-
   } catch (error) {
-    console.log(error)
-    res.status(500).json({ message: 'Error fetching surveys', error });
+    next(error);
   }
-
 }
 
-export const getSurveyById = async (req, res) => {
+export const getSurveyById = async (req, res, next) => {
   try {
     const { id } = req.params;
     const survey = await Survey.findByPk(id, {
@@ -168,28 +186,25 @@ export const getSurveyById = async (req, res) => {
     });
 
     if (!survey) {
-      return res.status(404).json({ message: 'Survey not found' });
+      return res.status(404).json({
+        success: false,
+        message: 'Survey not found',
+        code: 'SURVEY_NOT_FOUND'
+      });
     }
 
-    res.json(survey);
+    res.status(200).json({
+      success: true,
+      data: survey
+    });
   } catch (error) {
-    console.error('Error fetching survey by id:', error);
-    res.status(500).json({ message: 'Error fetching survey', error });
+    next(error);
   }
 }
 
-export const addSurvey = async (req, res) => {
+export const addSurvey = async (req, res, next) => {
   try {
-    // Check if user is authenticated
-    if (!req.user || !req.user.id) {
-      return res.status(401).json({
-        message: 'User authentication required',
-        debug: {
-          hasReqUser: !!req.user,
-          userId: req.user?.id
-        }
-      });
-    }
+    // req.user is guaranteed by authenticate middleware in route
 
     const {
       id,
@@ -223,7 +238,11 @@ export const addSurvey = async (req, res) => {
     if (id) {
       survey = await Survey.findByPk(id);
       if (!survey) {
-        return res.status(404).json({ message: 'Survey not found' });
+        return res.status(404).json({
+          success: false,
+          message: 'Survey not found',
+          code: 'SURVEY_NOT_FOUND'
+        });
       }
 
       // Update the survey
@@ -275,22 +294,24 @@ export const addSurvey = async (req, res) => {
     const payoutThisMonth = (surveysThisMonth * payoutPerSurvey).toFixed(2);
 
     res.status(isUpdate ? 200 : 201).json({
+      success: true,
       message: isUpdate ? 'Survey updated successfully' : 'Survey saved successfully',
-      survey,
-      stats: {
-        surveysToday,
-        surveysThisMonth,
-        payoutToday: parseFloat(payoutToday),
-        payoutThisMonth: parseFloat(payoutThisMonth),
-        payoutPerSurvey
+      data: {
+        survey,
+        stats: {
+          surveysToday,
+          surveysThisMonth,
+          payoutToday: parseFloat(payoutToday),
+          payoutThisMonth: parseFloat(payoutThisMonth),
+          payoutPerSurvey
+        }
       }
     });
   } catch (error) {
-    console.error('Error in addSurvey:', error);
-    res.status(500).json({ message: 'Error saving survey', error });
+    next(error);
   }
 }
-export const getSummary = async (req, res) => {
+export const getSummary = async (req, res, next) => {
   try {
     const surveys = await Survey.findAll();
     const totalResponses = surveys.length;
@@ -348,57 +369,82 @@ export const getSummary = async (req, res) => {
       };
     });
 
-    res.json({
-      totalResponses,
-      ratings,
-      heardFrom,
-      likedFeaturesCount,
-      topPayoutUsers: formattedTopUsers
+    res.status(200).json({
+      success: true,
+      data: {
+        totalResponses,
+        ratings,
+        heardFrom,
+        likedFeaturesCount,
+        topPayoutUsers: formattedTopUsers
+      }
     });
   } catch (error) {
-    console.error('Error fetching summary:', error);
-    res.status(500).json({ message: 'Error fetching summary', error });
+    next(error);
   }
 }
 // Approve or Reject Expense
-export const approveExpense = async (req, res) => {
+export const approveExpense = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { status } = req.body; // 'Approved' or 'Rejected'
-    if (!['Approved', 'Rejected'].includes(status))
-      return res.status(400).json({ message: 'Invalid status' });
+    if (!['Approved', 'Rejected'].includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid status',
+        code: 'VALIDATION_ERROR'
+      });
+    }
 
     const expense = await Expense.findByPk(id);
-    if (!expense) return res.status(404).json({ message: 'Expense not found' });
+    if (!expense) {
+      return res.status(404).json({
+        success: false,
+        message: 'Expense not found',
+        code: 'EXPENSE_NOT_FOUND'
+      });
+    }
 
     expense.status = status;
     await expense.save();
 
-    res.json({ message: 'Expense updated', expense });
+    res.status(200).json({
+      success: true,
+      message: 'Expense updated',
+      data: expense
+    });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Server Error' + err });
+    next(err);
   }
 };
 
-export const postExecutiveManagement = async (req, res) => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
-
+export const postExecutiveManagement = async (req, res, next) => {
   try {
     const { id } = req.params; // if present, means update
     const { name, employeCode, phoneNumber, email, password, roleId, moduleIds, isActive } = req.body;
 
     // Check role
     const role = await Role.findByPk(roleId);
-    if (!role) return res.status(404).json({ message: 'Role not found' });
+    if (!role) {
+      return res.status(404).json({
+        success: false,
+        message: 'Role not found',
+        code: 'ROLE_NOT_FOUND'
+      });
+    }
 
     let user;
 
     if (id) {
       // ✏️ UPDATE
       user = await User.findByPk(id);
-      if (!user) return res.status(404).json({ message: 'User not found' });
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: 'User not found',
+          code: 'USER_NOT_FOUND'
+        });
+      }
 
       const updateData = { name, employeCode, phoneNumber, email, password, role_id: roleId };
       // Allow updating isActive if provided
@@ -412,7 +458,11 @@ export const postExecutiveManagement = async (req, res) => {
       if (moduleIds && moduleIds.length) {
         const modules = await Module.findAll({ where: { id: moduleIds } });
         if (modules.length !== moduleIds.length) {
-          return res.status(404).json({ message: 'Some modules not found' });
+          return res.status(404).json({
+            success: false,
+            message: 'Some modules not found',
+            code: 'MODULES_NOT_FOUND'
+          });
         }
         await user.setModules(modules);
       }
@@ -431,7 +481,11 @@ export const postExecutiveManagement = async (req, res) => {
       if (moduleIds && moduleIds.length) {
         const modules = await Module.findAll({ where: { id: moduleIds } });
         if (modules.length !== moduleIds.length) {
-          return res.status(404).json({ message: 'Some modules not found' });
+          return res.status(404).json({
+            success: false,
+            message: 'Some modules not found',
+            code: 'MODULES_NOT_FOUND'
+          });
         }
         await user.setModules(modules);
       }
@@ -444,61 +498,42 @@ export const postExecutiveManagement = async (req, res) => {
       ]
     });
 
-    res.status(id ? 200 : 201).json(userData);
-  } catch (err) {
-    console.error(err);
-
-    // Handle duplicate entry errors
-    if (err.name === 'SequelizeUniqueConstraintError') {
-      const field = err.fields;
-      let message = 'User already exists with this ';
-
-      if (field.phone_number) {
-        message += 'phone number';
-      } else if (field.email) {
-        message += 'email';
-      } else if (field.employee_code) {
-        message += 'employee code';
-      } else {
-        message = 'User already exists';
-      }
-
-      return res.status(409).json({
-        success: false,
-        message,
-        field
-      });
-    }
-
-    res.status(500).json({
-      success: false,
-      message: 'Server Error'
+    res.status(id ? 200 : 201).json({
+      success: true,
+      message: id ? 'User updated successfully' : 'User created successfully',
+      data: userData
     });
+  } catch (err) {
+    next(err); // Let errorHandler middleware process all errors including SequelizeUniqueConstraintError
   }
 };
 
 // 🗑️ Delete Executive Management (Soft Delete - sets isActive to false)
-export const deleteExecutiveManagement = async (req, res) => {
+export const deleteExecutiveManagement = async (req, res, next) => {
   try {
     const { id } = req.params;
     const user = await User.findByPk(id);
-    if (!user) return res.status(404).json({ message: 'User not found' });
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found',
+        code: 'USER_NOT_FOUND'
+      });
+    }
 
     // Set isActive to false instead of destroying the user
     await user.update({ isActive: false });
-    res.json({ message: 'User deactivated successfully' });
+    res.status(200).json({
+      success: true,
+      message: 'User deactivated successfully'
+    });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Server Error' });
+    next(err);
   }
 };
 
-export async function resetPassword(req, res) {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    return res.status(400).json({ errors: errors.array() });
-  }
-
+export async function resetPassword(req, res, next) {
+  // Validation is handled by validate middleware in route
   const userId = req.params.id;
   const { oldPassword, newPassword } = req.body;
 
@@ -506,18 +541,30 @@ export async function resetPassword(req, res) {
     // Sequelize method to find user by primary key
     const user = await User.findByPk(userId);
     if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+      return res.status(404).json({
+        success: false,
+        message: 'User not found',
+        code: 'USER_NOT_FOUND'
+      });
     }
 
     // Check if user is active
     if (!user.isActive) {
-      return res.status(403).json({ message: 'Cannot reset password for inactive user' });
+      return res.status(403).json({
+        success: false,
+        message: 'Cannot reset password for inactive user',
+        code: 'ACCOUNT_DEACTIVATED'
+      });
     }
 
     // Compare old password with hashed password in DB
     const isMatch = await bcrypt.compare(oldPassword, user.password);
     if (!isMatch) {
-      return res.status(400).json({ message: 'Old password is incorrect' });
+      return res.status(400).json({
+        success: false,
+        message: 'Old password is incorrect',
+        code: 'INVALID_PASSWORD'
+      });
     }
 
     // Hash the new password
@@ -528,14 +575,16 @@ export async function resetPassword(req, res) {
     user.password = hashedPassword;
     await user.save();
 
-    return res.json({ message: 'Password updated successfully' });
+    return res.status(200).json({
+      success: true,
+      message: 'Password updated successfully'
+    });
   } catch (err) {
-    console.error(err);
-    return res.status(500).json({ message: 'Server error' });
+    next(err);
   }
 }
 
-export const getExecutiveManagement = async (req, res) => {
+export const getExecutiveManagement = async (req, res, next) => {
   try {
     const users = await User.findAll({
       where: { isActive: true }, // Only return active users
@@ -545,13 +594,15 @@ export const getExecutiveManagement = async (req, res) => {
         { model: Module, attributes: ['id', 'name'], through: { attributes: [] } }
       ]
     });
-    res.json(users);
+    res.status(200).json({
+      success: true,
+      data: users
+    });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Server Error' });
+    next(err);
   }
 }
-export const getEMById = async (req, res) => {
+export const getEMById = async (req, res, next) => {
   try {
     const user = await User.findByPk(req.params.id, {
       include: [
@@ -560,26 +611,27 @@ export const getEMById = async (req, res) => {
       ]
     });
 
-    if (!user) return res.status(404).json({ message: 'User not found' });
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found',
+        code: 'USER_NOT_FOUND'
+      });
+    }
 
-    res.json(user);
+    res.status(200).json({
+      success: true,
+      data: user
+    });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Server Error' });
+    next(err);
   }
 }
 
 // Create or Update Lead
-export const createLead = async (req, res) => {
+export const createLead = async (req, res, next) => {
   try {
-    // Check if user is authenticated
-    if (!req.user || !req.user.id) {
-      return res.status(401).json({
-        success: false,
-        message: 'User authentication required'
-      });
-    }
-
+    // req.user is guaranteed by authenticate middleware in route
     const {
       id,
       name,
@@ -593,20 +645,22 @@ export const createLead = async (req, res) => {
     // Get sales_executive from token (authenticated user) or from request body if provided
     const salesExecutiveId = sales_executive || req.user.id;
 
-    // Validate required fields
+    // Validate required fields (validation middleware should handle this, but keeping as backup)
     if (!name || !phone_number || !address || !source || !service_type) {
       return res.status(400).json({
         success: false,
-        message: 'Missing required fields: name, phone_number, address, source, service_type are required'
+        message: 'Missing required fields: name, phone_number, address, source, service_type are required',
+        code: 'VALIDATION_ERROR'
       });
     }
 
-    // Validate service_type enum
+    // Validate service_type enum (validation middleware should handle this, but keeping as backup)
     const validServiceTypes = ['SME', 'BROADBAND', 'LEASEDLINE'];
     if (!validServiceTypes.includes(service_type)) {
       return res.status(400).json({
         success: false,
-        message: `Invalid service_type. Must be one of: ${validServiceTypes.join(', ')}`
+        message: `Invalid service_type. Must be one of: ${validServiceTypes.join(', ')}`,
+        code: 'VALIDATION_ERROR'
       });
     }
 
@@ -615,7 +669,8 @@ export const createLead = async (req, res) => {
     if (!salesExecutive) {
       return res.status(404).json({
         success: false,
-        message: 'Sales executive (user) not found'
+        message: 'Sales executive (user) not found',
+        code: 'USER_NOT_FOUND'
       });
     }
 
@@ -632,7 +687,8 @@ export const createLead = async (req, res) => {
       if (existingLead) {
         return res.status(409).json({
           success: false,
-          message: 'A lead with this phone number already exists'
+          message: 'A lead with this phone number already exists',
+          code: 'DUPLICATE_LEAD'
         });
       }
     } else {
@@ -644,7 +700,8 @@ export const createLead = async (req, res) => {
       if (existingLead) {
         return res.status(409).json({
           success: false,
-          message: 'A lead with this phone number already exists'
+          message: 'A lead with this phone number already exists',
+          code: 'DUPLICATE_LEAD'
         });
       }
     }
@@ -658,7 +715,8 @@ export const createLead = async (req, res) => {
       if (!lead) {
         return res.status(404).json({
           success: false,
-          message: 'Lead not found'
+          message: 'Lead not found',
+          code: 'LEAD_NOT_FOUND'
         });
       }
 
@@ -732,17 +790,12 @@ export const createLead = async (req, res) => {
       data: leadWithDetails
     });
   } catch (err) {
-    console.error('Error creating/updating lead:', err);
-    res.status(500).json({
-      success: false,
-      message: 'Error creating/updating lead',
-      error: err.message
-    });
+    next(err); // Let errorHandler middleware process it
   }
 };
 
 // Get Lead by Unique ID
-export const getLeadByUniqueId = async (req, res) => {
+export const getLeadByUniqueId = async (req, res, next) => {
   try {
     const { unique_id } = req.params;
 
@@ -785,7 +838,8 @@ export const getLeadByUniqueId = async (req, res) => {
     if (!lead) {
       return res.status(404).json({
         success: false,
-        message: 'Lead not found with the provided unique ID'
+        message: 'Lead not found with the provided unique ID',
+        code: 'LEAD_NOT_FOUND'
       });
     }
 
@@ -794,17 +848,12 @@ export const getLeadByUniqueId = async (req, res) => {
       data: lead
     });
   } catch (err) {
-    console.error('Error fetching lead by unique ID:', err);
-    res.status(500).json({
-      success: false,
-      message: 'Error fetching lead',
-      error: err.message
-    });
+    next(err);
   }
 };
 
 // Get All Leads with Pagination
-export const getAllLeads = async (req, res) => {
+export const getAllLeads = async (req, res, next) => {
   try {
     const {
       page = 1,
@@ -990,56 +1039,53 @@ export const getAllLeads = async (req, res) => {
       }
     }
 
+    // Handle pagination edge cases
+    const totalPages = Math.ceil(finalCount / limitNumber);
+    const validPage = Math.min(pageNumber, Math.max(1, totalPages || 1));
+
     res.status(200).json({
       success: true,
       data: {
         leads: filteredLeads,
         pagination: {
-          currentPage: pageNumber,
-          totalPages: Math.ceil(finalCount / limitNumber),
+          currentPage: validPage,
+          totalPages: totalPages || 0,
           totalItems: finalCount,
-          itemsPerPage: limitNumber
+          itemsPerPage: limitNumber,
+          hasNextPage: validPage < totalPages,
+          hasPreviousPage: validPage > 1
         }
       }
     });
   } catch (err) {
     console.error('Error fetching leads:', err);
-    res.status(500).json({
-      success: false,
-      message: 'Error fetching leads',
-      error: err.message
-    });
+    next(err);
   }
 };
 
 // Update Lead Status
-export const updateLeadStatus = async (req, res) => {
+export const updateLeadStatus = async (req, res, next) => {
   try {
-    // Check if user is authenticated
-    if (!req.user || !req.user.id) {
-      return res.status(401).json({
-        success: false,
-        message: 'User authentication required'
-      });
-    }
-
+    // req.user is guaranteed by authenticate middleware in route
     const { unique_id } = req.params; // Lead unique_id from URL
     const { status } = req.body;
 
-    // Validate status is provided
+    // Validate status is provided (validation middleware should handle this, but keeping as backup)
     if (!status) {
       return res.status(400).json({
         success: false,
-        message: 'Status is required'
+        message: 'Status is required',
+        code: 'VALIDATION_ERROR'
       });
     }
 
-    // Validate status is a valid enum value
+    // Validate status is a valid enum value (validation middleware should handle this, but keeping as backup)
     const validStatuses = Object.values(leadStatus);
     if (!validStatuses.includes(status)) {
       return res.status(400).json({
         success: false,
-        message: `Invalid status. Must be one of: ${validStatuses.join(', ')}`
+        message: `Invalid status. Must be one of: ${validStatuses.join(', ')}`,
+        code: 'VALIDATION_ERROR'
       });
     }
 
@@ -1048,7 +1094,8 @@ export const updateLeadStatus = async (req, res) => {
     if (!lead) {
       return res.status(404).json({
         success: false,
-        message: 'Lead not found'
+        message: 'Lead not found',
+        code: 'LEAD_NOT_FOUND'
       });
     }
 
@@ -1075,25 +1122,14 @@ export const updateLeadStatus = async (req, res) => {
       data: leadWithDetails
     });
   } catch (err) {
-    console.error('Error updating lead status:', err);
-    res.status(500).json({
-      success: false,
-      message: 'Error updating lead status',
-      error: err.message
-    });
+    next(err); // Let errorHandler middleware process it
   }
 };
 
 // Create or Update Customer Details
-export const createOrUpdateCustomerDetails = async (req, res) => {
+export const createOrUpdateCustomerDetails = async (req, res, next) => {
   try {
-    // Check if user is authenticated
-    if (!req.user || !req.user.id) {
-      return res.status(401).json({
-        success: false,
-        message: 'User authentication required'
-      });
-    }
+    // req.user is guaranteed by authenticate middleware in route
 
     const { unique_id } = req.params;
     const {
@@ -1133,18 +1169,20 @@ export const createOrUpdateCustomerDetails = async (req, res) => {
       telephone_line_required
     } = req.body;
 
-    // Validate required fields
+    // Validate required fields (validation middleware should handle this, but keeping as backup)
     if (!unique_id) {
       return res.status(400).json({
         success: false,
-        message: 'Unique ID is required'
+        message: 'Unique ID is required',
+        code: 'VALIDATION_ERROR'
       });
     }
 
     if (!first_name) {
       return res.status(400).json({
         success: false,
-        message: 'First name is required'
+        message: 'First name is required',
+        code: 'VALIDATION_ERROR'
       });
     }
 
@@ -1155,7 +1193,8 @@ export const createOrUpdateCustomerDetails = async (req, res) => {
     if (!lead) {
       return res.status(404).json({
         success: false,
-        message: 'Lead not found'
+        message: 'Lead not found',
+        code: 'LEAD_NOT_FOUND'
       });
     }
 
@@ -1170,14 +1209,16 @@ export const createOrUpdateCustomerDetails = async (req, res) => {
       if (!customerDetails) {
         return res.status(404).json({
           success: false,
-          message: 'Customer details not found with the provided ID'
+          message: 'Customer details not found with the provided ID',
+          code: 'CUSTOMER_DETAILS_NOT_FOUND'
         });
       }
       // Verify that the customer details belong to the lead specified by unique_id
       if (customerDetails.lead_id !== lead_id) {
         return res.status(400).json({
           success: false,
-          message: 'Customer details ID does not match the lead unique_id'
+          message: 'Customer details ID does not match the lead unique_id',
+          code: 'VALIDATION_ERROR'
         });
       }
       isUpdate = true;
@@ -1280,24 +1321,20 @@ export const createOrUpdateCustomerDetails = async (req, res) => {
       data: customerDetailsWithLead
     });
   } catch (err) {
-    console.error('Error creating/updating customer details:', err);
-    res.status(500).json({
-      success: false,
-      message: 'Error creating/updating customer details',
-      error: err.message
-    });
+    next(err);
   }
 };
 
 // Get Customer Details by Lead ID
-export const getCustomerDetailsByLeadId = async (req, res) => {
+export const getCustomerDetailsByLeadId = async (req, res, next) => {
   try {
     const { unique_id } = req.params;
 
     if (!unique_id) {
       return res.status(400).json({
         success: false,
-        message: 'Lead unique ID is required'
+        message: 'Lead unique ID is required',
+        code: 'VALIDATION_ERROR'
       });
     }
 
@@ -1316,7 +1353,8 @@ export const getCustomerDetailsByLeadId = async (req, res) => {
     if (!lead) {
       return res.status(404).json({
         success: false,
-        message: 'Lead not found'
+        message: 'Lead not found',
+        code: 'LEAD_NOT_FOUND'
       });
     }
 
@@ -1354,7 +1392,8 @@ export const getCustomerDetailsByLeadId = async (req, res) => {
     if (!customerDetails) {
       return res.status(404).json({
         success: false,
-        message: 'Customer details not found for this lead'
+        message: 'Customer details not found for this lead',
+        code: 'CUSTOMER_DETAILS_NOT_FOUND'
       });
     }
 
@@ -1363,24 +1402,20 @@ export const getCustomerDetailsByLeadId = async (req, res) => {
       data: customerDetails
     });
   } catch (err) {
-    console.error('Error fetching customer details:', err);
-    res.status(500).json({
-      success: false,
-      message: 'Error fetching customer details',
-      error: err.message
-    });
+    next(err);
   }
 };
 
 // Send Customer Details Link
-export const sendCustomerDetailsFrom = async (req, res) => {
+export const sendCustomerDetailsFrom = async (req, res, next) => {
   try {
     const { leadId } = req.params;
 
     if (!leadId) {
       return res.status(400).json({
         success: false,
-        message: 'Lead ID is required'
+        message: 'Lead ID is required',
+        code: 'VALIDATION_ERROR'
       });
     }
 
@@ -1390,7 +1425,8 @@ export const sendCustomerDetailsFrom = async (req, res) => {
     if (!lead) {
       return res.status(404).json({
         success: false,
-        message: 'Lead not found'
+        message: 'Lead not found',
+        code: 'LEAD_NOT_FOUND'
       });
     }
 
@@ -1409,25 +1445,14 @@ export const sendCustomerDetailsFrom = async (req, res) => {
       lead_id: lead.id
     });
   } catch (err) {
-    console.error('Error sending customer details link:', err);
-    res.status(500).json({
-      success: false,
-      message: 'Error sending customer details link',
-      error: err.message
-    });
+    next(err);
   }
 };
 
 // Update GIS Status
-export const gisStatusChange = async (req, res) => {
+export const gisStatusChange = async (req, res, next) => {
   try {
-    // Check if user is authenticated
-    if (!req.user || !req.user.id) {
-      return res.status(401).json({
-        success: false,
-        message: 'User authentication required'
-      });
-    }
+    // req.user is guaranteed by authenticate middleware in route
 
     const {
       status,
@@ -1437,27 +1462,30 @@ export const gisStatusChange = async (req, res) => {
       optical_type
     } = req.body;
 
-    // Validate required fields
+    // Validate required fields (validation middleware should handle this, but keeping as backup)
     if (!status) {
       return res.status(400).json({
         success: false,
-        message: 'Status is required'
+        message: 'Status is required',
+        code: 'VALIDATION_ERROR'
       });
     }
 
     if (!lead_id) {
       return res.status(400).json({
         success: false,
-        message: 'Lead ID (unique_id) is required'
+        message: 'Lead ID (unique_id) is required',
+        code: 'VALIDATION_ERROR'
       });
     }
 
-    // Validate status enum
+    // Validate status enum (validation middleware should handle this, but keeping as backup)
     const validStatuses = Object.values(gisStatus);
     if (!validStatuses.includes(status)) {
       return res.status(400).json({
         success: false,
-        message: `Invalid status. Must be one of: ${validStatuses.join(', ')}`
+        message: `Invalid status. Must be one of: ${validStatuses.join(', ')}`,
+        code: 'VALIDATION_ERROR'
       });
     }
 
@@ -1480,16 +1508,18 @@ export const gisStatusChange = async (req, res) => {
       if (isNaN(distanceValue) || distanceValue < 0) {
         return res.status(400).json({
           success: false,
-          message: 'Distance must be a valid positive number'
+          message: 'Distance must be a valid positive number',
+          code: 'VALIDATION_ERROR'
         });
       }
     }
 
-    // Validate optical_type if provided
+    // Validate optical_type if provided (validation middleware should handle this, but keeping as backup)
     if (optical_type && !['GPON', 'EPON', 'Media convertor'].includes(optical_type)) {
       return res.status(400).json({
         success: false,
-        message: 'Invalid optical type. Must be one of: GPON, EPON, Media convertor'
+        message: 'Invalid optical type. Must be one of: GPON, EPON, Media convertor',
+        code: 'VALIDATION_ERROR'
       });
     }
 
@@ -1568,17 +1598,12 @@ export const gisStatusChange = async (req, res) => {
       data: gisRecordWithLead
     });
   } catch (err) {
-    console.error('Error updating GIS status:', err);
-    res.status(500).json({
-      success: false,
-      message: 'Error updating GIS status',
-      error: err.message
-    });
+    next(err);
   }
 };
 
 // Submit KYC
-export const submitKyc = async (req, res) => {
+export const submitKyc = async (req, res, next) => {
   try {
     const { unique_id } = req.params;
     const {
@@ -1595,39 +1620,44 @@ export const submitKyc = async (req, res) => {
     const addressProofFile = files.address_proof_document?.[0];
     const signatureFile = files.signature?.[0];
 
-    // Validate required fields
+    // Validate required fields (validation middleware should handle this, but keeping as backup)
     if (!id_type || !id_number) {
       return res.status(400).json({
         success: false,
-        message: 'ID type and ID number are required'
+        message: 'ID type and ID number are required',
+        code: 'VALIDATION_ERROR'
       });
     }
 
     if (!idDocumentFile) {
       return res.status(400).json({
         success: false,
-        message: 'ID document file is required'
+        message: 'ID document file is required',
+        code: 'VALIDATION_ERROR'
       });
     }
 
     if (!address_proof_type) {
       return res.status(400).json({
         success: false,
-        message: 'Address proof type is required'
+        message: 'Address proof type is required',
+        code: 'VALIDATION_ERROR'
       });
     }
 
     if (!addressProofFile) {
       return res.status(400).json({
         success: false,
-        message: 'Address proof document file is required'
+        message: 'Address proof document file is required',
+        code: 'VALIDATION_ERROR'
       });
     }
 
     if (!signatureFile) {
       return res.status(400).json({
         success: false,
-        message: 'Signature file is required'
+        message: 'Signature file is required',
+        code: 'VALIDATION_ERROR'
       });
     }
 
@@ -1636,7 +1666,8 @@ export const submitKyc = async (req, res) => {
     if (!isTermsAccepted) {
       return res.status(400).json({
         success: false,
-        message: 'Terms and conditions must be accepted'
+        message: 'Terms and conditions must be accepted',
+        code: 'VALIDATION_ERROR'
       });
     }
 
@@ -1658,7 +1689,8 @@ export const submitKyc = async (req, res) => {
     if (!lead) {
       return res.status(404).json({
         success: false,
-        message: 'Lead not found with the provided unique_id'
+        message: 'Lead not found with the provided unique_id',
+        code: 'LEAD_NOT_FOUND'
       });
     }
 
@@ -1723,11 +1755,6 @@ export const submitKyc = async (req, res) => {
       data: kycRecordWithLead
     });
   } catch (err) {
-    console.error('Error submitting KYC:', err);
-    res.status(500).json({
-      success: false,
-      message: 'Error submitting KYC information',
-      error: err.message
-    });
+    next(err);
   }
 };

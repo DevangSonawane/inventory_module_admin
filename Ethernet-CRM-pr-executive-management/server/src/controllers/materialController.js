@@ -1,12 +1,12 @@
 import Material from '../models/Material.js';
-import { validationResult } from 'express-validator';
+// validationResult removed - using validate middleware in routes instead
 import { Op } from 'sequelize';
 
 /**
  * Get all materials with filtering and pagination
  * GET /api/inventory/materials
  */
-export const getAllMaterials = async (req, res) => {
+export const getAllMaterials = async (req, res, next) => {
   try {
     const {
       page = 1,
@@ -65,12 +65,7 @@ export const getAllMaterials = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error fetching materials:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to fetch materials',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -78,7 +73,7 @@ export const getAllMaterials = async (req, res) => {
  * Get single material by ID
  * GET /api/inventory/materials/:id
  */
-export const getMaterialById = async (req, res) => {
+export const getMaterialById = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -91,7 +86,8 @@ export const getMaterialById = async (req, res) => {
     if (!material) {
       return res.status(404).json({
         success: false,
-        message: 'Material not found'
+        message: 'Material not found',
+        code: 'MATERIAL_NOT_FOUND'
       });
     }
 
@@ -100,12 +96,7 @@ export const getMaterialById = async (req, res) => {
       data: material
     });
   } catch (error) {
-    console.error('Error fetching material:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to fetch material',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -113,12 +104,9 @@ export const getMaterialById = async (req, res) => {
  * Create new material
  * POST /api/inventory/materials
  */
-export const createMaterial = async (req, res) => {
+export const createMaterial = async (req, res, next) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ success: false, errors: errors.array() });
-    }
+    // Validation is handled by validate middleware in route
 
     const { 
       materialName, 
@@ -151,9 +139,10 @@ export const createMaterial = async (req, res) => {
     });
 
     if (existingMaterial) {
-      return res.status(400).json({
+      return res.status(409).json({
         success: false,
-        message: 'Material with this product code already exists'
+        message: 'Material with this product code already exists',
+        code: 'UNIQUE_CONSTRAINT_ERROR'
       });
     }
 
@@ -180,12 +169,7 @@ export const createMaterial = async (req, res) => {
       data: material
     });
   } catch (error) {
-    console.error('Error creating material:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to create material',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -193,12 +177,9 @@ export const createMaterial = async (req, res) => {
  * Update material
  * PUT /api/inventory/materials/:id
  */
-export const updateMaterial = async (req, res) => {
+export const updateMaterial = async (req, res, next) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ success: false, errors: errors.array() });
-    }
+    // Validation is handled by validate middleware in route
 
     const { id } = req.params;
     const { 
@@ -225,7 +206,8 @@ export const updateMaterial = async (req, res) => {
     if (!material) {
       return res.status(404).json({
         success: false,
-        message: 'Material not found'
+        message: 'Material not found',
+        code: 'MATERIAL_NOT_FOUND'
       });
     }
 
@@ -255,9 +237,10 @@ export const updateMaterial = async (req, res) => {
       });
 
       if (existingMaterial) {
-        return res.status(400).json({
+        return res.status(409).json({
           success: false,
-          message: 'Material with this product code already exists'
+          message: 'Material with this product code already exists',
+          code: 'UNIQUE_CONSTRAINT_ERROR'
         });
       }
     }
@@ -283,12 +266,7 @@ export const updateMaterial = async (req, res) => {
       data: material
     });
   } catch (error) {
-    console.error('Error updating material:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to update material',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -296,7 +274,7 @@ export const updateMaterial = async (req, res) => {
  * Delete material (soft delete)
  * DELETE /api/inventory/materials/:id
  */
-export const deleteMaterial = async (req, res) => {
+export const deleteMaterial = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -309,7 +287,8 @@ export const deleteMaterial = async (req, res) => {
     if (!material) {
       return res.status(404).json({
         success: false,
-        message: 'Material not found'
+        message: 'Material not found',
+        code: 'MATERIAL_NOT_FOUND'
       });
     }
 
@@ -322,12 +301,7 @@ export const deleteMaterial = async (req, res) => {
       message: 'Material deleted successfully'
     });
   } catch (error) {
-    console.error('Error deleting material:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to delete material',
-      error: error.message
-    });
+    next(error);
   }
 };
 

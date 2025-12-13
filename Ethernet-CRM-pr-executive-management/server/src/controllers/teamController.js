@@ -1,6 +1,6 @@
 import Team from '../models/Team.js';
 import Group from '../models/Group.js';
-import { validationResult } from 'express-validator';
+// validationResult removed - using validate middleware in routes instead
 import { Op } from 'sequelize';
 import sequelize from '../config/database.js';
 
@@ -8,7 +8,7 @@ import sequelize from '../config/database.js';
  * Get all teams
  * GET /api/admin/teams
  */
-export const getAllTeams = async (req, res) => {
+export const getAllTeams = async (req, res, next) => {
   try {
     const {
       page = 1,
@@ -69,12 +69,7 @@ export const getAllTeams = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error fetching teams:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to fetch teams',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -82,7 +77,7 @@ export const getAllTeams = async (req, res) => {
  * Get teams by group ID
  * GET /api/admin/teams/group/:groupId
  */
-export const getTeamsByGroup = async (req, res) => {
+export const getTeamsByGroup = async (req, res, next) => {
   try {
     const { groupId } = req.params;
 
@@ -111,12 +106,7 @@ export const getTeamsByGroup = async (req, res) => {
       data: { teams }
     });
   } catch (error) {
-    console.error('Error fetching teams by group:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to fetch teams',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -124,7 +114,7 @@ export const getTeamsByGroup = async (req, res) => {
  * Get single team by ID
  * GET /api/admin/teams/:id
  */
-export const getTeamById = async (req, res) => {
+export const getTeamById = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -159,12 +149,7 @@ export const getTeamById = async (req, res) => {
       data: { team }
     });
   } catch (error) {
-    console.error('Error fetching team:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to fetch team',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -172,19 +157,9 @@ export const getTeamById = async (req, res) => {
  * Create new team
  * POST /api/admin/teams
  */
-export const createTeam = async (req, res) => {
+export const createTeam = async (req, res, next) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Validation failed',
-        errors: errors.array().map(err => ({
-          field: err.path || err.param,
-          message: err.msg || err.message || 'Validation error'
-        }))
-      });
-    }
+    // Validation is handled by validate middleware in route
 
     const { teamName, groupId, description } = req.body;
 
@@ -192,6 +167,7 @@ export const createTeam = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Team name is required',
+        code: 'VALIDATION_ERROR',
         errors: [{ field: 'teamName', message: 'Team name cannot be empty' }]
       });
     }
@@ -200,6 +176,7 @@ export const createTeam = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Group ID is required',
+        code: 'VALIDATION_ERROR',
         errors: [{ field: 'groupId', message: 'Please select a group' }]
       });
     }
@@ -221,6 +198,7 @@ export const createTeam = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: 'Group not found',
+        code: 'GROUP_NOT_FOUND',
         errors: [{ field: 'groupId', message: 'The selected group does not exist' }]
       });
     }
@@ -244,6 +222,7 @@ export const createTeam = async (req, res) => {
       return res.status(409).json({
         success: false,
         message: 'Team with this name already exists in this group',
+        code: 'UNIQUE_CONSTRAINT_ERROR',
         errors: [{ field: 'teamName', message: 'A team with this name already exists in the selected group' }]
       });
     }
@@ -312,41 +291,7 @@ export const createTeam = async (req, res) => {
       data: { team }
     });
   } catch (error) {
-    console.error('Error creating team:', error);
-    
-    // Handle Sequelize errors
-    if (error.name === 'SequelizeUniqueConstraintError') {
-      return res.status(409).json({
-        success: false,
-        message: 'Team with this name already exists in this group',
-        errors: [{ field: 'teamName', message: 'A team with this name already exists in the selected group' }]
-      });
-    }
-    
-    if (error.name === 'SequelizeValidationError') {
-      return res.status(400).json({
-        success: false,
-        message: 'Validation error',
-        errors: error.errors.map(err => ({
-          field: err.path,
-          message: err.message
-        }))
-      });
-    }
-    
-    if (error.name === 'SequelizeForeignKeyConstraintError') {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid group reference',
-        errors: [{ field: 'groupId', message: 'The selected group does not exist' }]
-      });
-    }
-    
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to create team',
-      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
-    });
+    next(error);
   }
 };
 
@@ -354,12 +299,9 @@ export const createTeam = async (req, res) => {
  * Update team
  * PUT /api/admin/teams/:id
  */
-export const updateTeam = async (req, res) => {
+export const updateTeam = async (req, res, next) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ success: false, errors: errors.array() });
-    }
+    // Validation is handled by validate middleware in route
 
     const { id } = req.params;
     const { teamName, groupId, description, isActive } = req.body;
@@ -379,7 +321,8 @@ export const updateTeam = async (req, res) => {
     if (!team) {
       return res.status(404).json({
         success: false,
-        message: 'Team not found'
+        message: 'Team not found',
+        code: 'TEAM_NOT_FOUND'
       });
     }
 
@@ -400,7 +343,8 @@ export const updateTeam = async (req, res) => {
       if (!group) {
         return res.status(400).json({
           success: false,
-          message: 'Group not found'
+          message: 'Group not found',
+          code: 'GROUP_NOT_FOUND'
         });
       }
     }
@@ -418,12 +362,7 @@ export const updateTeam = async (req, res) => {
       data: team
     });
   } catch (error) {
-    console.error('Error updating team:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to update team',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -431,7 +370,7 @@ export const updateTeam = async (req, res) => {
  * Delete team (soft delete)
  * DELETE /api/admin/teams/:id
  */
-export const deleteTeam = async (req, res) => {
+export const deleteTeam = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -450,7 +389,8 @@ export const deleteTeam = async (req, res) => {
     if (!team) {
       return res.status(404).json({
         success: false,
-        message: 'Team not found'
+        message: 'Team not found',
+        code: 'TEAM_NOT_FOUND'
       });
     }
 
@@ -463,12 +403,7 @@ export const deleteTeam = async (req, res) => {
       message: 'Team deleted successfully'
     });
   } catch (error) {
-    console.error('Error deleting team:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to delete team',
-      error: error.message
-    });
+    next(error);
   }
 };
 

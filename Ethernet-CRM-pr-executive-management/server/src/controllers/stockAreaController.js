@@ -1,13 +1,13 @@
 import StockArea from '../models/StockArea.js';
 import User from '../models/User.js';
-import { validationResult } from 'express-validator';
+// validationResult removed - using validate middleware in routes instead
 import { Op } from 'sequelize';
 
 /**
  * Get all stock areas
  * GET /api/inventory/stock-areas
  */
-export const getAllStockAreas = async (req, res) => {
+export const getAllStockAreas = async (req, res, next) => {
   try {
     const {
       page = 1,
@@ -69,12 +69,7 @@ export const getAllStockAreas = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error fetching stock areas:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to fetch stock areas',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -82,7 +77,7 @@ export const getAllStockAreas = async (req, res) => {
  * Get single stock area by ID
  * GET /api/inventory/stock-areas/:id
  */
-export const getStockAreaById = async (req, res) => {
+export const getStockAreaById = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -109,7 +104,8 @@ export const getStockAreaById = async (req, res) => {
     if (!stockArea) {
       return res.status(404).json({
         success: false,
-        message: 'Stock area not found'
+        message: 'Stock area not found',
+        code: 'STOCK_AREA_NOT_FOUND'
       });
     }
 
@@ -118,12 +114,7 @@ export const getStockAreaById = async (req, res) => {
       data: { stockArea }
     });
   } catch (error) {
-    console.error('Error fetching stock area:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to fetch stock area',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -131,12 +122,9 @@ export const getStockAreaById = async (req, res) => {
  * Create new stock area
  * POST /api/inventory/stock-areas
  */
-export const createStockArea = async (req, res) => {
+export const createStockArea = async (req, res, next) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ success: false, errors: errors.array() });
-    }
+    // Validation is handled by validate middleware in route
 
     const { areaName, locationCode, address, capacity, storeKeeperId, description, pinCode } = req.body;
 
@@ -158,12 +146,7 @@ export const createStockArea = async (req, res) => {
       data: stockArea
     });
   } catch (error) {
-    console.error('Error creating stock area:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to create stock area',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -171,12 +154,9 @@ export const createStockArea = async (req, res) => {
  * Update stock area
  * PUT /api/inventory/stock-areas/:id
  */
-export const updateStockArea = async (req, res) => {
+export const updateStockArea = async (req, res, next) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ success: false, errors: errors.array() });
-    }
+    // Validation is handled by validate middleware in route
 
     const { id } = req.params;
     const { areaName, locationCode, address, capacity, storeKeeperId, description, pinCode } = req.body;
@@ -196,7 +176,8 @@ export const updateStockArea = async (req, res) => {
     if (!stockArea) {
       return res.status(404).json({
         success: false,
-        message: 'Stock area not found'
+        message: 'Stock area not found',
+        code: 'STOCK_AREA_NOT_FOUND'
       });
     }
 
@@ -216,12 +197,7 @@ export const updateStockArea = async (req, res) => {
       data: stockArea
     });
   } catch (error) {
-    console.error('Error updating stock area:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to update stock area',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -229,7 +205,7 @@ export const updateStockArea = async (req, res) => {
  * Delete stock area (soft delete)
  * DELETE /api/inventory/stock-areas/:id
  */
-export const deleteStockArea = async (req, res) => {
+export const deleteStockArea = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -248,7 +224,8 @@ export const deleteStockArea = async (req, res) => {
     if (!stockArea) {
       return res.status(404).json({
         success: false,
-        message: 'Stock area not found'
+        message: 'Stock area not found',
+        code: 'STOCK_AREA_NOT_FOUND'
       });
     }
 
@@ -261,12 +238,7 @@ export const deleteStockArea = async (req, res) => {
       message: 'Stock area deleted successfully'
     });
   } catch (error) {
-    console.error('Error deleting stock area:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to delete stock area',
-      error: error.message
-    });
+    next(error);
   }
 };
 

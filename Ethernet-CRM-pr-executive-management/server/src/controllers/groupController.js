@@ -1,5 +1,5 @@
 import Group from '../models/Group.js';
-import { validationResult } from 'express-validator';
+// validationResult removed - using validate middleware in routes instead
 import { Op } from 'sequelize';
 import sequelize from '../config/database.js';
 
@@ -7,7 +7,7 @@ import sequelize from '../config/database.js';
  * Get all groups
  * GET /api/admin/groups
  */
-export const getAllGroups = async (req, res) => {
+export const getAllGroups = async (req, res, next) => {
   try {
     const {
       page = 1,
@@ -56,12 +56,7 @@ export const getAllGroups = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error fetching groups:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to fetch groups',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -69,7 +64,7 @@ export const getAllGroups = async (req, res) => {
  * Get single group by ID
  * GET /api/admin/groups/:id
  */
-export const getGroupById = async (req, res) => {
+export const getGroupById = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -88,7 +83,8 @@ export const getGroupById = async (req, res) => {
     if (!group) {
       return res.status(404).json({
         success: false,
-        message: 'Group not found'
+        message: 'Group not found',
+        code: 'GROUP_NOT_FOUND'
       });
     }
 
@@ -97,12 +93,7 @@ export const getGroupById = async (req, res) => {
       data: { group }
     });
   } catch (error) {
-    console.error('Error fetching group:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to fetch group',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -110,19 +101,9 @@ export const getGroupById = async (req, res) => {
  * Create new group
  * POST /api/admin/groups
  */
-export const createGroup = async (req, res) => {
+export const createGroup = async (req, res, next) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Validation failed',
-        errors: errors.array().map(err => ({
-          field: err.path || err.param,
-          message: err.msg || err.message || 'Validation error'
-        }))
-      });
-    }
+    // Validation is handled by validate middleware in route
 
     const { groupName, description } = req.body;
 
@@ -130,6 +111,7 @@ export const createGroup = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Group name is required',
+        code: 'VALIDATION_ERROR',
         errors: [{ field: 'groupName', message: 'Group name cannot be empty' }]
       });
     }
@@ -151,6 +133,7 @@ export const createGroup = async (req, res) => {
       return res.status(409).json({
         success: false,
         message: 'Group with this name already exists',
+        code: 'UNIQUE_CONSTRAINT_ERROR',
         errors: [{ field: 'groupName', message: 'A group with this name already exists' }]
       });
     }
@@ -227,33 +210,7 @@ export const createGroup = async (req, res) => {
       data: { group }
     });
   } catch (error) {
-    console.error('Error creating group:', error);
-    
-    // Handle Sequelize errors
-    if (error.name === 'SequelizeUniqueConstraintError') {
-      return res.status(409).json({
-        success: false,
-        message: 'Group with this name already exists',
-        errors: [{ field: 'groupName', message: 'A group with this name already exists' }]
-      });
-    }
-    
-    if (error.name === 'SequelizeValidationError') {
-      return res.status(400).json({
-        success: false,
-        message: 'Validation error',
-        errors: error.errors.map(err => ({
-          field: err.path,
-          message: err.message
-        }))
-      });
-    }
-    
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to create group',
-      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
-    });
+    next(error);
   }
 };
 
@@ -261,19 +218,9 @@ export const createGroup = async (req, res) => {
  * Update group
  * PUT /api/admin/groups/:id
  */
-export const updateGroup = async (req, res) => {
+export const updateGroup = async (req, res, next) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Validation failed',
-        errors: errors.array().map(err => ({
-          field: err.path || err.param,
-          message: err.msg || err.message || 'Validation error'
-        }))
-      });
-    }
+    // Validation is handled by validate middleware in route
 
     const { id } = req.params;
     const { groupName, description, isActive } = req.body;
@@ -292,6 +239,7 @@ export const updateGroup = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: 'Group not found',
+        code: 'GROUP_NOT_FOUND',
         errors: [{ field: 'id', message: 'Group with this ID does not exist' }]
       });
     }
@@ -314,6 +262,7 @@ export const updateGroup = async (req, res) => {
         return res.status(409).json({
           success: false,
           message: 'Group with this name already exists',
+          code: 'UNIQUE_CONSTRAINT_ERROR',
           errors: [{ field: 'groupName', message: 'A group with this name already exists' }]
         });
       }
@@ -331,21 +280,7 @@ export const updateGroup = async (req, res) => {
       data: { group }
     });
   } catch (error) {
-    console.error('Error updating group:', error);
-    
-    if (error.name === 'SequelizeUniqueConstraintError') {
-      return res.status(409).json({
-        success: false,
-        message: 'Group with this name already exists',
-        errors: [{ field: 'groupName', message: 'A group with this name already exists' }]
-      });
-    }
-    
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to update group',
-      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
-    });
+    next(error);
   }
 };
 
@@ -353,7 +288,7 @@ export const updateGroup = async (req, res) => {
  * Delete group (soft delete)
  * DELETE /api/admin/groups/:id
  */
-export const deleteGroup = async (req, res) => {
+export const deleteGroup = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -372,7 +307,8 @@ export const deleteGroup = async (req, res) => {
     if (!group) {
       return res.status(404).json({
         success: false,
-        message: 'Group not found'
+        message: 'Group not found',
+        code: 'GROUP_NOT_FOUND'
       });
     }
 
@@ -385,12 +321,7 @@ export const deleteGroup = async (req, res) => {
       message: 'Group deleted successfully'
     });
   } catch (error) {
-    console.error('Error deleting group:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to delete group',
-      error: error.message
-    });
+    next(error);
   }
 };
 

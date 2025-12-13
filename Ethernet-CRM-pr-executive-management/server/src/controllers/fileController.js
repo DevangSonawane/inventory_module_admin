@@ -18,6 +18,7 @@ export const downloadDocument = async (req, res, next) => {
       return res.status(400).json({
         success: false,
         message: 'Filename is required',
+        code: 'VALIDATION_ERROR'
       });
     }
 
@@ -55,6 +56,7 @@ export const downloadDocument = async (req, res, next) => {
       return res.status(404).json({
         success: false,
         message: 'File not found',
+        code: 'FILE_NOT_FOUND'
       });
     }
 
@@ -66,6 +68,7 @@ export const downloadDocument = async (req, res, next) => {
           res.status(500).json({
             success: false,
             message: 'Error downloading file',
+            code: 'FILE_DOWNLOAD_ERROR'
           });
         }
       }
@@ -86,6 +89,7 @@ export const deleteDocument = async (req, res, next) => {
       return res.status(400).json({
         success: false,
         message: 'Filename is required',
+        code: 'VALIDATION_ERROR'
       });
     }
 
@@ -126,6 +130,7 @@ export const deleteDocument = async (req, res, next) => {
       return res.status(404).json({
         success: false,
         message: 'File not found',
+        code: 'FILE_NOT_FOUND'
       });
     }
 
@@ -240,6 +245,7 @@ export const addDocumentsToInward = async (req, res, next) => {
       return res.status(400).json({
         success: false,
         message: 'No files uploaded',
+        code: 'VALIDATION_ERROR'
       });
     }
 
@@ -249,6 +255,7 @@ export const addDocumentsToInward = async (req, res, next) => {
       return res.status(404).json({
         success: false,
         message: 'Inward entry not found',
+        code: 'INWARD_ENTRY_NOT_FOUND'
       });
     }
 

@@ -4,7 +4,7 @@ import Material from '../models/Material.js';
 import StockArea from '../models/StockArea.js';
 import InventoryMaster from '../models/InventoryMaster.js';
 import PurchaseOrder from '../models/PurchaseOrder.js';
-import { validationResult } from 'express-validator';
+// validationResult removed - using validate middleware in routes instead
 import { Op } from 'sequelize';
 import sequelize from '../config/database.js';
 import { generateGRN } from '../utils/slipGenerator.js';
@@ -13,7 +13,7 @@ import { generateGRN } from '../utils/slipGenerator.js';
  * Create new inward entry with items
  * POST /api/inventory/inward
  */
-export const createInward = async (req, res) => {
+export const createInward = async (req, res, next) => {
   const transaction = await sequelize.transaction();
   
   try {
@@ -210,12 +210,7 @@ export const createInward = async (req, res) => {
     });
   } catch (error) {
     await transaction.rollback();
-    console.error('Error creating inward entry:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to create inward entry',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -223,7 +218,7 @@ export const createInward = async (req, res) => {
  * Get all inward entries with filtering and pagination
  * GET /api/inventory/inward
  */
-export const getAllInwards = async (req, res) => {
+export const getAllInwards = async (req, res, next) => {
   try {
     const {
       page = 1,
@@ -311,12 +306,7 @@ export const getAllInwards = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error fetching inward entries:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to fetch inward entries',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -324,7 +314,7 @@ export const getAllInwards = async (req, res) => {
  * Get single inward entry by ID with items
  * GET /api/inventory/inward/:id
  */
-export const getInwardById = async (req, res) => {
+export const getInwardById = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -368,12 +358,7 @@ export const getInwardById = async (req, res) => {
       data: inward
     });
   } catch (error) {
-    console.error('Error fetching inward entry:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to fetch inward entry',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -381,15 +366,11 @@ export const getInwardById = async (req, res) => {
  * Update inward entry
  * PUT /api/inventory/inward/:id
  */
-export const updateInward = async (req, res) => {
+export const updateInward = async (req, res, next) => {
   const transaction = await sequelize.transaction();
   
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      await transaction.rollback();
-      return res.status(400).json({ success: false, errors: errors.array() });
-    }
+    // Validation is handled by validate middleware in route
 
     const { id } = req.params;
     const {
@@ -424,7 +405,8 @@ export const updateInward = async (req, res) => {
       await transaction.rollback();
       return res.status(404).json({
         success: false,
-        message: 'Inward entry not found'
+        message: 'Inward entry not found',
+        code: 'INWARD_NOT_FOUND'
       });
     }
 
@@ -440,7 +422,8 @@ export const updateInward = async (req, res) => {
         await transaction.rollback();
         return res.status(400).json({
           success: false,
-          message: 'Invalid stock area'
+          message: 'Invalid stock area',
+          code: 'STOCK_AREA_NOT_FOUND'
         });
       }
     }
@@ -458,7 +441,8 @@ export const updateInward = async (req, res) => {
         await transaction.rollback();
         return res.status(400).json({
           success: false,
-          message: 'Slip number already exists'
+          message: 'Slip number already exists',
+          code: 'DUPLICATE_SLIP_NUMBER'
         });
       }
 
@@ -548,12 +532,7 @@ export const updateInward = async (req, res) => {
     });
   } catch (error) {
     await transaction.rollback();
-    console.error('Error updating inward entry:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to update inward entry',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -561,7 +540,7 @@ export const updateInward = async (req, res) => {
  * Delete inward entry (soft delete)
  * DELETE /api/inventory/inward/:id
  */
-export const deleteInward = async (req, res) => {
+export const deleteInward = async (req, res, next) => {
   try {
     const { id } = req.params;
     const userId = req.user?.id || req.user?.user_id;
@@ -595,12 +574,7 @@ export const deleteInward = async (req, res) => {
       message: 'Inward entry deleted successfully'
     });
   } catch (error) {
-    console.error('Error deleting inward entry:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to delete inward entry',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -613,7 +587,7 @@ export const deleteInward = async (req, res) => {
  * - All items must have valid materials
  * - Inventory must be updated successfully
  */
-export const markInwardAsCompleted = async (req, res) => {
+export const markInwardAsCompleted = async (req, res, next) => {
   const transaction = await sequelize.transaction();
   
   try {
@@ -650,7 +624,8 @@ export const markInwardAsCompleted = async (req, res) => {
       await transaction.rollback();
       return res.status(404).json({
         success: false,
-        message: 'Inward entry not found'
+        message: 'Inward entry not found',
+        code: 'INWARD_NOT_FOUND'
       });
     }
 
@@ -659,7 +634,8 @@ export const markInwardAsCompleted = async (req, res) => {
       await transaction.rollback();
       return res.status(400).json({
         success: false,
-        message: 'Inward entry is already completed'
+        message: 'Inward entry is already completed',
+        code: 'INVALID_STATUS'
       });
     }
 
@@ -668,7 +644,8 @@ export const markInwardAsCompleted = async (req, res) => {
       await transaction.rollback();
       return res.status(400).json({
         success: false,
-        message: 'Cannot complete a cancelled inward entry'
+        message: 'Cannot complete a cancelled inward entry',
+        code: 'INVALID_STATUS'
       });
     }
 
@@ -677,7 +654,8 @@ export const markInwardAsCompleted = async (req, res) => {
       await transaction.rollback();
       return res.status(400).json({
         success: false,
-        message: 'Cannot complete inward entry without items'
+        message: 'Cannot complete inward entry without items',
+        code: 'VALIDATION_ERROR'
       });
     }
 
@@ -687,7 +665,8 @@ export const markInwardAsCompleted = async (req, res) => {
         await transaction.rollback();
         return res.status(400).json({
           success: false,
-          message: `Item with material ${item.material_id} is invalid or inactive`
+          message: `Item with material ${item.material_id} is invalid or inactive`,
+          code: 'MATERIAL_NOT_FOUND'
         });
       }
     }
@@ -713,7 +692,8 @@ export const markInwardAsCompleted = async (req, res) => {
           await transaction.rollback();
           return res.status(400).json({
             success: false,
-            message: `Serial number ${item.serial_number} already exists in inventory`
+            message: `Serial number ${item.serial_number} already exists in inventory`,
+            code: 'DUPLICATE_SERIAL_NUMBER'
           });
         }
 
@@ -825,12 +805,7 @@ export const markInwardAsCompleted = async (req, res) => {
     });
   } catch (error) {
     await transaction.rollback();
-    console.error('Error marking inward as completed:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to mark inward entry as completed',
-      error: error.message
-    });
+    next(error);
   }
 };
 

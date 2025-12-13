@@ -80,19 +80,24 @@ router.post('/em/users',
 // Executive Management
 router.put('/em/users/:id',
   [
-    body('name').notEmpty().withMessage('Name is required'),
+    body('name').trim().notEmpty().withMessage('Name is required'),
     body('email').isEmail().withMessage('Valid email is required'),
     body('password').isLength({ min: 6 }).withMessage('Password min 6 chars'),
     body('roleId').isInt().withMessage('Role ID is required'),
     body('moduleIds').isArray().withMessage('Module IDs must be an array'),
     body('isActive').optional().isBoolean().withMessage('isActive must be a boolean')
   ],
+  validate,
   postExecutiveManagement
 );
-router.put('/em/users/:id/password-reset', [
-  body('oldPassword').notEmpty().withMessage('Old password is required'),
-  body('newPassword').isLength({ min: 6 }).withMessage('New password must be at least 6 characters long')
-], resetPassword);
+router.put('/em/users/:id/password-reset', 
+  [
+    body('oldPassword').notEmpty().withMessage('Old password is required'),
+    body('newPassword').isLength({ min: 6 }).withMessage('New password must be at least 6 characters long')
+  ],
+  validate,
+  resetPassword
+);
 
 
 router.get('/em/users', getExecutiveManagement);

@@ -27,38 +27,102 @@ const loginRateLimit = rateLimit({ windowMs: 15 * 60 * 1000, max: 5 }); // 5 log
 
 // Validation rules
 const registerValidation = [
-  body('name').trim().notEmpty().withMessage('Name is required'),
+  // Check for empty body
+  body().custom((value, { req }) => {
+    if (!req.body || Object.keys(req.body).length === 0) {
+      throw new Error('Request body cannot be empty');
+    }
+    return true;
+  }),
+  body('name')
+    .trim()
+    .notEmpty()
+    .withMessage('Name is required')
+    .isLength({ max: 255 })
+    .withMessage('Name must not exceed 255 characters')
+    .custom((value) => {
+      if (value.trim().length === 0) {
+        throw new Error('Name cannot be only whitespace');
+      }
+      return true;
+    }),
   body('password')
+    .notEmpty()
+    .withMessage('Password is required')
     .isLength({ min: 6 })
     .withMessage('Password must be at least 6 characters long'),
   body('employeCode')
     .optional()
     .trim()
-    .notEmpty()
-    .withMessage('Employee code cannot be empty if provided'),
+    .custom((value) => {
+      if (value !== undefined && value !== null && value !== '') {
+        if (value.trim().length === 0) {
+          throw new Error('Employee code cannot be only whitespace');
+        }
+        if (value.length > 50) {
+          throw new Error('Employee code must not exceed 50 characters');
+        }
+      }
+      return true;
+    }),
   body('phoneNumber')
     .optional()
-    .matches(/^[0-9]{10,15}$/)
-    .withMessage('Phone number must be 10-15 digits'),
+    .trim()
+    .custom((value) => {
+      if (value !== undefined && value !== null && value !== '') {
+        if (value.trim().length === 0) {
+          throw new Error('Phone number cannot be only whitespace');
+        }
+        if (!/^[0-9]{10,20}$/.test(value)) {
+          throw new Error('Phone number must be 10-20 digits');
+        }
+      }
+      return true;
+    }),
   body('email')
     .optional()
-    .isEmail()
-    .withMessage('Valid email is required if provided')
-].concat([
+    .trim()
+    .custom((value) => {
+      if (value !== undefined && value !== null && value !== '') {
+        if (value.trim().length === 0) {
+          throw new Error('Email cannot be only whitespace');
+        }
+        if (value.length > 255) {
+          throw new Error('Email must not exceed 255 characters');
+        }
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+          throw new Error('Valid email is required if provided');
+        }
+      }
+      return true;
+    }),
   body().custom((value, { req }) => {
-    if (!req.body.employeCode && !req.body.phoneNumber && !req.body.email) {
+    const hasEmployeCode = req.body.employeCode && req.body.employeCode.trim().length > 0;
+    const hasPhoneNumber = req.body.phoneNumber && req.body.phoneNumber.trim().length > 0;
+    const hasEmail = req.body.email && req.body.email.trim().length > 0;
+    
+    if (!hasEmployeCode && !hasPhoneNumber && !hasEmail) {
       throw new Error('At least one of employeCode, phoneNumber, or email is required');
     }
     return true;
   })
-]);
+];
 
 const loginValidation = [
   body('identifier')
     .trim()
     .notEmpty()
     .withMessage('Email, employee code, or phone number is required'),
-  body('password').notEmpty().withMessage('Password is required')
+  body('password')
+    .notEmpty()
+    .withMessage('Password is required')
+    .custom((value) => {
+      // Allow unicode characters in password
+      if (typeof value !== 'string') {
+        throw new Error('Password must be a string');
+      }
+      return true;
+    })
 ];
 
 const forgotPasswordValidation = [

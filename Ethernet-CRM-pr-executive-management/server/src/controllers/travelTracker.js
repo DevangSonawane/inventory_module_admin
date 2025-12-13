@@ -267,7 +267,7 @@ const sanitiseRecord = (recordInstance) => {
 };
 
 // 💠 Add / Update Travel Record
-export const createOrUpdateTravel = async (req, res) => {
+export const createOrUpdateTravel = async (req, res, next) => {
   try {
     const userId = req.user?.id;
     const {
@@ -284,28 +284,28 @@ export const createOrUpdateTravel = async (req, res) => {
     } = req.body;
 
     if (!userId)
-      return res.status(401).json({ message: 'Unauthorised. Please sign in again.' });
+      return res.status(401).json({ success: false, message: 'Unauthorised. Please sign in again.', code: 'UNAUTHORIZED' });
 
     if (!date || distance_km === undefined || distance_km === null || !vehicle_type)
-      return res.status(400).json({ message: 'Missing required fields' });
+      return res.status(400).json({ success: false, message: 'Missing required fields', code: 'VALIDATION_ERROR' });
 
     const normalisedVehicleType = normaliseVehicleType(vehicle_type);
     const validVehicleTypes = ['OWN_VEHICLE', 'COLLEAGUE', 'COMPANY_VEHICLE'];
 
     if (!validVehicleTypes.includes(normalisedVehicleType))
-      return res.status(400).json({ message: 'Invalid vehicle type provided' });
+      return res.status(400).json({ success: false, message: 'Invalid vehicle type provided', code: 'VALIDATION_ERROR' });
 
     const recordDate = new Date(date);
 
     if (Number.isNaN(recordDate.getTime()))
-      return res.status(400).json({ message: 'Invalid date supplied' });
+      return res.status(400).json({ success: false, message: 'Invalid date supplied', code: 'VALIDATION_ERROR' });
 
     const dateOnly = recordDate.toISOString().slice(0, 10);
 
     const numericDistance = parseFloat(distance_km);
 
     if (Number.isNaN(numericDistance) || numericDistance < 0)
-      return res.status(400).json({ message: 'Distance must be a non-negative number' });
+      return res.status(400).json({ success: false, message: 'Distance must be a non-negative number', code: 'VALIDATION_ERROR' });
 
     const payoutEligible = normalisedVehicleType === ELIGIBLE_VEHICLE_TYPE;
     const payout = payoutEligible ? numericDistance * RATE_PER_KM : 0;
@@ -314,7 +314,7 @@ export const createOrUpdateTravel = async (req, res) => {
     if (started_at !== undefined && started_at !== null && started_at !== '') {
       const parsedStart = new Date(started_at);
       if (Number.isNaN(parsedStart.getTime()))
-        return res.status(400).json({ message: 'Invalid start time supplied' });
+        return res.status(400).json({ success: false, message: 'Invalid start time supplied', code: 'VALIDATION_ERROR' });
       startedAt = parsedStart;
     }
 
@@ -322,12 +322,12 @@ export const createOrUpdateTravel = async (req, res) => {
     if (ended_at !== undefined && ended_at !== null && ended_at !== '') {
       const parsedEnd = new Date(ended_at);
       if (Number.isNaN(parsedEnd.getTime()))
-        return res.status(400).json({ message: 'Invalid end time supplied' });
+        return res.status(400).json({ success: false, message: 'Invalid end time supplied', code: 'VALIDATION_ERROR' });
       endedAt = parsedEnd;
     }
 
     if (startedAt && endedAt && endedAt < startedAt)
-      return res.status(400).json({ message: 'End time cannot be before start time' });
+      return res.status(400).json({ success: false, message: 'End time cannot be before start time', code: 'VALIDATION_ERROR' });
 
     const payload = {
       user_id: userId,
@@ -349,7 +349,7 @@ export const createOrUpdateTravel = async (req, res) => {
       });
 
       if (!record)
-        return res.status(404).json({ message: 'Travel record not found for this user' });
+        return res.status(404).json({ success: false, message: 'Travel record not found for this user', code: 'TRAVEL_RECORD_NOT_FOUND' });
 
       record.date = dateOnly;
       record.distance_km = numericDistance;
@@ -409,8 +409,9 @@ export const createOrUpdateTravel = async (req, res) => {
       await record.save();
 
       res.status(200).json({
+        success: true,
         message: 'Travel record updated successfully',
-        record: sanitiseRecord(record),
+        data: sanitiseRecord(record),
       });
       return;
     }
@@ -418,17 +419,17 @@ export const createOrUpdateTravel = async (req, res) => {
     const record = await TravelRecord.create(payload);
 
     res.status(201).json({
+      success: true,
       message: 'Travel record added successfully',
-      record: sanitiseRecord(record),
+      data: sanitiseRecord(record),
     });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    next(error);
   }
 };
 
 // 💠 Get all Travel History (with vehicle, payout, distance, date)
-export const getAllTravels = async (req, res) => {
+export const getAllTravels = async (req, res, next) => {
   try {
     const records = await TravelRecord.findAll({
       include: {
@@ -439,25 +440,28 @@ export const getAllTravels = async (req, res) => {
       order: [['date', 'DESC']],
     });
 
-    res.json(records.map(sanitiseRecord));
+    res.status(200).json({
+      success: true,
+      data: records.map(sanitiseRecord)
+    });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    next(error);
   }
 };
 
 // 💠 Get Travel History Month-wise
-export const getMonthlyTravels = async (req, res) => {
+export const getMonthlyTravels = async (req, res, next) => {
   try {
     const { month, year, user_id } = req.query;
 
     if (!month || !year)
-      return res.status(400).json({ message: 'Please provide month and year' });
+      return res.status(400).json({ success: false, message: 'Please provide month and year', code: 'VALIDATION_ERROR' });
 
     const monthNumber = parseInt(month, 10);
     const yearNumber = parseInt(year, 10);
 
     if (Number.isNaN(monthNumber) || Number.isNaN(yearNumber))
-      return res.status(400).json({ message: 'Month and year must be valid numbers' });
+      return res.status(400).json({ success: false, message: 'Month and year must be valid numbers', code: 'VALIDATION_ERROR' });
 
     const whereClause = {
       [Op.and]: [
@@ -494,20 +498,23 @@ export const getMonthlyTravels = async (req, res) => {
       { totalDistance: 0, eligibleDistance: 0, totalPayout: 0 }
     );
 
-    res.json({
-      records: sanitisedRecords,
-      summary: {
-        ...summary,
-        ratePerKm: RATE_PER_KM,
-      },
+    res.status(200).json({
+      success: true,
+      data: {
+        records: sanitisedRecords,
+        summary: {
+          ...summary,
+          ratePerKm: RATE_PER_KM,
+        },
+      }
     });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    next(error);
   }
 };
 
 // 👥 Get all executives (distinct users who have travel records)
-export const getAllExecutives = async (req, res) => {
+export const getAllExecutives = async (req, res, next) => {
   try {
     const executives = await User.findAll({
       include: [
@@ -522,16 +529,18 @@ export const getAllExecutives = async (req, res) => {
       having: Sequelize.literal('COUNT(`travels`.`id`) > 0'),
     });
 
-    res.json(executives);
+    res.status(200).json({
+      success: true,
+      data: executives
+    });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    next(error);
   }
 };
 
 
 // 👤 Get travel history for one user
-export const getEmployeeTravelHistory = async (req, res) => {
+export const getEmployeeTravelHistory = async (req, res, next) => {
   try {
     const { user_id } = req.params;
 
@@ -545,8 +554,11 @@ export const getEmployeeTravelHistory = async (req, res) => {
       order: [['date', 'DESC']],
     });
 
-    res.json(records.map(sanitiseRecord));
+    res.status(200).json({
+      success: true,
+      data: records.map(sanitiseRecord)
+    });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    next(error);
   }
 };

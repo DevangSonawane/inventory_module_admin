@@ -3,7 +3,7 @@ import PurchaseRequestItem from '../models/PurchaseRequestItem.js';
 import Material from '../models/Material.js';
 import User from '../models/User.js';
 import BusinessPartner from '../models/BusinessPartner.js';
-import { validationResult } from 'express-validator';
+// validationResult removed - using validate middleware in routes instead
 import { Op } from 'sequelize';
 import sequelize from '../config/database.js';
 
@@ -51,14 +51,15 @@ const generatePRNumber = async (requestedDate = null) => {
  * Generate PR number based on requested date
  * GET /api/inventory/purchase-requests/generate-pr-number
  */
-export const generatePRNumberEndpoint = async (req, res) => {
+export const generatePRNumberEndpoint = async (req, res, next) => {
   try {
     const { requestedDate } = req.query;
 
     if (!requestedDate) {
       return res.status(400).json({
         success: false,
-        message: 'Requested date is required'
+        message: 'Requested date is required',
+        code: 'VALIDATION_ERROR'
       });
     }
 
@@ -67,7 +68,8 @@ export const generatePRNumberEndpoint = async (req, res) => {
     if (isNaN(date.getTime())) {
       return res.status(400).json({
         success: false,
-        message: 'Invalid date format'
+        message: 'Invalid date format',
+        code: 'VALIDATION_ERROR'
       });
     }
 
@@ -78,12 +80,7 @@ export const generatePRNumberEndpoint = async (req, res) => {
       data: { prNumber }
     });
   } catch (error) {
-    console.error('Error generating PR number:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to generate PR number',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -91,7 +88,7 @@ export const generatePRNumberEndpoint = async (req, res) => {
  * Get all purchase requests with filtering and pagination
  * GET /api/inventory/purchase-requests
  */
-export const getAllPurchaseRequests = async (req, res) => {
+export const getAllPurchaseRequests = async (req, res, next) => {
   try {
     const {
       page = 1,
@@ -152,12 +149,7 @@ export const getAllPurchaseRequests = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error fetching purchase requests:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to fetch purchase requests',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -165,7 +157,7 @@ export const getAllPurchaseRequests = async (req, res) => {
  * Get single purchase request by ID with items
  * GET /api/inventory/purchase-requests/:id
  */
-export const getPurchaseRequestById = async (req, res) => {
+export const getPurchaseRequestById = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -218,12 +210,7 @@ export const getPurchaseRequestById = async (req, res) => {
       data: { purchaseRequest }
     });
   } catch (error) {
-    console.error('Error fetching purchase request:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to fetch purchase request',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -231,22 +218,11 @@ export const getPurchaseRequestById = async (req, res) => {
  * Create new purchase request with items
  * POST /api/inventory/purchase-requests
  */
-export const createPurchaseRequest = async (req, res) => {
+export const createPurchaseRequest = async (req, res, next) => {
   const transaction = await sequelize.transaction();
   
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      await transaction.rollback();
-      return res.status(400).json({
-        success: false,
-        message: 'Validation failed',
-        errors: errors.array().map(err => ({
-          field: err.path || err.param,
-          message: err.msg || err.message
-        }))
-      });
-    }
+    // Validation is handled by validate middleware in route
 
     const {
       prNumber,
@@ -263,7 +239,8 @@ export const createPurchaseRequest = async (req, res) => {
       await transaction.rollback();
       return res.status(400).json({
         success: false,
-        message: 'At least one item is required'
+        message: 'At least one item is required',
+        code: 'VALIDATION_ERROR'
       });
     }
 
@@ -279,7 +256,8 @@ export const createPurchaseRequest = async (req, res) => {
         await transaction.rollback();
         return res.status(500).json({
           success: false,
-          message: 'Failed to generate unique PR number. Please try again.'
+          message: 'Failed to generate unique PR number. Please try again.',
+          code: 'PR_NUMBER_GENERATION_ERROR'
         });
       }
     }
@@ -315,7 +293,8 @@ export const createPurchaseRequest = async (req, res) => {
         await transaction.rollback();
         return res.status(400).json({
           success: false,
-          message: 'PR name is required for each item'
+          message: 'PR name is required for each item',
+          code: 'VALIDATION_ERROR'
         });
       }
 
@@ -323,7 +302,8 @@ export const createPurchaseRequest = async (req, res) => {
         await transaction.rollback();
         return res.status(400).json({
           success: false,
-          message: 'Material type is required for each item'
+          message: 'Material type is required for each item',
+          code: 'VALIDATION_ERROR'
         });
       }
 
@@ -333,7 +313,8 @@ export const createPurchaseRequest = async (req, res) => {
         await transaction.rollback();
         return res.status(400).json({
           success: false,
-          message: `Invalid material type. Must be one of: ${validMaterialTypes.join(', ')}`
+          message: `Invalid material type. Must be one of: ${validMaterialTypes.join(', ')}`,
+          code: 'VALIDATION_ERROR'
         });
       }
 
@@ -347,7 +328,8 @@ export const createPurchaseRequest = async (req, res) => {
           await transaction.rollback();
           return res.status(400).json({
             success: false,
-            message: `Material with ID ${materialId} not found`
+            message: `Material with ID ${materialId} not found`,
+            code: 'MATERIAL_NOT_FOUND'
           });
         }
       }
@@ -362,7 +344,8 @@ export const createPurchaseRequest = async (req, res) => {
           await transaction.rollback();
           return res.status(400).json({
             success: false,
-            message: `Business partner with ID ${businessPartnerId} not found`
+            message: `Business partner with ID ${businessPartnerId} not found`,
+            code: 'BUSINESS_PARTNER_NOT_FOUND'
           });
         }
       }
@@ -409,12 +392,7 @@ export const createPurchaseRequest = async (req, res) => {
     });
   } catch (error) {
     await transaction.rollback();
-    console.error('Error creating purchase request:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to create purchase request',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -422,23 +400,11 @@ export const createPurchaseRequest = async (req, res) => {
  * Update purchase request
  * PUT /api/inventory/purchase-requests/:id
  */
-export const updatePurchaseRequest = async (req, res) => {
+export const updatePurchaseRequest = async (req, res, next) => {
   const transaction = await sequelize.transaction();
   
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      await transaction.rollback();
-      return res.status(400).json({
-        success: false,
-        message: 'Validation failed',
-        errors: errors.array().map(err => ({
-          field: err.path || err.param,
-          message: err.msg || err.message
-        }))
-      });
-    }
-
+    // Validation is handled by validate middleware in route
     const { id } = req.params;
     const {
       requestedDate,
@@ -454,7 +420,8 @@ export const updatePurchaseRequest = async (req, res) => {
       await transaction.rollback();
       return res.status(404).json({
         success: false,
-        message: 'Purchase request not found'
+        message: 'Purchase request not found',
+        code: 'PURCHASE_REQUEST_NOT_FOUND'
       });
     }
 
@@ -463,7 +430,8 @@ export const updatePurchaseRequest = async (req, res) => {
       await transaction.rollback();
       return res.status(400).json({
         success: false,
-        message: 'Only DRAFT purchase requests can be updated'
+        message: 'Only DRAFT purchase requests can be updated',
+        code: 'INVALID_STATUS'
       });
     }
 
@@ -503,7 +471,8 @@ export const updatePurchaseRequest = async (req, res) => {
           await transaction.rollback();
           return res.status(400).json({
             success: false,
-            message: 'PR name is required for each item'
+            message: 'PR name is required for each item',
+            code: 'VALIDATION_ERROR'
           });
         }
 
@@ -511,7 +480,8 @@ export const updatePurchaseRequest = async (req, res) => {
           await transaction.rollback();
           return res.status(400).json({
             success: false,
-            message: 'Material type is required for each item'
+            message: 'Material type is required for each item',
+            code: 'VALIDATION_ERROR'
           });
         }
 
@@ -521,7 +491,8 @@ export const updatePurchaseRequest = async (req, res) => {
           await transaction.rollback();
           return res.status(400).json({
             success: false,
-            message: `Invalid material type. Must be one of: ${validMaterialTypes.join(', ')}`
+            message: `Invalid material type. Must be one of: ${validMaterialTypes.join(', ')}`,
+            code: 'VALIDATION_ERROR'
           });
         }
 
@@ -535,7 +506,8 @@ export const updatePurchaseRequest = async (req, res) => {
             await transaction.rollback();
             return res.status(400).json({
               success: false,
-              message: `Material with ID ${materialId} not found`
+              message: `Material with ID ${materialId} not found`,
+              code: 'MATERIAL_NOT_FOUND'
             });
           }
         }
@@ -550,7 +522,8 @@ export const updatePurchaseRequest = async (req, res) => {
             await transaction.rollback();
             return res.status(400).json({
               success: false,
-              message: `Business partner with ID ${businessPartnerId} not found`
+              message: `Business partner with ID ${businessPartnerId} not found`,
+              code: 'BUSINESS_PARTNER_NOT_FOUND'
             });
           }
         }
@@ -596,12 +569,7 @@ export const updatePurchaseRequest = async (req, res) => {
     });
   } catch (error) {
     await transaction.rollback();
-    console.error('Error updating purchase request:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to update purchase request',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -609,7 +577,7 @@ export const updatePurchaseRequest = async (req, res) => {
  * Submit purchase request (DRAFT -> SUBMITTED)
  * PUT /api/inventory/purchase-requests/:id/submit
  */
-export const submitPurchaseRequest = async (req, res) => {
+export const submitPurchaseRequest = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -620,14 +588,16 @@ export const submitPurchaseRequest = async (req, res) => {
     if (!purchaseRequest) {
       return res.status(404).json({
         success: false,
-        message: 'Purchase request not found'
+        message: 'Purchase request not found',
+        code: 'PURCHASE_REQUEST_NOT_FOUND'
       });
     }
 
     if (purchaseRequest.status !== 'DRAFT') {
       return res.status(400).json({
         success: false,
-        message: 'Only DRAFT purchase requests can be submitted'
+        message: 'Only DRAFT purchase requests can be submitted',
+        code: 'INVALID_STATUS'
       });
     }
 
@@ -639,12 +609,7 @@ export const submitPurchaseRequest = async (req, res) => {
       data: { purchaseRequest }
     });
   } catch (error) {
-    console.error('Error submitting purchase request:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to submit purchase request',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -652,7 +617,7 @@ export const submitPurchaseRequest = async (req, res) => {
  * Approve purchase request
  * PUT /api/inventory/purchase-requests/:id/approve
  */
-export const approvePurchaseRequest = async (req, res) => {
+export const approvePurchaseRequest = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { remarks } = req.body;
@@ -670,7 +635,8 @@ export const approvePurchaseRequest = async (req, res) => {
     if (!purchaseRequest) {
       return res.status(404).json({
         success: false,
-        message: 'Purchase request not found'
+        message: 'Purchase request not found',
+        code: 'PURCHASE_REQUEST_NOT_FOUND'
       });
     }
 
@@ -688,12 +654,7 @@ export const approvePurchaseRequest = async (req, res) => {
       data: { purchaseRequest }
     });
   } catch (error) {
-    console.error('Error approving purchase request:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to approve purchase request',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -701,7 +662,7 @@ export const approvePurchaseRequest = async (req, res) => {
  * Reject purchase request
  * PUT /api/inventory/purchase-requests/:id/reject
  */
-export const rejectPurchaseRequest = async (req, res) => {
+export const rejectPurchaseRequest = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { remarks } = req.body;
@@ -711,7 +672,8 @@ export const rejectPurchaseRequest = async (req, res) => {
     if (!remarks) {
       return res.status(400).json({
         success: false,
-        message: 'Rejection remarks are required'
+        message: 'Rejection remarks are required',
+        code: 'VALIDATION_ERROR'
       });
     }
 
@@ -726,7 +688,8 @@ export const rejectPurchaseRequest = async (req, res) => {
     if (!purchaseRequest) {
       return res.status(404).json({
         success: false,
-        message: 'Purchase request not found'
+        message: 'Purchase request not found',
+        code: 'PURCHASE_REQUEST_NOT_FOUND'
       });
     }
 
@@ -744,12 +707,7 @@ export const rejectPurchaseRequest = async (req, res) => {
       data: { purchaseRequest }
     });
   } catch (error) {
-    console.error('Error rejecting purchase request:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to reject purchase request',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -757,7 +715,7 @@ export const rejectPurchaseRequest = async (req, res) => {
  * Delete purchase request (soft delete)
  * DELETE /api/inventory/purchase-requests/:id
  */
-export const deletePurchaseRequest = async (req, res) => {
+export const deletePurchaseRequest = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -768,7 +726,8 @@ export const deletePurchaseRequest = async (req, res) => {
     if (!purchaseRequest) {
       return res.status(404).json({
         success: false,
-        message: 'Purchase request not found'
+        message: 'Purchase request not found',
+        code: 'PURCHASE_REQUEST_NOT_FOUND'
       });
     }
 
@@ -776,7 +735,8 @@ export const deletePurchaseRequest = async (req, res) => {
     if (purchaseRequest.status !== 'DRAFT') {
       return res.status(400).json({
         success: false,
-        message: 'Only DRAFT purchase requests can be deleted'
+        message: 'Only DRAFT purchase requests can be deleted',
+        code: 'INVALID_STATUS'
       });
     }
 
@@ -787,12 +747,7 @@ export const deletePurchaseRequest = async (req, res) => {
       message: 'Purchase request deleted successfully'
     });
   } catch (error) {
-    console.error('Error deleting purchase request:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to delete purchase request',
-      error: error.message
-    });
+    next(error);
   }
 };
 

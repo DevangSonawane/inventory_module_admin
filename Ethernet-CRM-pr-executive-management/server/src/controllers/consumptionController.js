@@ -3,7 +3,7 @@ import ConsumptionItem from '../models/ConsumptionItem.js';
 import Material from '../models/Material.js';
 import StockArea from '../models/StockArea.js';
 import InventoryMaster from '../models/InventoryMaster.js';
-import { validationResult } from 'express-validator';
+// validationResult removed - using validate middleware in routes instead
 import { Op } from 'sequelize';
 import sequelize from '../config/database.js';
 
@@ -11,15 +11,11 @@ import sequelize from '../config/database.js';
  * Create new consumption record
  * POST /api/inventory/consumption
  */
-export const createConsumption = async (req, res) => {
+export const createConsumption = async (req, res, next) => {
   const transaction = await sequelize.transaction();
   
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      await transaction.rollback();
-      return res.status(400).json({ success: false, errors: errors.array() });
-    }
+    // Validation is handled by validate middleware in route
 
     const {
       externalSystemRefId,
@@ -227,12 +223,7 @@ export const createConsumption = async (req, res) => {
     });
   } catch (error) {
     await transaction.rollback();
-    console.error('Error creating consumption record:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to create consumption record',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -240,7 +231,7 @@ export const createConsumption = async (req, res) => {
  * Get all consumption records with filtering and pagination
  * GET /api/inventory/consumption
  */
-export const getAllConsumptions = async (req, res) => {
+export const getAllConsumptions = async (req, res, next) => {
   try {
     const {
       page = 1,
@@ -319,12 +310,7 @@ export const getAllConsumptions = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error fetching consumption records:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to fetch consumption records',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -332,7 +318,7 @@ export const getAllConsumptions = async (req, res) => {
  * Get single consumption record by ID
  * GET /api/inventory/consumption/:id
  */
-export const getConsumptionById = async (req, res) => {
+export const getConsumptionById = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -376,12 +362,7 @@ export const getConsumptionById = async (req, res) => {
       data: consumption
     });
   } catch (error) {
-    console.error('Error fetching consumption record:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to fetch consumption record',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -389,15 +370,11 @@ export const getConsumptionById = async (req, res) => {
  * Update consumption record
  * PUT /api/inventory/consumption/:id
  */
-export const updateConsumption = async (req, res) => {
+export const updateConsumption = async (req, res, next) => {
   const transaction = await sequelize.transaction();
   
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      await transaction.rollback();
-      return res.status(400).json({ success: false, errors: errors.array() });
-    }
+    // Validation is handled by validate middleware in route
 
     const { id } = req.params;
     const {
@@ -425,7 +402,8 @@ export const updateConsumption = async (req, res) => {
       await transaction.rollback();
       return res.status(404).json({
         success: false,
-        message: 'Consumption record not found'
+        message: 'Consumption record not found',
+        code: 'CONSUMPTION_NOT_FOUND'
       });
     }
 
@@ -441,7 +419,8 @@ export const updateConsumption = async (req, res) => {
         await transaction.rollback();
         return res.status(400).json({
           success: false,
-          message: 'Invalid stock area'
+          message: 'Invalid stock area',
+          code: 'STOCK_AREA_NOT_FOUND'
         });
       }
     }
@@ -475,7 +454,8 @@ export const updateConsumption = async (req, res) => {
           await transaction.rollback();
           return res.status(400).json({
             success: false,
-            message: `Material with ID ${materialId} not found`
+            message: `Material with ID ${materialId} not found`,
+            code: 'MATERIAL_NOT_FOUND'
           });
         }
 
@@ -514,12 +494,7 @@ export const updateConsumption = async (req, res) => {
     });
   } catch (error) {
     await transaction.rollback();
-    console.error('Error updating consumption record:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to update consumption record',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -527,7 +502,7 @@ export const updateConsumption = async (req, res) => {
  * Delete consumption record (soft delete)
  * DELETE /api/inventory/consumption/:id
  */
-export const deleteConsumption = async (req, res) => {
+export const deleteConsumption = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -559,12 +534,7 @@ export const deleteConsumption = async (req, res) => {
       message: 'Consumption record deleted successfully'
     });
   } catch (error) {
-    console.error('Error deleting consumption record:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to delete consumption record',
-      error: error.message
-    });
+    next(error);
   }
 };
 

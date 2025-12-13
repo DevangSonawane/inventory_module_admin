@@ -15,6 +15,7 @@ export const validateProductCode = async (req, res, next) => {
       return res.status(400).json({
         success: false,
         message: 'Product code is required',
+        code: 'VALIDATION_ERROR'
       });
     }
 
@@ -61,6 +62,7 @@ export const validateSlipNumber = async (req, res, next) => {
       return res.status(400).json({
         success: false,
         message: 'Slip number and type are required',
+        code: 'VALIDATION_ERROR'
       });
     }
 
@@ -115,6 +117,7 @@ export const validateSlipNumber = async (req, res, next) => {
       return res.status(400).json({
         success: false,
         message: 'Invalid type. Must be GRN, MR, or ST',
+        code: 'VALIDATION_ERROR'
       });
     }
 

@@ -71,12 +71,7 @@ export const getAuditLogs = async (req, res, next) => {
       }
     });
   } catch (error) {
-    console.error('Error fetching audit logs:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to fetch audit logs',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -124,12 +119,7 @@ export const getEntityHistory = async (req, res, next) => {
       }
     });
   } catch (error) {
-    console.error('Error fetching entity history:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to fetch entity history',
-      error: error.message
-    });
+    next(error);
   }
 };
 

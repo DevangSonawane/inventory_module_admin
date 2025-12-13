@@ -12,7 +12,8 @@ export const getNotifications = async (req, res, next) => {
     if (!userId) {
       return res.status(400).json({
         success: false,
-        message: 'User ID is required'
+        message: 'User ID is required',
+        code: 'VALIDATION_ERROR'
       });
     }
 
@@ -60,7 +61,8 @@ export const markNotificationRead = async (req, res, next) => {
     if (!userId) {
       return res.status(400).json({
         success: false,
-        message: 'User ID is required'
+        message: 'User ID is required',
+        code: 'VALIDATION_ERROR'
       });
     }
 
@@ -75,6 +77,7 @@ export const markNotificationRead = async (req, res, next) => {
       return res.status(404).json({
         success: false,
         message: 'Notification not found',
+        code: 'NOTIFICATION_NOT_FOUND'
       });
     }
 
@@ -104,7 +107,8 @@ export const deleteNotification = async (req, res, next) => {
     if (!userId) {
       return res.status(400).json({
         success: false,
-        message: 'User ID is required'
+        message: 'User ID is required',
+        code: 'VALIDATION_ERROR'
       });
     }
 
@@ -119,6 +123,7 @@ export const deleteNotification = async (req, res, next) => {
       return res.status(404).json({
         success: false,
         message: 'Notification not found',
+        code: 'NOTIFICATION_NOT_FOUND'
       });
     }
 

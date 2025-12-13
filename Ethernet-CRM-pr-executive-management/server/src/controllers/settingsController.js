@@ -1,11 +1,11 @@
 import SystemSettings from '../models/SystemSettings.js';
-import { validationResult } from 'express-validator';
+// validationResult removed - using validate middleware in routes instead
 
 /**
  * Get all system settings
  * GET /api/v1/admin/settings
  */
-export const getSettings = async (req, res) => {
+export const getSettings = async (req, res, next) => {
   try {
     const settings = await SystemSettings.findAll({
       order: [['setting_key', 'ASC']],
@@ -59,12 +59,7 @@ export const getSettings = async (req, res) => {
       data: mergedSettings,
     });
   } catch (error) {
-    console.error('Error fetching settings:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to fetch settings',
-      error: error.message,
-    });
+    next(error);
   }
 };
 
@@ -72,15 +67,9 @@ export const getSettings = async (req, res) => {
  * Update system settings
  * PUT /api/v1/admin/settings
  */
-export const updateSettings = async (req, res) => {
+export const updateSettings = async (req, res, next) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({
-        success: false,
-        errors: errors.array(),
-      });
-    }
+    // Validation is handled by validate middleware in route
 
     const { general, notifications, security, inventory } = req.body;
     const userId = req.user?.id || req.user?.user_id;
@@ -113,12 +102,7 @@ export const updateSettings = async (req, res) => {
       message: 'Settings updated successfully',
     });
   } catch (error) {
-    console.error('Error updating settings:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to update settings',
-      error: error.message,
-    });
+    next(error);
   }
 };
 

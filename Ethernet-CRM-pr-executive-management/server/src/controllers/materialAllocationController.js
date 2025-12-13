@@ -5,7 +5,7 @@ import InventoryMaster from '../models/InventoryMaster.js';
 import Material from '../models/Material.js';
 import StockArea from '../models/StockArea.js';
 import User from '../models/User.js';
-import { validationResult } from 'express-validator';
+// validationResult removed - using validate middleware in routes instead
 import { Op } from 'sequelize';
 import sequelize from '../config/database.js';
 
@@ -13,7 +13,7 @@ import sequelize from '../config/database.js';
  * Get available inventory for allocation (items in warehouse, not allocated)
  * GET /api/v1/inventory/material-request/:id/available-stock
  */
-export const getAvailableStockForAllocation = async (req, res) => {
+export const getAvailableStockForAllocation = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { stockAreaId, materialId } = req.query;
@@ -26,7 +26,8 @@ export const getAvailableStockForAllocation = async (req, res) => {
     if (!materialRequest) {
       return res.status(404).json({
         success: false,
-        message: 'Material request not found'
+        message: 'Material request not found',
+        code: 'MATERIAL_REQUEST_NOT_FOUND'
       });
     }
 
@@ -89,12 +90,7 @@ export const getAvailableStockForAllocation = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error fetching available stock:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to fetch available stock',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -102,15 +98,11 @@ export const getAvailableStockForAllocation = async (req, res) => {
  * Allocate items to material request
  * POST /api/v1/inventory/material-request/:id/allocate
  */
-export const allocateItems = async (req, res) => {
+export const allocateItems = async (req, res, next) => {
   const transaction = await sequelize.transaction();
   
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      await transaction.rollback();
-      return res.status(400).json({ success: false, errors: errors.array() });
-    }
+    // Validation is handled by validate middleware in route
 
     const { id } = req.params;
     const { allocations } = req.body; // Array of {materialRequestItemId, inventoryMasterIds: []}
@@ -133,7 +125,8 @@ export const allocateItems = async (req, res) => {
       await transaction.rollback();
       return res.status(404).json({
         success: false,
-        message: 'Material request not found'
+        message: 'Material request not found',
+        code: 'MATERIAL_REQUEST_NOT_FOUND'
       });
     }
 
@@ -141,7 +134,8 @@ export const allocateItems = async (req, res) => {
       await transaction.rollback();
       return res.status(400).json({
         success: false,
-        message: 'Material request must be approved before allocation'
+        message: 'Material request must be approved before allocation',
+        code: 'VALIDATION_ERROR'
       });
     }
 
@@ -150,7 +144,8 @@ export const allocateItems = async (req, res) => {
       await transaction.rollback();
       return res.status(400).json({
         success: false,
-        message: 'At least one allocation is required'
+        message: 'At least one allocation is required',
+        code: 'VALIDATION_ERROR'
       });
     }
 
@@ -172,7 +167,8 @@ export const allocateItems = async (req, res) => {
         await transaction.rollback();
         return res.status(400).json({
           success: false,
-          message: `Material request item ${materialRequestItemId} not found`
+          message: `Material request item ${materialRequestItemId} not found`,
+          code: 'MATERIAL_REQUEST_ITEM_NOT_FOUND'
         });
       }
 
@@ -181,7 +177,8 @@ export const allocateItems = async (req, res) => {
         await transaction.rollback();
         return res.status(400).json({
           success: false,
-          message: `At least one inventory item is required for material request item ${materialRequestItemId}`
+          message: `At least one inventory item is required for material request item ${materialRequestItemId}`,
+          code: 'VALIDATION_ERROR'
         });
       }
 
@@ -198,7 +195,8 @@ export const allocateItems = async (req, res) => {
         await transaction.rollback();
         return res.status(400).json({
           success: false,
-          message: `Allocation exceeds requested quantity. Requested: ${requestItem.requested_quantity}, Already allocated: ${existingAllocations}, Trying to allocate: ${inventoryMasterIds.length}`
+          message: `Allocation exceeds requested quantity. Requested: ${requestItem.requested_quantity}, Already allocated: ${existingAllocations}, Trying to allocate: ${inventoryMasterIds.length}`,
+          code: 'VALIDATION_ERROR'
         });
       }
 
@@ -220,7 +218,8 @@ export const allocateItems = async (req, res) => {
           await transaction.rollback();
           return res.status(400).json({
             success: false,
-            message: `Inventory item ${inventoryMasterId} not found or not available`
+            message: `Inventory item ${inventoryMasterId} not found or not available`,
+            code: 'INVENTORY_ITEM_NOT_FOUND'
           });
         }
 
@@ -237,7 +236,8 @@ export const allocateItems = async (req, res) => {
           await transaction.rollback();
           return res.status(400).json({
             success: false,
-            message: `Inventory item ${inventoryMasterId} is already allocated`
+            message: `Inventory item ${inventoryMasterId} is already allocated`,
+            code: 'VALIDATION_ERROR'
           });
         }
 
@@ -300,12 +300,7 @@ export const allocateItems = async (req, res) => {
     });
   } catch (error) {
     await transaction.rollback();
-    console.error('Error allocating items:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to allocate items',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -313,7 +308,7 @@ export const allocateItems = async (req, res) => {
  * Get allocations for a material request
  * GET /api/v1/inventory/material-request/:id/allocations
  */
-export const getAllocations = async (req, res) => {
+export const getAllocations = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -325,7 +320,8 @@ export const getAllocations = async (req, res) => {
     if (!materialRequest) {
       return res.status(404).json({
         success: false,
-        message: 'Material request not found'
+        message: 'Material request not found',
+        code: 'MATERIAL_REQUEST_NOT_FOUND'
       });
     }
 
@@ -386,12 +382,7 @@ export const getAllocations = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error fetching allocations:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to fetch allocations',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -399,7 +390,7 @@ export const getAllocations = async (req, res) => {
  * Cancel allocation
  * DELETE /api/v1/inventory/material-request/:id/allocations/:allocationId
  */
-export const cancelAllocation = async (req, res) => {
+export const cancelAllocation = async (req, res, next) => {
   const transaction = await sequelize.transaction();
   
   try {
@@ -415,7 +406,8 @@ export const cancelAllocation = async (req, res) => {
       await transaction.rollback();
       return res.status(404).json({
         success: false,
-        message: 'Material request not found'
+        message: 'Material request not found',
+        code: 'MATERIAL_REQUEST_NOT_FOUND'
       });
     }
 
@@ -439,7 +431,8 @@ export const cancelAllocation = async (req, res) => {
       await transaction.rollback();
       return res.status(404).json({
         success: false,
-        message: 'Allocation not found or cannot be cancelled'
+        message: 'Allocation not found or cannot be cancelled',
+        code: 'ALLOCATION_NOT_FOUND'
       });
     }
 
@@ -463,12 +456,7 @@ export const cancelAllocation = async (req, res) => {
     });
   } catch (error) {
     await transaction.rollback();
-    console.error('Error cancelling allocation:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to cancel allocation',
-      error: error.message
-    });
+    next(error);
   }
 };
 

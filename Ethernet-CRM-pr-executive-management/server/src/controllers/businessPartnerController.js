@@ -1,12 +1,12 @@
 import BusinessPartner from '../models/BusinessPartner.js';
-import { validationResult } from 'express-validator';
+// validationResult removed - using validate middleware in routes instead
 import { Op } from 'sequelize';
 
 /**
  * Get all business partners with filtering and pagination
  * GET /api/inventory/business-partners
  */
-export const getAllBusinessPartners = async (req, res) => {
+export const getAllBusinessPartners = async (req, res, next) => {
   try {
     const {
       page = 1,
@@ -51,12 +51,7 @@ export const getAllBusinessPartners = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error fetching business partners:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to fetch business partners',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -64,7 +59,7 @@ export const getAllBusinessPartners = async (req, res) => {
  * Get single business partner by ID
  * GET /api/inventory/business-partners/:id
  */
-export const getBusinessPartnerById = async (req, res) => {
+export const getBusinessPartnerById = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -77,7 +72,8 @@ export const getBusinessPartnerById = async (req, res) => {
     if (!businessPartner) {
       return res.status(404).json({
         success: false,
-        message: 'Business partner not found'
+        message: 'Business partner not found',
+        code: 'BUSINESS_PARTNER_NOT_FOUND'
       });
     }
 
@@ -86,12 +82,7 @@ export const getBusinessPartnerById = async (req, res) => {
       data: { businessPartner }
     });
   } catch (error) {
-    console.error('Error fetching business partner:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to fetch business partner',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -99,19 +90,9 @@ export const getBusinessPartnerById = async (req, res) => {
  * Create new business partner
  * POST /api/inventory/business-partners
  */
-export const createBusinessPartner = async (req, res) => {
+export const createBusinessPartner = async (req, res, next) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({
-        success: false,
-        message: 'Validation failed',
-        errors: errors.array().map(err => ({
-          field: err.path || err.param,
-          message: err.msg || err.message
-        }))
-      });
-    }
+    // Validation is handled by validate middleware in route
 
     const {
       partnerName,
@@ -193,12 +174,7 @@ export const createBusinessPartner = async (req, res) => {
       data: { businessPartner }
     });
   } catch (error) {
-    console.error('Error creating business partner:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to create business partner',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -206,19 +182,9 @@ export const createBusinessPartner = async (req, res) => {
  * Update business partner
  * PUT /api/inventory/business-partners/:id
  */
-export const updateBusinessPartner = async (req, res) => {
+export const updateBusinessPartner = async (req, res, next) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({
-        success: false,
-        message: 'Validation failed',
-        errors: errors.array().map(err => ({
-          field: err.path || err.param,
-          message: err.msg || err.message
-        }))
-      });
-    }
+    // Validation is handled by validate middleware in route
 
     const { id } = req.params;
     const {
@@ -258,7 +224,8 @@ export const updateBusinessPartner = async (req, res) => {
     if (!businessPartner) {
       return res.status(404).json({
         success: false,
-        message: 'Business partner not found'
+        message: 'Business partner not found',
+        code: 'BUSINESS_PARTNER_NOT_FOUND'
       });
     }
 
@@ -269,9 +236,10 @@ export const updateBusinessPartner = async (req, res) => {
         where: { vendor_code: vendorCode, partner_id: { [Op.ne]: id } } 
       });
       if (existing) {
-        return res.status(400).json({
+        return res.status(409).json({
           success: false,
-          message: 'Vendor code already exists'
+          message: 'Vendor code already exists',
+          code: 'UNIQUE_CONSTRAINT_ERROR'
         });
       }
     }
@@ -312,12 +280,7 @@ export const updateBusinessPartner = async (req, res) => {
       data: { businessPartner }
     });
   } catch (error) {
-    console.error('Error updating business partner:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to update business partner',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -325,7 +288,7 @@ export const updateBusinessPartner = async (req, res) => {
  * Delete business partner (soft delete)
  * DELETE /api/inventory/business-partners/:id
  */
-export const deleteBusinessPartner = async (req, res) => {
+export const deleteBusinessPartner = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -336,7 +299,8 @@ export const deleteBusinessPartner = async (req, res) => {
     if (!businessPartner) {
       return res.status(404).json({
         success: false,
-        message: 'Business partner not found'
+        message: 'Business partner not found',
+        code: 'BUSINESS_PARTNER_NOT_FOUND'
       });
     }
 
@@ -347,12 +311,7 @@ export const deleteBusinessPartner = async (req, res) => {
       message: 'Business partner deleted successfully'
     });
   } catch (error) {
-    console.error('Error deleting business partner:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to delete business partner',
-      error: error.message
-    });
+    next(error);
   }
 };
 

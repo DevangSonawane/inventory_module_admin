@@ -1,7 +1,7 @@
 import Asset from '../models/Asset.js';
 import Company from '../models/Company.js';
 import AssetType from '../models/AssetType.js';
-import { validationResult } from 'express-validator';
+// validationResult removed - using validate middleware in routes instead
 import { Op, fn, col, where, literal } from 'sequelize';
 
 // ==================== ASSET OPERATIONS ====================
@@ -10,12 +10,9 @@ import { Op, fn, col, where, literal } from 'sequelize';
  * Add new stock to an asset (creates new asset or updates existing)
  * POST /api/inventory/add-stock
  */
-export const addStock = async (req, res) => {
+export const addStock = async (req, res, next) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ success: false, errors: errors.array() });
-    }
+    // Validation is handled by validate middleware in route
 
     const { company, assetType, batchQty, threshold, orgId } = req.body;
     const userId = req.user?.user_id; // Assuming user is attached via auth middleware
@@ -68,12 +65,7 @@ export const addStock = async (req, res) => {
       });
     }
   } catch (error) {
-    console.error('Error adding stock:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to add stock',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -81,7 +73,7 @@ export const addStock = async (req, res) => {
  * Get all assets with filtering, searching, and pagination
  * GET /api/inventory/assets
  */
-export const getAllAssets = async (req, res) => {
+export const getAllAssets = async (req, res, next) => {
   try {
     const {
       page = 1,
@@ -238,12 +230,7 @@ export const getAllAssets = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error fetching assets:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to fetch assets',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -251,7 +238,7 @@ export const getAllAssets = async (req, res) => {
  * Get single asset by ID
  * GET /api/inventory/assets/:id
  */
-export const getAssetById = async (req, res) => {
+export const getAssetById = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -265,7 +252,8 @@ export const getAssetById = async (req, res) => {
     if (!asset) {
       return res.status(404).json({
         success: false,
-        message: 'Asset not found'
+        message: 'Asset not found',
+        code: 'ASSET_NOT_FOUND'
       });
     }
 
@@ -274,12 +262,7 @@ export const getAssetById = async (req, res) => {
       data: asset
     });
   } catch (error) {
-    console.error('Error fetching asset:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to fetch asset',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -287,12 +270,9 @@ export const getAssetById = async (req, res) => {
  * Update asset (edit asset details, adjust stock out, update threshold)
  * PUT /api/inventory/assets/:id
  */
-export const updateAsset = async (req, res) => {
+export const updateAsset = async (req, res, next) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ success: false, errors: errors.array() });
-    }
+    // Validation is handled by validate middleware in route
 
     const { id } = req.params;
     const { assetType, company, totalIn, totalOut, threshold, addToOut } = req.body;
@@ -308,7 +288,8 @@ export const updateAsset = async (req, res) => {
     if (!asset) {
       return res.status(404).json({
         success: false,
-        message: 'Asset not found'
+        message: 'Asset not found',
+        code: 'ASSET_NOT_FOUND'
       });
     }
 
@@ -343,7 +324,8 @@ export const updateAsset = async (req, res) => {
     if (updateData.balance < 0) {
       return res.status(400).json({
         success: false,
-        message: 'Total out cannot exceed total in. Balance would be negative.'
+        message: 'Total out cannot exceed total in. Balance would be negative.',
+        code: 'VALIDATION_ERROR'
       });
     }
 
@@ -355,12 +337,7 @@ export const updateAsset = async (req, res) => {
       data: asset
     });
   } catch (error) {
-    console.error('Error updating asset:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to update asset',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -368,7 +345,7 @@ export const updateAsset = async (req, res) => {
  * Delete asset (soft delete)
  * DELETE /api/inventory/assets/:id
  */
-export const deleteAsset = async (req, res) => {
+export const deleteAsset = async (req, res, next) => {
   try {
     const { id } = req.params;
     const userId = req.user?.user_id;
@@ -383,7 +360,8 @@ export const deleteAsset = async (req, res) => {
     if (!asset) {
       return res.status(404).json({
         success: false,
-        message: 'Asset not found'
+        message: 'Asset not found',
+        code: 'ASSET_NOT_FOUND'
       });
     }
 
@@ -397,12 +375,7 @@ export const deleteAsset = async (req, res) => {
       message: 'Asset deleted successfully'
     });
   } catch (error) {
-    console.error('Error deleting asset:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to delete asset',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -410,7 +383,7 @@ export const deleteAsset = async (req, res) => {
  * Get assets with low stock (balance <= threshold)
  * GET /api/inventory/low-stock
  */
-export const getLowStockAssets = async (req, res) => {
+export const getLowStockAssets = async (req, res, next) => {
   try {
     const { orgId = '' } = req.query;
 
@@ -436,12 +409,7 @@ export const getLowStockAssets = async (req, res) => {
       count: lowStockAssets.length
     });
   } catch (error) {
-    console.error('Error fetching low stock assets:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to fetch low stock assets',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -451,7 +419,7 @@ export const getLowStockAssets = async (req, res) => {
  * Get all companies
  * GET /api/inventory/companies
  */
-export const getAllCompanies = async (req, res) => {
+export const getAllCompanies = async (req, res, next) => {
   try {
     const { orgId = '' } = req.query;
 
@@ -470,12 +438,7 @@ export const getAllCompanies = async (req, res) => {
       data: companies
     });
   } catch (error) {
-    console.error('Error fetching companies:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to fetch companies',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -483,12 +446,9 @@ export const getAllCompanies = async (req, res) => {
  * Add new company
  * POST /api/inventory/companies
  */
-export const addCompany = async (req, res) => {
+export const addCompany = async (req, res, next) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ success: false, errors: errors.array() });
-    }
+    // Validation is handled by validate middleware in route
 
     const { companyCode, companyName, orgId } = req.body;
 
@@ -501,9 +461,10 @@ export const addCompany = async (req, res) => {
     });
 
     if (existingCompany) {
-      return res.status(400).json({
+      return res.status(409).json({
         success: false,
-        message: 'Company with this code already exists'
+        message: 'Company with this code already exists',
+        code: 'UNIQUE_CONSTRAINT_ERROR'
       });
     }
 
@@ -520,12 +481,7 @@ export const addCompany = async (req, res) => {
       data: company
     });
   } catch (error) {
-    console.error('Error adding company:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to add company',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -535,7 +491,7 @@ export const addCompany = async (req, res) => {
  * Get all asset types
  * GET /api/inventory/asset-types
  */
-export const getAllAssetTypes = async (req, res) => {
+export const getAllAssetTypes = async (req, res, next) => {
   try {
     const { orgId = '' } = req.query;
 
@@ -554,12 +510,7 @@ export const getAllAssetTypes = async (req, res) => {
       data: assetTypes
     });
   } catch (error) {
-    console.error('Error fetching asset types:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to fetch asset types',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -567,12 +518,9 @@ export const getAllAssetTypes = async (req, res) => {
  * Add new asset type
  * POST /api/inventory/asset-types
  */
-export const addAssetType = async (req, res) => {
+export const addAssetType = async (req, res, next) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ success: false, errors: errors.array() });
-    }
+    // Validation is handled by validate middleware in route
 
     const { typeName, typeCode, description, orgId } = req.body;
 
@@ -585,9 +533,10 @@ export const addAssetType = async (req, res) => {
     });
 
     if (existingType) {
-      return res.status(400).json({
+      return res.status(409).json({
         success: false,
-        message: 'Asset type with this code already exists'
+        message: 'Asset type with this code already exists',
+        code: 'UNIQUE_CONSTRAINT_ERROR'
       });
     }
 
@@ -605,12 +554,7 @@ export const addAssetType = async (req, res) => {
       data: assetType
     });
   } catch (error) {
-    console.error('Error adding asset type:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to add asset type',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -620,7 +564,7 @@ export const addAssetType = async (req, res) => {
  * Get inventory dashboard statistics
  * GET /api/inventory/dashboard
  */
-export const getDashboardStats = async (req, res) => {
+export const getDashboardStats = async (req, res, next) => {
   try {
     const { orgId = '' } = req.query;
 
@@ -705,12 +649,7 @@ export const getDashboardStats = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error fetching dashboard stats:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to fetch dashboard statistics',
-      error: error.message
-    });
+    next(error);
   }
 };
 

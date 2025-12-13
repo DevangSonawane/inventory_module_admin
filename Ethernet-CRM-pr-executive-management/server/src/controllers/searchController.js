@@ -28,6 +28,7 @@ export const globalSearch = async (req, res, next) => {
       return res.status(400).json({
         success: false,
         message: 'Search query is required',
+        code: 'VALIDATION_ERROR'
       });
     }
 
@@ -496,13 +497,6 @@ export const globalSearch = async (req, res, next) => {
       },
     });
   } catch (error) {
-    console.error('Error in global search:', error);
-    console.error('Search query:', req.query);
-    console.error('Error stack:', error.stack);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to perform search',
-      error: error.message
-    });
+    next(error);
   }
 };

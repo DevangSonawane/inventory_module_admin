@@ -7,10 +7,12 @@ export const validate = (req, res, next) => {
     return res.status(400).json({
       success: false,
       message: 'Validation failed',
+      code: 'VALIDATION_ERROR',
       errors: errors.array().map(err => ({
-        field: err.path,
+        field: err.path || err.param,
         message: err.msg
-      }))
+      })),
+      timestamp: new Date().toISOString()
     });
   }
   
@@ -29,7 +31,9 @@ export const parseInwardItems = (req, res, next) => {
       return res.status(400).json({
         success: false,
         message: 'Invalid items format',
-        errors: [{ field: 'items', message: 'Invalid items JSON format' }]
+        code: 'VALIDATION_ERROR',
+        errors: [{ field: 'items', message: 'Invalid items JSON format' }],
+        timestamp: new Date().toISOString()
       });
     }
   }

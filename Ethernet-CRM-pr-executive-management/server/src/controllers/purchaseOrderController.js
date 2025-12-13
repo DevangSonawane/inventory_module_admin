@@ -4,7 +4,7 @@ import PurchaseRequest from '../models/PurchaseRequest.js';
 import PurchaseRequestItem from '../models/PurchaseRequestItem.js';
 import Material from '../models/Material.js';
 import BusinessPartner from '../models/BusinessPartner.js';
-import { validationResult } from 'express-validator';
+// validationResult removed - using validate middleware in routes instead
 import { Op } from 'sequelize';
 import sequelize from '../config/database.js';
 import { sendPOEmailToVendor } from '../utils/emailService.js';
@@ -28,7 +28,7 @@ const generatePONumber = (prNumber = null) => {
  * Get all purchase orders with filtering and pagination
  * GET /api/inventory/purchase-orders
  */
-export const getAllPurchaseOrders = async (req, res) => {
+export const getAllPurchaseOrders = async (req, res, next) => {
   try {
     const {
       page = 1,
@@ -89,12 +89,7 @@ export const getAllPurchaseOrders = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error fetching purchase orders:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to fetch purchase orders',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -102,7 +97,7 @@ export const getAllPurchaseOrders = async (req, res) => {
  * Get single purchase order by ID with items
  * GET /api/inventory/purchase-orders/:id
  */
-export const getPurchaseOrderById = async (req, res) => {
+export const getPurchaseOrderById = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -139,7 +134,8 @@ export const getPurchaseOrderById = async (req, res) => {
     if (!purchaseOrder) {
       return res.status(404).json({
         success: false,
-        message: 'Purchase order not found'
+        message: 'Purchase order not found',
+        code: 'PURCHASE_ORDER_NOT_FOUND'
       });
     }
 
@@ -148,12 +144,7 @@ export const getPurchaseOrderById = async (req, res) => {
       data: { purchaseOrder }
     });
   } catch (error) {
-    console.error('Error fetching purchase order:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to fetch purchase order',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -161,7 +152,7 @@ export const getPurchaseOrderById = async (req, res) => {
  * Create purchase order from purchase request
  * POST /api/inventory/purchase-orders/from-pr/:prId
  */
-export const createPOFromPR = async (req, res) => {
+export const createPOFromPR = async (req, res, next) => {
   const transaction = await sequelize.transaction();
   
   try {
@@ -196,7 +187,8 @@ export const createPOFromPR = async (req, res) => {
       await transaction.rollback();
       return res.status(404).json({
         success: false,
-        message: 'Purchase request not found'
+        message: 'Purchase request not found',
+        code: 'PURCHASE_REQUEST_NOT_FOUND'
       });
     }
 
@@ -204,7 +196,8 @@ export const createPOFromPR = async (req, res) => {
       await transaction.rollback();
       return res.status(400).json({
         success: false,
-        message: 'Only APPROVED purchase requests can be converted to purchase orders'
+        message: 'Only APPROVED purchase requests can be converted to purchase orders',
+        code: 'INVALID_STATUS'
       });
     }
 
@@ -217,7 +210,8 @@ export const createPOFromPR = async (req, res) => {
         await transaction.rollback();
         return res.status(400).json({
           success: false,
-          message: 'Invalid vendor ID'
+          message: 'Invalid vendor ID',
+          code: 'VENDOR_NOT_FOUND'
         });
       }
     }
@@ -242,7 +236,8 @@ export const createPOFromPR = async (req, res) => {
         await transaction.rollback();
         return res.status(500).json({
           success: false,
-          message: 'Failed to generate unique PO number'
+          message: 'Failed to generate unique PO number',
+          code: 'PO_NUMBER_GENERATION_ERROR'
         });
       }
     }
@@ -287,7 +282,8 @@ export const createPOFromPR = async (req, res) => {
         await transaction.rollback();
         return res.status(400).json({
           success: false,
-          message: `Material with ID ${materialId} not found`
+          message: `Material with ID ${materialId} not found`,
+          code: 'MATERIAL_NOT_FOUND'
         });
       }
 
@@ -346,12 +342,7 @@ export const createPOFromPR = async (req, res) => {
     });
   } catch (error) {
     await transaction.rollback();
-    console.error('Error creating purchase order:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to create purchase order',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -359,22 +350,11 @@ export const createPOFromPR = async (req, res) => {
  * Create new purchase order (standalone, not from PR)
  * POST /api/inventory/purchase-orders
  */
-export const createPurchaseOrder = async (req, res) => {
+export const createPurchaseOrder = async (req, res, next) => {
   const transaction = await sequelize.transaction();
   
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      await transaction.rollback();
-      return res.status(400).json({
-        success: false,
-        message: 'Validation failed',
-        errors: errors.array().map(err => ({
-          field: err.path || err.param,
-          message: err.msg || err.message
-        }))
-      });
-    }
+    // Validation is handled by validate middleware in route
 
     const {
       poNumber,
@@ -391,7 +371,8 @@ export const createPurchaseOrder = async (req, res) => {
       await transaction.rollback();
       return res.status(400).json({
         success: false,
-        message: 'At least one item is required'
+        message: 'At least one item is required',
+        code: 'VALIDATION_ERROR'
       });
     }
 
@@ -404,7 +385,8 @@ export const createPurchaseOrder = async (req, res) => {
         await transaction.rollback();
         return res.status(400).json({
           success: false,
-          message: 'Invalid vendor ID'
+          message: 'Invalid vendor ID',
+          code: 'VENDOR_NOT_FOUND'
         });
       }
     }
@@ -441,7 +423,8 @@ export const createPurchaseOrder = async (req, res) => {
         await transaction.rollback();
         return res.status(500).json({
           success: false,
-          message: 'Failed to generate unique PO number'
+          message: 'Failed to generate unique PO number',
+          code: 'PO_NUMBER_GENERATION_ERROR'
         });
       }
     }
@@ -474,7 +457,8 @@ export const createPurchaseOrder = async (req, res) => {
         await transaction.rollback();
         return res.status(400).json({
           success: false,
-          message: `Material with ID ${materialId} not found`
+          message: `Material with ID ${materialId} not found`,
+          code: 'MATERIAL_NOT_FOUND'
         });
       }
 
@@ -527,12 +511,7 @@ export const createPurchaseOrder = async (req, res) => {
     });
   } catch (error) {
     await transaction.rollback();
-    console.error('Error creating purchase order:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to create purchase order',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -540,22 +519,11 @@ export const createPurchaseOrder = async (req, res) => {
  * Update purchase order
  * PUT /api/inventory/purchase-orders/:id
  */
-export const updatePurchaseOrder = async (req, res) => {
+export const updatePurchaseOrder = async (req, res, next) => {
   const transaction = await sequelize.transaction();
   
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      await transaction.rollback();
-      return res.status(400).json({
-        success: false,
-        message: 'Validation failed',
-        errors: errors.array().map(err => ({
-          field: err.path || err.param,
-          message: err.msg || err.message
-        }))
-      });
-    }
+    // Validation is handled by validate middleware in route
 
     const { id } = req.params;
     const {
@@ -576,7 +544,8 @@ export const updatePurchaseOrder = async (req, res) => {
       await transaction.rollback();
       return res.status(404).json({
         success: false,
-        message: 'Purchase order not found'
+        message: 'Purchase order not found',
+        code: 'PURCHASE_ORDER_NOT_FOUND'
       });
     }
 
@@ -585,7 +554,8 @@ export const updatePurchaseOrder = async (req, res) => {
       await transaction.rollback();
       return res.status(400).json({
         success: false,
-        message: 'Only DRAFT purchase orders can be updated'
+        message: 'Only DRAFT purchase orders can be updated',
+        code: 'INVALID_STATUS'
       });
     }
 
@@ -599,7 +569,8 @@ export const updatePurchaseOrder = async (req, res) => {
           await transaction.rollback();
           return res.status(400).json({
             success: false,
-            message: 'Invalid vendor ID'
+            message: 'Invalid vendor ID',
+            code: 'VENDOR_NOT_FOUND'
           });
         }
       }
@@ -633,7 +604,8 @@ export const updatePurchaseOrder = async (req, res) => {
           await transaction.rollback();
           return res.status(400).json({
             success: false,
-            message: `Material with ID ${materialId} not found`
+            message: `Material with ID ${materialId} not found`,
+            code: 'MATERIAL_NOT_FOUND'
           });
         }
 
@@ -687,12 +659,7 @@ export const updatePurchaseOrder = async (req, res) => {
     });
   } catch (error) {
     await transaction.rollback();
-    console.error('Error updating purchase order:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to update purchase order',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -700,7 +667,7 @@ export const updatePurchaseOrder = async (req, res) => {
  * Delete purchase order (soft delete)
  * DELETE /api/inventory/purchase-orders/:id
  */
-export const deletePurchaseOrder = async (req, res) => {
+export const deletePurchaseOrder = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -713,7 +680,8 @@ export const deletePurchaseOrder = async (req, res) => {
     if (!purchaseOrder) {
       return res.status(404).json({
         success: false,
-        message: 'Purchase order not found'
+        message: 'Purchase order not found',
+        code: 'PURCHASE_ORDER_NOT_FOUND'
       });
     }
 
@@ -721,7 +689,8 @@ export const deletePurchaseOrder = async (req, res) => {
     if (purchaseOrder.status !== 'DRAFT') {
       return res.status(400).json({
         success: false,
-        message: 'Only DRAFT purchase orders can be deleted'
+        message: 'Only DRAFT purchase orders can be deleted',
+        code: 'INVALID_STATUS'
       });
     }
 
@@ -732,12 +701,7 @@ export const deletePurchaseOrder = async (req, res) => {
       message: 'Purchase order deleted successfully'
     });
   } catch (error) {
-    console.error('Error deleting purchase order:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to delete purchase order',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -745,7 +709,7 @@ export const deletePurchaseOrder = async (req, res) => {
  * Mark Purchase Order as SENT (when email/PO is sent to vendor)
  * POST /api/inventory/purchase-orders/:id/send
  */
-export const sendPurchaseOrder = async (req, res) => {
+export const sendPurchaseOrder = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -758,7 +722,8 @@ export const sendPurchaseOrder = async (req, res) => {
     if (!purchaseOrder) {
       return res.status(404).json({
         success: false,
-        message: 'Purchase order not found'
+        message: 'Purchase order not found',
+        code: 'PURCHASE_ORDER_NOT_FOUND'
       });
     }
 
@@ -766,7 +731,8 @@ export const sendPurchaseOrder = async (req, res) => {
     if (purchaseOrder.status !== 'DRAFT') {
       return res.status(400).json({
         success: false,
-        message: `Purchase order is already ${purchaseOrder.status}. Only DRAFT orders can be sent.`
+        message: `Purchase order is already ${purchaseOrder.status}. Only DRAFT orders can be sent.`,
+        code: 'INVALID_STATUS'
       });
     }
 
@@ -805,12 +771,7 @@ export const sendPurchaseOrder = async (req, res) => {
       data: { purchaseOrder: updatedPO }
     });
   } catch (error) {
-    console.error('Error sending purchase order:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to send purchase order',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -818,7 +779,7 @@ export const sendPurchaseOrder = async (req, res) => {
  * Mark Purchase Order as RECEIVED (when goods are received)
  * POST /api/inventory/purchase-orders/:id/receive
  */
-export const receivePurchaseOrder = async (req, res) => {
+export const receivePurchaseOrder = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -831,7 +792,8 @@ export const receivePurchaseOrder = async (req, res) => {
     if (!purchaseOrder) {
       return res.status(404).json({
         success: false,
-        message: 'Purchase order not found'
+        message: 'Purchase order not found',
+        code: 'PURCHASE_ORDER_NOT_FOUND'
       });
     }
 
@@ -839,7 +801,8 @@ export const receivePurchaseOrder = async (req, res) => {
     if (purchaseOrder.status !== 'SENT') {
       return res.status(400).json({
         success: false,
-        message: `Purchase order status is ${purchaseOrder.status}. Only SENT orders can be marked as RECEIVED.`
+        message: `Purchase order status is ${purchaseOrder.status}. Only SENT orders can be marked as RECEIVED.`,
+        code: 'INVALID_STATUS'
       });
     }
 
@@ -878,12 +841,7 @@ export const receivePurchaseOrder = async (req, res) => {
       data: { purchaseOrder: updatedPO }
     });
   } catch (error) {
-    console.error('Error receiving purchase order:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to mark purchase order as received',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -891,7 +849,7 @@ export const receivePurchaseOrder = async (req, res) => {
  * Add documents to purchase order
  * POST /api/inventory/purchase-orders/:id/documents
  */
-export const addDocumentsToPurchaseOrder = async (req, res) => {
+export const addDocumentsToPurchaseOrder = async (req, res, next) => {
   try {
     const { id } = req.params;
     const files = req.files;
@@ -900,6 +858,7 @@ export const addDocumentsToPurchaseOrder = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'No files uploaded',
+        code: 'VALIDATION_ERROR'
       });
     }
 
@@ -918,6 +877,7 @@ export const addDocumentsToPurchaseOrder = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Some files are invalid. Only images and PDFs are allowed, max size 10MB per file.',
+        code: 'VALIDATION_ERROR'
       });
     }
 
@@ -931,6 +891,7 @@ export const addDocumentsToPurchaseOrder = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: 'Purchase order not found',
+        code: 'PURCHASE_ORDER_NOT_FOUND'
       });
     }
 
@@ -947,6 +908,7 @@ export const addDocumentsToPurchaseOrder = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: `Maximum ${maxFiles} documents allowed. Current: ${existingDocuments.length}, Trying to add: ${documentFiles.length}`,
+        code: 'VALIDATION_ERROR'
       });
     }
 
@@ -966,12 +928,7 @@ export const addDocumentsToPurchaseOrder = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('Error adding documents to purchase order:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to add documents',
-      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
-    });
+    next(error);
   }
 };
 
@@ -979,7 +936,7 @@ export const addDocumentsToPurchaseOrder = async (req, res) => {
  * Submit Purchase Order (sends email to vendor)
  * POST /api/inventory/purchase-orders/:id/submit
  */
-export const submitPurchaseOrder = async (req, res) => {
+export const submitPurchaseOrder = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -1014,14 +971,16 @@ export const submitPurchaseOrder = async (req, res) => {
     if (!purchaseOrder) {
       return res.status(404).json({
         success: false,
-        message: 'Purchase order not found'
+        message: 'Purchase order not found',
+        code: 'PURCHASE_ORDER_NOT_FOUND'
       });
     }
 
     if (!purchaseOrder.vendor) {
       return res.status(400).json({
         success: false,
-        message: 'Vendor information is required to submit purchase order'
+        message: 'Vendor information is required to submit purchase order',
+        code: 'VENDOR_NOT_FOUND'
       });
     }
 
@@ -1030,7 +989,8 @@ export const submitPurchaseOrder = async (req, res) => {
     if (!vendorEmail) {
       return res.status(400).json({
         success: false,
-        message: 'Vendor email address is not available'
+        message: 'Vendor email address is not available',
+        code: 'VENDOR_EMAIL_NOT_FOUND'
       });
     }
 
@@ -1086,12 +1046,7 @@ export const submitPurchaseOrder = async (req, res) => {
       data: { purchaseOrder: updatedPO }
     });
   } catch (error) {
-    console.error('Error submitting purchase order:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to submit purchase order',
-      error: error.message
-    });
+    next(error);
   }
 };
 

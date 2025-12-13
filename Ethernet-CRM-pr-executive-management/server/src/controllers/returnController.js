@@ -5,7 +5,7 @@ import Material from '../models/Material.js';
 import User from '../models/User.js';
 import ConsumptionRecord from '../models/ConsumptionRecord.js';
 import StockArea from '../models/StockArea.js';
-import { validationResult } from 'express-validator';
+// validationResult removed - using validate middleware in routes instead
 import { Op } from 'sequelize';
 import sequelize from '../config/database.js';
 
@@ -13,15 +13,11 @@ import sequelize from '../config/database.js';
  * Create new return record
  * POST /api/v1/inventory/returns
  */
-export const createReturn = async (req, res) => {
+export const createReturn = async (req, res, next) => {
   const transaction = await sequelize.transaction();
   
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      await transaction.rollback();
-      return res.status(400).json({ success: false, errors: errors.array() });
-    }
+    // Validation is handled by validate middleware in route
 
     const {
       consumptionId,
@@ -48,7 +44,8 @@ export const createReturn = async (req, res) => {
       await transaction.rollback();
       return res.status(400).json({
         success: false,
-        message: 'Invalid technician'
+        message: 'Invalid technician',
+        code: 'TECHNICIAN_NOT_FOUND'
       });
     }
 
@@ -65,7 +62,8 @@ export const createReturn = async (req, res) => {
         await transaction.rollback();
         return res.status(400).json({
           success: false,
-          message: 'Invalid consumption record'
+          message: 'Invalid consumption record',
+          code: 'CONSUMPTION_NOT_FOUND'
         });
       }
     }
@@ -75,7 +73,8 @@ export const createReturn = async (req, res) => {
       await transaction.rollback();
       return res.status(400).json({
         success: false,
-        message: 'At least one item is required'
+        message: 'At least one item is required',
+        code: 'VALIDATION_ERROR'
       });
     }
 
@@ -111,7 +110,8 @@ export const createReturn = async (req, res) => {
         await transaction.rollback();
         return res.status(400).json({
           success: false,
-          message: `Material with ID ${materialId} not found`
+          message: `Material with ID ${materialId} not found`,
+          code: 'MATERIAL_NOT_FOUND'
         });
       }
 
@@ -143,7 +143,8 @@ export const createReturn = async (req, res) => {
           await transaction.rollback();
           return res.status(400).json({
             success: false,
-            message: `Serial number ${serialNumber || inventoryMasterId} not found in technician's stock or already consumed`
+            message: `Serial number ${serialNumber || inventoryMasterId} not found in technician's stock or already consumed`,
+            code: 'INVENTORY_NOT_FOUND'
           });
         }
 
@@ -179,7 +180,8 @@ export const createReturn = async (req, res) => {
           await transaction.rollback();
           return res.status(400).json({
             success: false,
-            message: `Insufficient stock. Available: ${availableItems.length}, Requested: ${itemQuantity}`
+            message: `Insufficient stock. Available: ${availableItems.length}, Requested: ${itemQuantity}`,
+            code: 'INSUFFICIENT_STOCK'
           });
         }
 
@@ -241,12 +243,7 @@ export const createReturn = async (req, res) => {
     });
   } catch (error) {
     await transaction.rollback();
-    console.error('Error creating return record:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to create return record',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -254,7 +251,7 @@ export const createReturn = async (req, res) => {
  * Get all return records with filtering and pagination
  * GET /api/v1/inventory/returns
  */
-export const getAllReturns = async (req, res) => {
+export const getAllReturns = async (req, res, next) => {
   try {
     const {
       page = 1,
@@ -353,12 +350,7 @@ export const getAllReturns = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error fetching return records:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to fetch return records',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -366,7 +358,7 @@ export const getAllReturns = async (req, res) => {
  * Get single return record by ID
  * GET /api/v1/inventory/returns/:id
  */
-export const getReturnById = async (req, res) => {
+export const getReturnById = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -412,7 +404,8 @@ export const getReturnById = async (req, res) => {
     if (!returnRecord) {
       return res.status(404).json({
         success: false,
-        message: 'Return record not found'
+        message: 'Return record not found',
+        code: 'RETURN_NOT_FOUND'
       });
     }
 
@@ -421,12 +414,7 @@ export const getReturnById = async (req, res) => {
       data: { returnRecord }
     });
   } catch (error) {
-    console.error('Error fetching return record:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to fetch return record',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -434,7 +422,7 @@ export const getReturnById = async (req, res) => {
  * Approve return record and transfer items back to warehouse
  * PUT /api/v1/inventory/returns/:id/approve
  */
-export const approveReturn = async (req, res) => {
+export const approveReturn = async (req, res, next) => {
   const transaction = await sequelize.transaction();
   
   try {
@@ -493,7 +481,8 @@ export const approveReturn = async (req, res) => {
         await transaction.rollback();
         return res.status(400).json({
           success: false,
-          message: 'Invalid stock area'
+          message: 'Invalid stock area',
+          code: 'STOCK_AREA_NOT_FOUND'
         });
       }
     } else {
@@ -507,7 +496,8 @@ export const approveReturn = async (req, res) => {
         await transaction.rollback();
         return res.status(400).json({
           success: false,
-          message: 'No stock area available. Please specify a stock area.'
+          message: 'No stock area available. Please specify a stock area.',
+          code: 'STOCK_AREA_NOT_FOUND'
         });
       }
 
@@ -577,12 +567,7 @@ export const approveReturn = async (req, res) => {
     });
   } catch (error) {
     await transaction.rollback();
-    console.error('Error approving return:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to approve return',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -590,7 +575,7 @@ export const approveReturn = async (req, res) => {
  * Reject return record
  * PUT /api/v1/inventory/returns/:id/reject
  */
-export const rejectReturn = async (req, res) => {
+export const rejectReturn = async (req, res, next) => {
   const transaction = await sequelize.transaction();
   
   try {
@@ -619,7 +604,8 @@ export const rejectReturn = async (req, res) => {
       await transaction.rollback();
       return res.status(404).json({
         success: false,
-        message: 'Return record not found or already processed'
+        message: 'Return record not found or already processed',
+        code: 'RETURN_NOT_FOUND'
       });
     }
 
@@ -668,12 +654,7 @@ export const rejectReturn = async (req, res) => {
     });
   } catch (error) {
     await transaction.rollback();
-    console.error('Error rejecting return:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to reject return',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -681,7 +662,7 @@ export const rejectReturn = async (req, res) => {
  * Get technician's items available for return (from person stock)
  * GET /api/v1/inventory/returns/available-items
  */
-export const getAvailableItemsForReturn = async (req, res) => {
+export const getAvailableItemsForReturn = async (req, res, next) => {
   try {
     const { technicianId, ticketId, materialId } = req.query;
 
@@ -691,7 +672,8 @@ export const getAvailableItemsForReturn = async (req, res) => {
     if (!targetTechnicianId) {
       return res.status(400).json({
         success: false,
-        message: 'Technician ID is required'
+        message: 'Technician ID is required',
+        code: 'VALIDATION_ERROR'
       });
     }
 
@@ -747,12 +729,7 @@ export const getAvailableItemsForReturn = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error fetching available items for return:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to fetch available items',
-      error: error.message
-    });
+    next(error);
   }
 };
 

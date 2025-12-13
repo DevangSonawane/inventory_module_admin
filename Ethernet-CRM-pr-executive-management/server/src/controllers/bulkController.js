@@ -17,6 +17,7 @@ export const bulkMaterials = async (req, res, next) => {
       return res.status(400).json({
         success: false,
         message: 'Materials array is required',
+        code: 'VALIDATION_ERROR'
       });
     }
 
@@ -99,6 +100,7 @@ export const bulkInward = async (req, res, next) => {
       return res.status(400).json({
         success: false,
         message: 'Inward entries array is required',
+        code: 'VALIDATION_ERROR'
       });
     }
 

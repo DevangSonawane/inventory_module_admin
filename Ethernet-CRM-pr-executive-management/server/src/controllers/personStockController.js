@@ -8,7 +8,7 @@ import sequelize from '../config/database.js';
  * Get person stock (technician's assigned inventory)
  * GET /api/v1/inventory/person-stock
  */
-export const getPersonStock = async (req, res) => {
+export const getPersonStock = async (req, res, next) => {
   try {
     const {
       userId,
@@ -110,12 +110,7 @@ export const getPersonStock = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error fetching person stock:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to fetch person stock',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -123,7 +118,7 @@ export const getPersonStock = async (req, res) => {
  * Get person stock by ticket
  * GET /api/v1/inventory/person-stock/ticket/:ticketId
  */
-export const getPersonStockByTicket = async (req, res) => {
+export const getPersonStockByTicket = async (req, res, next) => {
   try {
     const { ticketId } = req.params;
     const { userId, status, orgId } = req.query;
@@ -134,7 +129,8 @@ export const getPersonStockByTicket = async (req, res) => {
     if (!targetUserId) {
       return res.status(400).json({
         success: false,
-        message: 'User ID is required'
+        message: 'User ID is required',
+        code: 'VALIDATION_ERROR'
       });
     }
 
@@ -176,12 +172,7 @@ export const getPersonStockByTicket = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error fetching person stock by ticket:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to fetch person stock by ticket',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -189,14 +180,15 @@ export const getPersonStockByTicket = async (req, res) => {
  * Search person stock by serial number
  * GET /api/v1/inventory/person-stock/search
  */
-export const searchPersonStockBySerial = async (req, res) => {
+export const searchPersonStockBySerial = async (req, res, next) => {
   try {
     const { serialNumber, userId, ticketId } = req.query;
 
     if (!serialNumber) {
       return res.status(400).json({
         success: false,
-        message: 'Serial number is required'
+        message: 'Serial number is required',
+        code: 'VALIDATION_ERROR'
       });
     }
 
@@ -206,7 +198,8 @@ export const searchPersonStockBySerial = async (req, res) => {
     if (!targetUserId) {
       return res.status(400).json({
         success: false,
-        message: 'User ID is required'
+        message: 'User ID is required',
+        code: 'VALIDATION_ERROR'
       });
     }
 
@@ -236,7 +229,8 @@ export const searchPersonStockBySerial = async (req, res) => {
     if (!item) {
       return res.status(404).json({
         success: false,
-        message: `Serial number ${serialNumber} not found in your stock${ticketId ? ` for ticket ${ticketId}` : ''}`
+        message: `Serial number ${serialNumber} not found in your stock${ticketId ? ` for ticket ${ticketId}` : ''}`,
+        code: 'ITEM_NOT_FOUND'
       });
     }
 
@@ -245,12 +239,7 @@ export const searchPersonStockBySerial = async (req, res) => {
       data: item
     });
   } catch (error) {
-    console.error('Error searching person stock:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to search person stock',
-      error: error.message
-    });
+    next(error);
   }
 };
 

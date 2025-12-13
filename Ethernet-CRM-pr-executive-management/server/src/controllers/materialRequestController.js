@@ -5,7 +5,7 @@ import User from '../models/User.js';
 import Group from '../models/Group.js';
 import Team from '../models/Team.js';
 import StockArea from '../models/StockArea.js';
-import { validationResult } from 'express-validator';
+// validationResult removed - using validate middleware in routes instead
 import { Op } from 'sequelize';
 import sequelize from '../config/database.js';
 import { generateMR } from '../utils/slipGenerator.js';
@@ -14,15 +14,11 @@ import { generateMR } from '../utils/slipGenerator.js';
  * Create new material request
  * POST /api/inventory/material-request
  */
-export const createMaterialRequest = async (req, res) => {
+export const createMaterialRequest = async (req, res, next) => {
   const transaction = await sequelize.transaction();
   
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      await transaction.rollback();
-      return res.status(400).json({ success: false, errors: errors.array() });
-    }
+    // Validation is handled by validate middleware in route
 
     const {
       prNumbers, // Array of {prNumber, prDate}
@@ -234,12 +230,7 @@ export const createMaterialRequest = async (req, res) => {
     });
   } catch (error) {
     await transaction.rollback();
-    console.error('Error creating material request:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to create material request',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -247,7 +238,7 @@ export const createMaterialRequest = async (req, res) => {
  * Get all material requests with filtering and pagination
  * GET /api/inventory/material-request
  */
-export const getAllMaterialRequests = async (req, res) => {
+export const getAllMaterialRequests = async (req, res, next) => {
   try {
     const {
       page = 1,
@@ -341,12 +332,7 @@ export const getAllMaterialRequests = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error fetching material requests:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to fetch material requests',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -354,7 +340,7 @@ export const getAllMaterialRequests = async (req, res) => {
  * Get single material request by ID
  * GET /api/inventory/material-request/:id
  */
-export const getMaterialRequestById = async (req, res) => {
+export const getMaterialRequestById = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -434,12 +420,7 @@ export const getMaterialRequestById = async (req, res) => {
       data: { materialRequest: request }
     });
   } catch (error) {
-    console.error('Error fetching material request:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to fetch material request',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -447,15 +428,11 @@ export const getMaterialRequestById = async (req, res) => {
  * Update material request
  * PUT /api/inventory/material-request/:id
  */
-export const updateMaterialRequest = async (req, res) => {
+export const updateMaterialRequest = async (req, res, next) => {
   const transaction = await sequelize.transaction();
   
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      await transaction.rollback();
-      return res.status(400).json({ success: false, errors: errors.array() });
-    }
+    // Validation is handled by validate middleware in route
 
     const { id } = req.params;
     const {
@@ -488,7 +465,8 @@ export const updateMaterialRequest = async (req, res) => {
       await transaction.rollback();
       return res.status(404).json({
         success: false,
-        message: 'Material request not found'
+        message: 'Material request not found',
+        code: 'MATERIAL_REQUEST_NOT_FOUND'
       });
     }
 
@@ -503,7 +481,8 @@ export const updateMaterialRequest = async (req, res) => {
         await transaction.rollback();
         return res.status(400).json({
           success: false,
-          message: 'Group not found'
+          message: 'Group not found',
+          code: 'GROUP_NOT_FOUND'
         });
       }
     }
@@ -519,7 +498,8 @@ export const updateMaterialRequest = async (req, res) => {
         await transaction.rollback();
         return res.status(400).json({
           success: false,
-          message: 'Team not found'
+          message: 'Team not found',
+          code: 'TEAM_NOT_FOUND'
         });
       }
       // Validate team belongs to group if group is provided
@@ -527,7 +507,8 @@ export const updateMaterialRequest = async (req, res) => {
         await transaction.rollback();
         return res.status(400).json({
           success: false,
-          message: 'Team does not belong to the selected group'
+          message: 'Team does not belong to the selected group',
+          code: 'VALIDATION_ERROR'
         });
       }
     }
@@ -543,7 +524,8 @@ export const updateMaterialRequest = async (req, res) => {
         await transaction.rollback();
         return res.status(400).json({
           success: false,
-          message: 'Stock area not found'
+          message: 'Stock area not found',
+          code: 'STOCK_AREA_NOT_FOUND'
         });
       }
     }
@@ -557,7 +539,8 @@ export const updateMaterialRequest = async (req, res) => {
         await transaction.rollback();
         return res.status(400).json({
           success: false,
-          message: 'Requestor not found'
+          message: 'Requestor not found',
+          code: 'USER_NOT_FOUND'
         });
       }
     }
@@ -604,7 +587,8 @@ export const updateMaterialRequest = async (req, res) => {
           await transaction.rollback();
           return res.status(400).json({
             success: false,
-            message: `Material with ID ${materialId} not found`
+            message: `Material with ID ${materialId} not found`,
+            code: 'MATERIAL_NOT_FOUND'
           });
         }
 
@@ -677,12 +661,7 @@ export const updateMaterialRequest = async (req, res) => {
     });
   } catch (error) {
     await transaction.rollback();
-    console.error('Error updating material request:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to update material request',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -690,15 +669,11 @@ export const updateMaterialRequest = async (req, res) => {
  * Approve or reject material request
  * POST /api/inventory/material-request/:id/approve
  */
-export const approveMaterialRequest = async (req, res) => {
+export const approveMaterialRequest = async (req, res, next) => {
   const transaction = await sequelize.transaction();
   
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      await transaction.rollback();
-      return res.status(400).json({ success: false, errors: errors.array() });
-    }
+    // Validation is handled by validate middleware in route
 
     const { id } = req.params;
     const { status, approvedItems, remarks } = req.body; // approvedItems: [{itemId, approvedQuantity}]
@@ -727,7 +702,8 @@ export const approveMaterialRequest = async (req, res) => {
       await transaction.rollback();
       return res.status(404).json({
         success: false,
-        message: 'Material request not found'
+        message: 'Material request not found',
+        code: 'MATERIAL_REQUEST_NOT_FOUND'
       });
     }
 
@@ -735,7 +711,8 @@ export const approveMaterialRequest = async (req, res) => {
       await transaction.rollback();
       return res.status(400).json({
         success: false,
-        message: 'Status must be APPROVED or REJECTED'
+        message: 'Status must be APPROVED or REJECTED',
+        code: 'VALIDATION_ERROR'
       });
     }
 
@@ -797,12 +774,7 @@ export const approveMaterialRequest = async (req, res) => {
     });
   } catch (error) {
     await transaction.rollback();
-    console.error('Error approving material request:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to approve material request',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -810,7 +782,7 @@ export const approveMaterialRequest = async (req, res) => {
  * Delete material request (soft delete)
  * DELETE /api/inventory/material-request/:id
  */
-export const deleteMaterialRequest = async (req, res) => {
+export const deleteMaterialRequest = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -842,12 +814,7 @@ export const deleteMaterialRequest = async (req, res) => {
       message: 'Material request deleted successfully'
     });
   } catch (error) {
-    console.error('Error deleting material request:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to delete material request',
-      error: error.message
-    });
+    next(error);
   }
 };
 

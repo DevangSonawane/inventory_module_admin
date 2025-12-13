@@ -5,7 +5,7 @@ import StockArea from '../models/StockArea.js';
 import MaterialRequest from '../models/MaterialRequest.js';
 import InventoryMaster from '../models/InventoryMaster.js';
 import User from '../models/User.js';
-import { validationResult } from 'express-validator';
+// validationResult removed - using validate middleware in routes instead
 import { Op } from 'sequelize';
 import sequelize from '../config/database.js';
 import { generateST, generateSTSequential } from '../utils/slipGenerator.js';
@@ -14,15 +14,11 @@ import { generateST, generateSTSequential } from '../utils/slipGenerator.js';
  * Create new stock transfer
  * POST /api/inventory/stock-transfer
  */
-export const createStockTransfer = async (req, res) => {
+export const createStockTransfer = async (req, res, next) => {
   const transaction = await sequelize.transaction();
   
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      await transaction.rollback();
-      return res.status(400).json({ success: false, errors: errors.array() });
-    }
+    // Validation is handled by validate middleware in route
 
     const {
       fromStockAreaId,
@@ -320,12 +316,7 @@ export const createStockTransfer = async (req, res) => {
     });
   } catch (error) {
     await transaction.rollback();
-    console.error('Error creating stock transfer:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to create stock transfer',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -333,7 +324,7 @@ export const createStockTransfer = async (req, res) => {
  * Get all stock transfers with filtering and pagination
  * GET /api/inventory/stock-transfer
  */
-export const getAllStockTransfers = async (req, res) => {
+export const getAllStockTransfers = async (req, res, next) => {
   try {
     const {
       page = 1,
@@ -422,12 +413,7 @@ export const getAllStockTransfers = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error fetching stock transfers:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to fetch stock transfers',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -435,7 +421,7 @@ export const getAllStockTransfers = async (req, res) => {
  * Get single stock transfer by ID
  * GET /api/inventory/stock-transfer/:id
  */
-export const getStockTransferById = async (req, res) => {
+export const getStockTransferById = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -487,12 +473,7 @@ export const getStockTransferById = async (req, res) => {
       data: transfer
     });
   } catch (error) {
-    console.error('Error fetching stock transfer:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to fetch stock transfer',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -500,15 +481,11 @@ export const getStockTransferById = async (req, res) => {
  * Update stock transfer
  * PUT /api/inventory/stock-transfer/:id
  */
-export const updateStockTransfer = async (req, res) => {
+export const updateStockTransfer = async (req, res, next) => {
   const transaction = await sequelize.transaction();
   
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      await transaction.rollback();
-      return res.status(400).json({ success: false, errors: errors.array() });
-    }
+    // Validation is handled by validate middleware in route
 
     const { id } = req.params;
     const {
@@ -539,7 +516,8 @@ export const updateStockTransfer = async (req, res) => {
       await transaction.rollback();
       return res.status(404).json({
         success: false,
-        message: 'Stock transfer not found'
+        message: 'Stock transfer not found',
+        code: 'STOCK_TRANSFER_NOT_FOUND'
       });
     }
 
@@ -552,7 +530,8 @@ export const updateStockTransfer = async (req, res) => {
         await transaction.rollback();
         return res.status(400).json({
           success: false,
-          message: 'Source and destination stock areas cannot be the same'
+          message: 'Source and destination stock areas cannot be the same',
+          code: 'VALIDATION_ERROR'
         });
       }
     }
@@ -589,7 +568,8 @@ export const updateStockTransfer = async (req, res) => {
           await transaction.rollback();
           return res.status(400).json({
             success: false,
-            message: `Material with ID ${materialId} not found`
+            message: `Material with ID ${materialId} not found`,
+            code: 'MATERIAL_NOT_FOUND'
           });
         }
 
@@ -628,12 +608,7 @@ export const updateStockTransfer = async (req, res) => {
     });
   } catch (error) {
     await transaction.rollback();
-    console.error('Error updating stock transfer:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to update stock transfer',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -641,7 +616,7 @@ export const updateStockTransfer = async (req, res) => {
  * Delete stock transfer (soft delete)
  * DELETE /api/inventory/stock-transfer/:id
  */
-export const deleteStockTransfer = async (req, res) => {
+export const deleteStockTransfer = async (req, res, next) => {
   try {
     const { id } = req.params;
     const userId = req.user?.id || req.user?.user_id;
@@ -675,12 +650,7 @@ export const deleteStockTransfer = async (req, res) => {
       message: 'Stock transfer deleted successfully'
     });
   } catch (error) {
-    console.error('Error deleting stock transfer:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to delete stock transfer',
-      error: error.message
-    });
+    next(error);
   }
 };
 

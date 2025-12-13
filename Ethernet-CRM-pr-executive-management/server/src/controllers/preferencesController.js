@@ -10,7 +10,8 @@ export const getPreferences = async (req, res, next) => {
     if (!userId) {
       return res.status(400).json({
         success: false,
-        message: 'User ID is required'
+        message: 'User ID is required',
+        code: 'VALIDATION_ERROR'
       });
     }
 
@@ -19,7 +20,8 @@ export const getPreferences = async (req, res, next) => {
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: 'User not found'
+        message: 'User not found',
+        code: 'USER_NOT_FOUND'
       });
     }
 
@@ -63,7 +65,8 @@ export const updatePreferences = async (req, res, next) => {
     if (!userId) {
       return res.status(400).json({
         success: false,
-        message: 'User ID is required'
+        message: 'User ID is required',
+        code: 'VALIDATION_ERROR'
       });
     }
 
@@ -72,7 +75,8 @@ export const updatePreferences = async (req, res, next) => {
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: 'User not found'
+        message: 'User not found',
+        code: 'USER_NOT_FOUND'
       });
     }
 

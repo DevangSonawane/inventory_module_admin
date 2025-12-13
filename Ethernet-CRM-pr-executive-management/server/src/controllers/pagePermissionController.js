@@ -8,7 +8,7 @@ import { Op } from 'sequelize';
  * Get all available pages (for reference)
  * GET /api/v1/admin/page-permissions/pages
  */
-export const getAvailablePages = async (req, res) => {
+export const getAvailablePages = async (req, res, next) => {
   try {
     const pages = [
       // Inventory Section
@@ -46,12 +46,7 @@ export const getAvailablePages = async (req, res) => {
       data: pages,
     });
   } catch (error) {
-    console.error('Error fetching available pages:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to fetch available pages',
-      error: error.message,
-    });
+    next(error);
   }
 };
 
@@ -59,7 +54,7 @@ export const getAvailablePages = async (req, res) => {
  * Get role permissions
  * GET /api/v1/admin/page-permissions/roles/:roleId
  */
-export const getRolePermissions = async (req, res) => {
+export const getRolePermissions = async (req, res, next) => {
   try {
     const { roleId } = req.params;
 
@@ -75,12 +70,7 @@ export const getRolePermissions = async (req, res) => {
       data: pageIds,
     });
   } catch (error) {
-    console.error('Error fetching role permissions:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to fetch role permissions',
-      error: error.message,
-    });
+    next(error);
   }
 };
 
@@ -88,7 +78,7 @@ export const getRolePermissions = async (req, res) => {
  * Update role permissions
  * PUT /api/v1/admin/page-permissions/roles/:roleId
  */
-export const updateRolePermissions = async (req, res) => {
+export const updateRolePermissions = async (req, res, next) => {
   try {
     const { roleId } = req.params;
     const { pageIds } = req.body; // Array of page IDs
@@ -99,6 +89,7 @@ export const updateRolePermissions = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: 'Role not found',
+        code: 'ROLE_NOT_FOUND'
       });
     }
 
@@ -122,12 +113,7 @@ export const updateRolePermissions = async (req, res) => {
       message: 'Role permissions updated successfully',
     });
   } catch (error) {
-    console.error('Error updating role permissions:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to update role permissions',
-      error: error.message,
-    });
+    next(error);
   }
 };
 
@@ -135,7 +121,7 @@ export const updateRolePermissions = async (req, res) => {
  * Get user permissions
  * GET /api/v1/admin/page-permissions/users/:userId
  */
-export const getUserPermissions = async (req, res) => {
+export const getUserPermissions = async (req, res, next) => {
   try {
     const { userId } = req.params;
 
@@ -151,12 +137,7 @@ export const getUserPermissions = async (req, res) => {
       data: pageIds,
     });
   } catch (error) {
-    console.error('Error fetching user permissions:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to fetch user permissions',
-      error: error.message,
-    });
+    next(error);
   }
 };
 
@@ -164,7 +145,7 @@ export const getUserPermissions = async (req, res) => {
  * Update user permissions
  * PUT /api/v1/admin/page-permissions/users/:userId
  */
-export const updateUserPermissions = async (req, res) => {
+export const updateUserPermissions = async (req, res, next) => {
   try {
     const { userId } = req.params;
     const { pageIds } = req.body; // Array of page IDs
@@ -175,6 +156,7 @@ export const updateUserPermissions = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: 'User not found',
+        code: 'USER_NOT_FOUND'
       });
     }
 
@@ -198,12 +180,7 @@ export const updateUserPermissions = async (req, res) => {
       message: 'User permissions updated successfully',
     });
   } catch (error) {
-    console.error('Error updating user permissions:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to update user permissions',
-      error: error.message,
-    });
+    next(error);
   }
 };
 
@@ -211,7 +188,7 @@ export const updateUserPermissions = async (req, res) => {
  * Get effective permissions for a user (user permissions OR role permissions)
  * GET /api/v1/admin/page-permissions/users/:userId/effective
  */
-export const getUserEffectivePermissions = async (req, res) => {
+export const getUserEffectivePermissions = async (req, res, next) => {
   try {
     const { userId } = req.params;
 
@@ -221,6 +198,7 @@ export const getUserEffectivePermissions = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: 'User not found',
+        code: 'USER_NOT_FOUND'
       });
     }
 
@@ -251,12 +229,7 @@ export const getUserEffectivePermissions = async (req, res) => {
       source: userPermissions.length > 0 ? 'user' : (user.role_id ? 'role' : 'none'),
     });
   } catch (error) {
-    console.error('Error fetching effective permissions:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to fetch effective permissions',
-      error: error.message,
-    });
+    next(error);
   }
 };
 
