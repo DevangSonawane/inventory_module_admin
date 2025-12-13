@@ -22,6 +22,9 @@ const InwardList = () => {
   const [totalItems, setTotalItems] = useState(0)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [deleteId, setDeleteId] = useState(null)
+  const [selectedIds, setSelectedIds] = useState([])
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   // Fetch inwards on mount and when filters change
   useEffect(() => {
@@ -132,6 +135,53 @@ const InwardList = () => {
     }
   }
 
+  const handleSelectAll = (checked) => {
+    if (checked) {
+      setSelectedIds(inwards.map(item => item.id))
+    } else {
+      setSelectedIds([])
+    }
+  }
+
+  const handleSelectRow = (id, checked) => {
+    if (checked) {
+      setSelectedIds(prev => {
+        // Prevent duplicate IDs
+        if (prev.includes(id)) return prev
+        return [...prev, id]
+      })
+    } else {
+      setSelectedIds(prev => prev.filter(selectedId => selectedId !== id))
+    }
+  }
+
+  const handleBulkDelete = () => {
+    if (selectedIds.length === 0) return
+    setShowBulkDeleteModal(true)
+  }
+
+  const confirmBulkDelete = async () => {
+    if (selectedIds.length === 0) return
+    try {
+      setIsDeleting(true)
+      const response = await inwardService.bulkDelete(selectedIds)
+      if (response.success) {
+        const deletedCount = response.data?.deleted || selectedIds.length
+        toast.success(`${deletedCount} inward entry(ies) deleted successfully`)
+        setShowBulkDeleteModal(false)
+        setSelectedIds([])
+        fetchInwards()
+      } else {
+        toast.error(response.message || 'Failed to delete inward entries')
+      }
+    } catch (error) {
+      console.error('Error bulk deleting inward entries:', error)
+      toast.error(error.message || 'Failed to delete inward entries')
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
   const handleExport = async () => {
     try {
       await exportService.exportInward('csv', { search: searchTerm, status: statusFilter })
@@ -186,7 +236,32 @@ const InwardList = () => {
       <div className="bg-white rounded-lg shadow p-6">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-semibold text-gray-900">Inward List</h2>
-          <div className="flex gap-4">
+          <div className="flex gap-4 items-center">
+            {selectedIds.length > 0 && (
+              <div className="flex items-center gap-2 mr-2">
+                <span className="text-sm text-gray-600">
+                  {selectedIds.length} selected
+                </span>
+                <Button 
+                  variant="danger" 
+                  onClick={handleBulkDelete}
+                  disabled={isDeleting}
+                  className="bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isDeleting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 inline animate-spin" />
+                      Deleting...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-4 h-4 mr-2 inline" />
+                      Delete Selected
+                    </>
+                  )}
+                </Button>
+              </div>
+            )}
             <Button variant="secondary" onClick={handleExport}>
               <Download className="w-4 h-4 mr-2 inline" />
               Export
@@ -246,10 +321,22 @@ const InwardList = () => {
           <>
             <Table
               headers={['SR. NO.', 'DATE', 'GRN NO.', 'INVOICE NUMBER', 'PARTY NAME', 'TOTAL AMOUNT', 'STATUS', 'ACTIONS']}
+              selectable
+              selectedIds={selectedIds}
+              onSelectAll={handleSelectAll}
+              onSelectRow={handleSelectRow}
             >
               {inwards.length > 0 ? (
                 inwards.map((item) => (
                   <tr key={item.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.includes(item.id)}
+                        onChange={(e) => handleSelectRow(item.id, e.target.checked)}
+                        className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.srNo}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.date}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.grnNo}</td>
@@ -327,6 +414,20 @@ const InwardList = () => {
         title="Delete Inward Entry"
         message="Are you sure you want to delete this inward record? This action cannot be undone."
         confirmText="Delete"
+        variant="danger"
+      />
+
+      <ConfirmationModal
+        isOpen={showBulkDeleteModal}
+        onClose={() => {
+          if (!isDeleting) {
+            setShowBulkDeleteModal(false)
+          }
+        }}
+        onConfirm={confirmBulkDelete}
+        title="Delete Selected Inward Entries"
+        message={`Are you sure you want to delete ${selectedIds.length} inward entry(ies)? This action cannot be undone.`}
+        confirmText={isDeleting ? "Deleting..." : "Delete"}
         variant="danger"
       />
     </div>

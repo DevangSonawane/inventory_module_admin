@@ -162,6 +162,11 @@ export const materialRequestService = {
   delete: async (id) => {
     return await del(API_ENDPOINTS.MATERIAL_REQUEST_BY_ID(id));
   },
+
+  // Bulk delete material requests
+  bulkDelete: async (ids) => {
+    return await post(`${API_ENDPOINTS.MATERIAL_REQUEST}/bulk-delete`, { ids });
+  },
 };
 
 

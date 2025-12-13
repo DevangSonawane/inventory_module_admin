@@ -20,6 +20,7 @@ const PersonStock = () => {
   const [loading, setLoading] = useState(true)
   const [totalItems, setTotalItems] = useState(0)
   const [userId, setUserId] = useState(null)
+  const [selectedIds, setSelectedIds] = useState([])
 
   useEffect(() => {
     // Get current user ID from localStorage
@@ -131,6 +132,26 @@ const PersonStock = () => {
     { value: 'FAULTY', label: 'Faulty' },
   ]
 
+  const handleSelectAll = (checked) => {
+    if (checked) {
+      setSelectedIds(personStock.map(item => item.id))
+    } else {
+      setSelectedIds([])
+    }
+  }
+
+  const handleSelectRow = (id, checked) => {
+    if (checked) {
+      setSelectedIds(prev => {
+        // Prevent duplicate IDs
+        if (prev.includes(id)) return prev
+        return [...prev, id]
+      })
+    } else {
+      setSelectedIds(prev => prev.filter(selectedId => selectedId !== id))
+    }
+  }
+
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
@@ -184,7 +205,24 @@ const PersonStock = () => {
           </div>
         ) : (
           <>
-            <Table data={personStock} columns={columns} />
+            {selectedIds.length > 0 && (
+              <div className="mb-4 p-3 bg-blue-50 rounded-md flex items-center justify-between">
+                <span className="text-sm text-gray-700">
+                  {selectedIds.length} item(s) selected
+                </span>
+                <span className="text-xs text-gray-500">
+                  Note: Use Return Stock or Stock Transfer to manage selected items
+                </span>
+              </div>
+            )}
+            <Table 
+              data={personStock} 
+              columns={columns}
+              selectable
+              selectedIds={selectedIds}
+              onSelectAll={handleSelectAll}
+              onSelectRow={handleSelectRow}
+            />
             <Pagination
               currentPage={currentPage}
               totalPages={Math.ceil(totalItems / itemsPerPage)}

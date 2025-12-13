@@ -31,6 +31,21 @@ apiClient.interceptors.request.use(
   }
 );
 
+// Retry configuration
+const RETRY_CONFIG = {
+  maxRetries: 1, // Only 1 retry for token refresh (401 errors)
+  maxNetworkRetries: 0, // No automatic retries for network errors
+  retryDelay: 1000, // 1 second delay between retries
+  retryableStatusCodes: [500, 502, 503, 504], // Only retry server errors (not used for now)
+  retryableNetworkErrors: false, // Don't retry network errors automatically
+  maxRetryTime: 10000, // Maximum 10 seconds total retry time
+};
+
+// Helper function to check if device is online
+const isOnline = () => {
+  return typeof navigator !== 'undefined' && navigator.onLine !== false;
+};
+
 // Response interceptor - Handle errors and token refresh
 apiClient.interceptors.response.use(
   (response) => {
@@ -39,17 +54,44 @@ apiClient.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
+    // Initialize retry counter if not exists
+    if (!originalRequest._retryCount) {
+      originalRequest._retryCount = 0;
+    }
+
+    // Check if device is offline - don't retry
+    if (!isOnline()) {
+      return Promise.reject({
+        ...error,
+        isOffline: true,
+        message: 'You are offline. Please check your internet connection.',
+      });
+    }
+
     // Handle 401 Unauthorized - Token expired or invalid
-    if (error.response?.status === HTTP_STATUS.UNAUTHORIZED && !originalRequest._retry) {
-      originalRequest._retry = true;
+    // Only retry once for 401 errors
+    if (
+      error.response?.status === HTTP_STATUS.UNAUTHORIZED &&
+      originalRequest._retryCount < RETRY_CONFIG.maxRetries &&
+      !originalRequest._isRefreshRequest
+    ) {
+      originalRequest._retryCount += 1;
 
       try {
         // Try to refresh token
         const refreshToken = localStorage.getItem('refreshToken');
         if (refreshToken) {
-          const response = await axios.post(`${API_BASE_URL}/auth/refresh`, {
-            refreshToken,
-          });
+          // Mark refresh request to prevent infinite loop
+          const refreshConfig = {
+            ...originalRequest,
+            _isRefreshRequest: true,
+          };
+
+          const response = await axios.post(
+            `${API_BASE_URL}/auth/refresh`,
+            { refreshToken },
+            { timeout: 10000 } // 10 second timeout for refresh
+          );
 
           const { accessToken, refreshToken: newRefreshToken } = response.data.data || response.data;
           
@@ -58,8 +100,9 @@ apiClient.interceptors.response.use(
             localStorage.setItem('refreshToken', newRefreshToken);
           }
 
-          // Retry original request with new token
+          // Retry original request with new token (only once)
           originalRequest.headers.Authorization = `Bearer ${accessToken}`;
+          originalRequest._isRefreshRequest = false; // Reset flag for the retry
           return apiClient(originalRequest);
         }
       } catch (refreshError) {
@@ -71,7 +114,18 @@ apiClient.interceptors.response.use(
       }
     }
 
-    // Handle other errors
+    // For network errors (no response) - don't retry automatically
+    // This prevents excessive retries during network failures
+    if (!error.response && error.request) {
+      // Network error - return immediately without retry
+      return Promise.reject({
+        ...error,
+        isNetworkError: true,
+        message: 'Network error. Please check your connection.',
+      });
+    }
+
+    // Handle other errors - no automatic retries
     return Promise.reject(error);
   }
 );

@@ -4,8 +4,9 @@ Production-ready inventory management system with complete frontend and backend 
 
 ## 📚 Documentation
 
-### System Flow
-- **Flow Documentation**: See [INVENTORY_SYSTEM_FLOW_DOCUMENTATION.md](./INVENTORY_SYSTEM_FLOW_DOCUMENTATION.md) for complete system flow, phases, and implementation details
+- **Getting Started**: See [GETTING_STARTED.md](./GETTING_STARTED.md) for setup and installation guide
+- **System Flow**: See [FLOW.md](./FLOW.md) for complete system flow and phases
+- **Complete Documentation**: See [APP_DOCUMENTATION.md](./APP_DOCUMENTATION.md) for full application documentation
 - **Flow Diagram**: See [flowchartG.png](./flowchartG.png) for visual representation of the system flow
 
 ## 🏗️ Project Structure
@@ -174,10 +175,11 @@ See `Ethernet-CRM-pr-executive-management/tests/TEST_PLAN.md` for test guideline
 
 ## 📝 Additional Resources
 
-- **System Flow**: [INVENTORY_SYSTEM_FLOW_DOCUMENTATION.md](./INVENTORY_SYSTEM_FLOW_DOCUMENTATION.md)
+- **Getting Started**: [GETTING_STARTED.md](./GETTING_STARTED.md)
+- **System Flow**: [FLOW.md](./FLOW.md)
+- **Complete Documentation**: [APP_DOCUMENTATION.md](./APP_DOCUMENTATION.md)
 - **Flow Diagram**: [flowchartG.png](./flowchartG.png)
-- **Backend README**: [Ethernet-CRM-pr-executive-management/server/README.md](./Ethernet-CRM-pr-executive-management/server/README.md)
-- **Postman Collection**: [Ethernet-CRM-Postman-Collection.json](./Ethernet-CRM-pr-executive-management/Ethernet-CRM-Postman-Collection.json)
+- **Postman Collection**: [Inventory_Management_API_Complete.postman_collection.json](./Inventory_Management_API_Complete.postman_collection.json)
 
 ## ✅ Production Readiness
 

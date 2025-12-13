@@ -76,6 +76,11 @@ export const inwardService = {
     return await del(API_ENDPOINTS.INWARD_BY_ID(id));
   },
 
+  // Bulk delete inward entries
+  bulkDelete: async (ids) => {
+    return await post(`${API_ENDPOINTS.INWARD}/bulk-delete`, { ids });
+  },
+
   // Complete inward entry
   complete: async (id) => {
     return await put(API_ENDPOINTS.INWARD_COMPLETE(id));

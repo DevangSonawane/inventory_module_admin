@@ -2,7 +2,7 @@
 	"info": {
 		"_postman_id": "40c2e582-b7ca-48b4-88ec-479d32785784",
 		"name": "Inventory Management API - Complete",
-		"description": "Complete API collection for Inventory Management System including all endpoints for Assets, Companies, Asset Types, Materials, Stock Areas, Inward, Material Requests, Material Allocation, Stock Transfers, Consumption, Person Stock, Returns, Reports, Stock Levels, Files, Audit, Notifications, Search, Bulk Operations, Export, Validation, Business Partners, Purchase Requests, and Purchase Orders. Admin-only routes are marked with [ADMIN ONLY]. Updated with latest endpoints including PR number generation, PO submission, document uploads, and additional export endpoints.",
+		"description": "Complete API collection for Inventory Management System including all endpoints for Assets, Companies, Asset Types, Materials, Stock Areas, Inward, Material Requests, Material Allocation, Stock Transfers, Consumption, Person Stock, Returns, Reports, Stock Levels, Files, Audit, Notifications, Search, Bulk Operations, Export, Validation, Business Partners, Purchase Requests, and Purchase Orders. Admin-only routes are marked with [ADMIN ONLY]. Updated with latest endpoints including PR number generation, PO submission, document uploads, bulk delete operations, and additional export endpoints.",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"item": [
@@ -828,6 +828,32 @@
 						},
 						"description": "Mark inward entry as completed and create inventory records (Admin only)"
 					}
+				},
+				{
+					"name": "Bulk Delete Inward Entries",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"ids\": [\n    \"{{inwardId}}\",\n    \"{{inwardId}}\"\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/inventory/inward/bulk-delete",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "inward", "bulk-delete"]
+						},
+						"description": "Bulk delete inward entries (soft delete). Requires array of inward entry IDs (UUIDs)."
+					}
 				}
 			]
 		},
@@ -1047,6 +1073,32 @@
 							"path": ["inventory", "material-request", "{{materialRequestId}}", "allocations", "{{allocationId}}"]
 						},
 						"description": "Cancel an allocation and return item to available stock"
+					}
+				},
+				{
+					"name": "Bulk Delete Material Requests",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"ids\": [\n    \"{{materialRequestId}}\",\n    \"{{materialRequestId}}\"\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/inventory/material-request/bulk-delete",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "material-request", "bulk-delete"]
+						},
+						"description": "Bulk delete material requests (soft delete). Requires array of material request IDs (UUIDs)."
 					}
 				}
 			]

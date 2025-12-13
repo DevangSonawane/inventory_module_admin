@@ -112,7 +112,9 @@ import {
 } from '../controllers/searchController.js';
 import {
   bulkMaterials,
-  bulkInward
+  bulkInward,
+  bulkDeleteMaterialRequests,
+  bulkDeleteInward
 } from '../controllers/bulkController.js';
 import {
   exportMaterials,
@@ -1519,6 +1521,44 @@ router.post('/bulk/materials', roleGuard('admin'), bulkMaterials);
  * @access  Private (Admin only)
  */
 router.post('/bulk/inward', roleGuard('admin'), bulkInward);
+
+/**
+ * @route   POST /api/inventory/material-request/bulk-delete
+ * @desc    Bulk delete material requests (soft delete)
+ * @access  Private
+ */
+router.post(
+  '/material-request/bulk-delete',
+  [
+    body('ids')
+      .isArray({ min: 1 })
+      .withMessage('IDs array is required and must contain at least one ID'),
+    body('ids.*')
+      .isUUID()
+      .withMessage('Each ID must be a valid UUID'),
+  ],
+  validate,
+  bulkDeleteMaterialRequests
+);
+
+/**
+ * @route   POST /api/inventory/inward/bulk-delete
+ * @desc    Bulk delete inward entries (soft delete)
+ * @access  Private
+ */
+router.post(
+  '/inward/bulk-delete',
+  [
+    body('ids')
+      .isArray({ min: 1 })
+      .withMessage('IDs array is required and must contain at least one ID'),
+    body('ids.*')
+      .isUUID()
+      .withMessage('Each ID must be a valid UUID'),
+  ],
+  validate,
+  bulkDeleteInward
+);
 
 // ==================== EXPORT ROUTES ====================
 

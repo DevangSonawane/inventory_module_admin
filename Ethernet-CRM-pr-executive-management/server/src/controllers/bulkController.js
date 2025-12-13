@@ -2,6 +2,7 @@ import { Op } from 'sequelize';
 import Material from '../models/Material.js';
 import InwardEntry from '../models/InwardEntry.js';
 import InwardItem from '../models/InwardItem.js';
+import MaterialRequest from '../models/MaterialRequest.js';
 import StockArea from '../models/StockArea.js';
 import { generateGRN } from '../utils/slipGenerator.js';
 import sequelize from '../config/database.js';
@@ -192,9 +193,157 @@ export const bulkInward = async (req, res, next) => {
   }
 };
 
+/**
+ * Bulk delete material requests (soft delete)
+ * POST /api/inventory/material-request/bulk-delete
+ */
+export const bulkDeleteMaterialRequests = async (req, res, next) => {
+  try {
+    const { ids } = req.body; // Array of material request IDs
 
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'IDs array is required',
+        code: 'VALIDATION_ERROR'
+      });
+    }
 
+    const userId = req.user?.id || req.user?.user_id;
+    const results = {
+      deleted: [],
+      notFound: [],
+      errors: [],
+    };
 
+    const transaction = await sequelize.transaction();
+
+    try {
+      for (const id of ids) {
+        try {
+          const materialRequest = await MaterialRequest.findOne({
+            where: req.withOrg
+              ? req.withOrg({
+                  request_id: id,
+                  is_active: true
+                })
+              : {
+                  request_id: id,
+                  is_active: true
+                }
+          }, { transaction });
+
+          if (!materialRequest) {
+            results.notFound.push(id);
+            continue;
+          }
+
+          await materialRequest.update({
+            is_active: false,
+            updated_by: userId
+          }, { transaction });
+
+          results.deleted.push(id);
+        } catch (error) {
+          results.errors.push({ id, error: error.message });
+        }
+      }
+
+      await transaction.commit();
+
+      res.status(200).json({
+        success: true,
+        data: {
+          deleted: results.deleted.length,
+          notFound: results.notFound.length,
+          errors: results.errors.length,
+          details: results,
+        },
+      });
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Bulk delete inward entries (soft delete)
+ * POST /api/inventory/inward/bulk-delete
+ */
+export const bulkDeleteInward = async (req, res, next) => {
+  try {
+    const { ids } = req.body; // Array of inward entry IDs
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'IDs array is required',
+        code: 'VALIDATION_ERROR'
+      });
+    }
+
+    const userId = req.user?.id || req.user?.user_id;
+    const results = {
+      deleted: [],
+      notFound: [],
+      errors: [],
+    };
+
+    const transaction = await sequelize.transaction();
+
+    try {
+      for (const id of ids) {
+        try {
+          const inward = await InwardEntry.findOne({
+            where: req.withOrg
+              ? req.withOrg({
+                  inward_id: id,
+                  is_active: true
+                })
+              : {
+                  inward_id: id,
+                  is_active: true
+                }
+          }, { transaction });
+
+          if (!inward) {
+            results.notFound.push(id);
+            continue;
+          }
+
+          await inward.update({
+            is_active: false,
+            updated_by: userId
+          }, { transaction });
+
+          results.deleted.push(id);
+        } catch (error) {
+          results.errors.push({ id, error: error.message });
+        }
+      }
+
+      await transaction.commit();
+
+      res.status(200).json({
+        success: true,
+        data: {
+          deleted: results.deleted.length,
+          notFound: results.notFound.length,
+          errors: results.errors.length,
+          details: results,
+        },
+      });
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+  } catch (error) {
+    next(error);
+  }
+};
 
 
 
