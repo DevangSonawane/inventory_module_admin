@@ -1,9 +1,11 @@
 import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom'
+import { useEffect } from 'react'
 import Layout from './components/layout/Layout'
 import ProtectedRoute from './components/common/ProtectedRoute'
 import AdminRoute from './components/common/AdminRoute'
 import ErrorBoundary from './components/common/ErrorBoundary'
 import { useAuth } from './utils/useAuth'
+import { connectSocket, disconnectSocket } from './services/chatSocket.js'
 import Login from './pages/Login'
 import Settings from './pages/Settings'
 import InventoryStock from './pages/InventoryStock'
@@ -48,6 +50,19 @@ const SmartRedirect = () => {
 }
 
 function App() {
+  useEffect(() => {
+    // Initialize socket connection when app loads
+    const token = localStorage.getItem('accessToken')
+    if (token) {
+      connectSocket()
+    }
+
+    // Cleanup on unmount
+    return () => {
+      disconnectSocket()
+    }
+  }, [])
+
   return (
     <ErrorBoundary>
       <Router>

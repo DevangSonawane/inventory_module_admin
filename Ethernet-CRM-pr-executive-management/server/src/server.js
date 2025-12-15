@@ -1,10 +1,16 @@
 import os from 'os';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
 import app from './app.js';
 import { connectDB } from './config/database.js';
 // Import models to ensure associations are loaded
 import './models/index.js';
-// Import migration script
+// Import migration scripts
 import runMigration from './scripts/migrateInventoryTables.js';
+import runChatMigration from './scripts/migrateChatTables.js';
+import runChatPatch from './scripts/patchChatTablesTimestamps.js';
+import { authenticateSocket } from './utils/socketAuth.js';
+import { initializeChatSocket } from './utils/chatSocket.js';
 
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
@@ -73,9 +79,25 @@ const runStartupTasks = async () => {
       try {
         const migrationResult = await runMigration(true); // silent = true
         if (migrationResult && migrationResult.success === false) {
-          console.warn('⚠️  Migration completed with warnings:', migrationResult.error);
+          console.warn('⚠️  Inventory migration completed with warnings:', migrationResult.error);
         } else {
-          console.log('✅ Database migrations completed');
+          console.log('✅ Inventory migrations completed');
+        }
+        
+        // Run chat system migrations
+        const chatMigrationResult = await runChatMigration(true); // silent = true
+        if (chatMigrationResult && chatMigrationResult.success === false) {
+          console.warn('⚠️  Chat migration completed with warnings:', chatMigrationResult.error);
+        } else {
+          console.log('✅ Chat system migrations completed');
+        }
+
+        // Run chat timestamps patch (idempotent)
+        const chatPatchResult = await runChatPatch(true);
+        if (chatPatchResult && chatPatchResult.success === false) {
+          console.warn('⚠️  Chat patch completed with warnings:', chatPatchResult.error);
+        } else {
+          console.log('✅ Chat timestamps patch completed');
         }
       } catch (migrationError) {
         console.error('❌ Migration error:', migrationError.message);
@@ -131,8 +153,30 @@ const startServer = async () => {
     // Run all startup tasks (database connection, migrations, email verification, etc.)
     await runStartupTasks();
     
+    // Create HTTP server from Express app
+    const httpServer = createServer(app);
+    
+    // Initialize Socket.IO
+    const io = new Server(httpServer, {
+      cors: {
+        origin: process.env.CORS_ORIGIN 
+          ? process.env.CORS_ORIGIN.split(',').map(origin => origin.trim())
+          : ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:3000'],
+        credentials: true,
+        methods: ['GET', 'POST']
+      }
+    });
+
+    // Authenticate Socket.IO connections
+    io.use(authenticateSocket);
+
+    // Initialize chat socket handlers
+    initializeChatSocket(io);
+
+    console.log('✅ Socket.IO initialized');
+    
     // Start the HTTP server
-    app.listen(PORT, HOST, () => {
+    httpServer.listen(PORT, HOST, () => {
       console.log(`🚀 Server is running on http://${HOST}:${PORT}`);
       console.log(`📝 Environment: ${process.env.NODE_ENV || 'development'}`);
       if (HOST === '0.0.0.0') {

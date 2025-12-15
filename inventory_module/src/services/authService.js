@@ -14,16 +14,18 @@ export const authService = {
   logout: async () => {
     try {
       const response = await post(API_ENDPOINTS.AUTH_LOGOUT);
-      // Clear tokens from localStorage
+      // Clear tokens and remember me flag from localStorage
       localStorage.removeItem('accessToken');
       localStorage.removeItem('refreshToken');
       localStorage.removeItem('user');
+      localStorage.removeItem('rememberMe');
       return response;
     } catch (error) {
-      // Clear tokens even if API call fails
+      // Clear tokens and remember me flag even if API call fails
       localStorage.removeItem('accessToken');
       localStorage.removeItem('refreshToken');
       localStorage.removeItem('user');
+      localStorage.removeItem('rememberMe');
       throw error;
     }
   },

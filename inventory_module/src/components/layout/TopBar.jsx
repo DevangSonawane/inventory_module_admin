@@ -5,6 +5,7 @@ import { toast } from 'react-toastify'
 import { authService } from '../../services/authService.js'
 import { searchService } from '../../services/searchService.js'
 import { notificationService } from '../../services/notificationService.js'
+import ChatWidget from '../chat/ChatWidget.jsx'
 
 const getPageTitle = (pathname) => {
   const routes = {
@@ -157,10 +158,11 @@ const TopBar = () => {
         navigate('/login')
       } catch (error) {
         console.error('Logout error:', error)
-        // Clear tokens even if API call fails
+        // Clear tokens and remember me flag even if API call fails
         localStorage.removeItem('accessToken')
         localStorage.removeItem('refreshToken')
         localStorage.removeItem('user')
+        localStorage.removeItem('rememberMe')
         navigate('/login')
       }
     }
@@ -232,6 +234,9 @@ const TopBar = () => {
             </div>
           )}
         </div>
+
+        {/* Chat Widget */}
+        <ChatWidget />
 
         {/* Notifications */}
         <div className="relative" ref={notificationRef}>

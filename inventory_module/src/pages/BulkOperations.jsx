@@ -210,7 +210,7 @@ const BulkOperations = () => {
               Upload a CSV file with inward entry and item details
             </p>
             <Button
-              variant="secondary"
+              variant="primary"
               onClick={() => {
                 setUploadType('inward')
                 setShowModal(true)

@@ -135,6 +135,21 @@ export const API_ENDPOINTS = {
   ADMIN_TEAMS: '/admin/teams',
   ADMIN_TEAM_BY_ID: (id) => `/admin/teams/${id}`,
   ADMIN_TEAMS_BY_GROUP: (groupId) => `/admin/teams/group/${groupId}`,
+  
+  // Chat - FAQs
+  CHAT_FAQS: '/chat/faqs',
+  CHAT_FAQ_BY_ID: (id) => `/chat/faqs/${id}`,
+  CHAT_FAQ_HELPFUL: (id) => `/chat/faqs/${id}/helpful`,
+  CHAT_FAQ_INTERACTION: '/chat/faqs/interaction',
+  
+  // Chat - Conversations
+  CHAT_CONVERSATIONS: '/chat/conversations',
+  CHAT_CONVERSATION_BY_ID: (id) => `/chat/conversations/${id}`,
+  CHAT_CONVERSATION_MESSAGES: (id) => `/chat/conversations/${id}/messages`,
+  CHAT_CONVERSATION_READ: (id) => `/chat/conversations/${id}/read`,
+  CHAT_CONVERSATION_STATUS: (id) => `/chat/conversations/${id}/status`,
+  CHAT_CONVERSATIONS_SEARCH: '/chat/conversations/search',
+  CHAT_UNREAD_COUNT: '/chat/unread-count',
 };
 
 // Status codes

@@ -162,10 +162,11 @@ const Settings = () => {
       navigate('/login')
     } catch (error) {
       console.error('Logout error:', error)
-      // Clear tokens even if API call fails
+      // Clear tokens and remember me flag even if API call fails
       localStorage.removeItem('accessToken')
       localStorage.removeItem('refreshToken')
       localStorage.removeItem('user')
+      localStorage.removeItem('rememberMe')
       navigate('/login')
     }
   }

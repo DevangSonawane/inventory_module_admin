@@ -30,6 +30,10 @@ import RolePagePermission from './RolePagePermission.js';
 import UserPagePermission from './UserPagePermission.js';
 import Group from './Group.js';
 import Team from './Team.js';
+import FAQ from './FAQ.js';
+import ChatConversation from './ChatConversation.js';
+import ChatMessage from './ChatMessage.js';
+import FAQInteraction from './FAQInteraction.js';
 
 // ==================== INVENTORY MODEL ASSOCIATIONS ====================
 
@@ -204,6 +208,26 @@ User.hasMany(UserPagePermission, { foreignKey: 'user_id', as: 'pagePermissions' 
 Group.hasMany(Team, { foreignKey: 'group_id', as: 'teams' });
 Team.belongsTo(Group, { foreignKey: 'group_id', as: 'group' });
 
+// ==================== CHAT SYSTEM MODEL ASSOCIATIONS ====================
+
+// ChatConversation associations
+ChatConversation.belongsTo(User, { foreignKey: 'employee_id', as: 'employee' });
+ChatConversation.belongsTo(User, { foreignKey: 'admin_id', as: 'admin' });
+User.hasMany(ChatConversation, { foreignKey: 'employee_id', as: 'employeeConversations' });
+User.hasMany(ChatConversation, { foreignKey: 'admin_id', as: 'adminConversations' });
+
+// ChatMessage associations
+ChatMessage.belongsTo(ChatConversation, { foreignKey: 'conversation_id', as: 'conversation' });
+ChatMessage.belongsTo(User, { foreignKey: 'sender_id', as: 'sender' });
+ChatConversation.hasMany(ChatMessage, { foreignKey: 'conversation_id', as: 'messages' });
+User.hasMany(ChatMessage, { foreignKey: 'sender_id', as: 'sentMessages' });
+
+// FAQInteraction associations
+FAQInteraction.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+FAQInteraction.belongsTo(FAQ, { foreignKey: 'faq_id', as: 'faq' });
+User.hasMany(FAQInteraction, { foreignKey: 'user_id', as: 'faqInteractions' });
+FAQ.hasMany(FAQInteraction, { foreignKey: 'faq_id', as: 'interactions' });
+
 // Export all models
 const models = {
   User,
@@ -237,6 +261,10 @@ const models = {
   UserPagePermission,
   Group,
   Team,
+  FAQ,
+  ChatConversation,
+  ChatMessage,
+  FAQInteraction,
 };
 
 export default models;

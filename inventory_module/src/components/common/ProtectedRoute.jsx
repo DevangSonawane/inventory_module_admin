@@ -33,6 +33,15 @@ const ProtectedRoute = ({ children }) => {
         }
       } else {
         setIsAuthenticated(false)
+        // Clear tokens if verification fails
+        localStorage.removeItem('accessToken')
+        localStorage.removeItem('refreshToken')
+        localStorage.removeItem('user')
+        // Only clear rememberMe if token verification fails
+        const rememberMe = localStorage.getItem('rememberMe')
+        if (!rememberMe || rememberMe !== 'true') {
+          localStorage.removeItem('rememberMe')
+        }
       }
     } catch (error) {
       // Token is invalid or expired
@@ -40,6 +49,11 @@ const ProtectedRoute = ({ children }) => {
       localStorage.removeItem('accessToken')
       localStorage.removeItem('refreshToken')
       localStorage.removeItem('user')
+      // Only clear rememberMe if there's an error
+      const rememberMe = localStorage.getItem('rememberMe')
+      if (!rememberMe || rememberMe !== 'true') {
+        localStorage.removeItem('rememberMe')
+      }
     } finally {
       setLoading(false)
     }
