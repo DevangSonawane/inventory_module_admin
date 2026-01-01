@@ -290,12 +290,15 @@ export const connectDB = async () => {
 
     // Run migrations to ensure schema is up to date (fixes missing columns, indexes, etc.)
     try {
-      const { runMigration } = await import('../scripts/migrateInventoryTables.js');
-      const result = await runMigration(true); // Run silently
-      if (result && result.success === false) {
-        console.warn('⚠️  Migration completed with warnings:', result.error);
-      } else {
-        console.log('✅ Database migrations completed.');
+      const migrationModule = await import('../scripts/migrateInventoryTables.js');
+      const runMigration = migrationModule.default || migrationModule.runMigration;
+      if (runMigration && typeof runMigration === 'function') {
+        const result = await runMigration(true); // Run silently
+        if (result && result.success === false) {
+          console.warn('⚠️  Migration completed with warnings:', result.error);
+        } else {
+          console.log('✅ Database migrations completed.');
+        }
       }
     } catch (migrationError) {
       console.warn('⚠️  Migration warning:', migrationError.message);

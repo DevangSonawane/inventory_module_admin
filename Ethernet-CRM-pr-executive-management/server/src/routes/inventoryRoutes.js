@@ -971,32 +971,86 @@ router.post(
       .isInt({ min: 1 })
       .withMessage('Requested quantity must be a positive integer'),
     body('ticketId')
-      .optional()
+      .optional({ checkFalsy: true })
       .trim()
       .isLength({ max: 100 })
       .withMessage('Ticket ID must be 100 characters or less'),
     body('fromStockAreaId')
-      .optional()
-      .isUUID()
+      .optional({ checkFalsy: true, nullable: true })
+      .customSanitizer((value) => {
+        // Convert empty strings, null, or whitespace to undefined
+        if (!value || (typeof value === 'string' && value.trim() === '')) {
+          return undefined;
+        }
+        return value;
+      })
+      .custom((value) => {
+        // If value is undefined after sanitization, skip validation
+        if (value === undefined || value === null) {
+          return true;
+        }
+        // Check if it's a valid UUID format
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (!uuidRegex.test(value)) {
+          throw new Error('Invalid source stock area ID format');
+        }
+        return true;
+      })
       .withMessage('Invalid source stock area ID'),
     body('requestDate')
-      .optional()
+      .optional({ checkFalsy: true })
       .isISO8601()
       .withMessage('Invalid request date format'),
     body('requestorId')
-      .optional()
+      .optional({ checkFalsy: true })
       .isInt()
       .withMessage('Invalid requestor ID'),
     body('groupId')
-      .optional()
-      .isUUID()
+      .optional({ checkFalsy: true, nullable: true })
+      .customSanitizer((value) => {
+        // Convert empty strings, null, or whitespace to undefined
+        if (!value || (typeof value === 'string' && value.trim() === '')) {
+          return undefined;
+        }
+        return value;
+      })
+      .custom((value) => {
+        // If value is undefined after sanitization, skip validation
+        if (value === undefined || value === null) {
+          return true;
+        }
+        // Check if it's a valid UUID format
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (!uuidRegex.test(value)) {
+          throw new Error('Invalid group ID format');
+        }
+        return true;
+      })
       .withMessage('Invalid group ID'),
     body('teamId')
-      .optional()
-      .isUUID()
+      .optional({ checkFalsy: true, nullable: true })
+      .customSanitizer((value) => {
+        // Convert empty strings, null, or whitespace to undefined
+        if (!value || (typeof value === 'string' && value.trim() === '')) {
+          return undefined;
+        }
+        return value;
+      })
+      .custom((value) => {
+        // If value is undefined after sanitization, skip validation
+        if (value === undefined || value === null) {
+          return true;
+        }
+        // Check if it's a valid UUID format
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (!uuidRegex.test(value)) {
+          throw new Error('Invalid team ID format');
+        }
+        return true;
+      })
       .withMessage('Invalid team ID'),
     body('serviceArea')
-      .optional()
+      .optional({ checkFalsy: true })
       .trim()
       .isLength({ max: 100 })
       .withMessage('Service area must be 100 characters or less'),
@@ -1040,32 +1094,86 @@ router.put(
       .isUUID()
       .withMessage('Invalid material request ID'),
     body('ticketId')
-      .optional()
+      .optional({ checkFalsy: true })
       .trim()
       .isLength({ max: 100 })
       .withMessage('Ticket ID must be 100 characters or less'),
     body('fromStockAreaId')
-      .optional()
-      .isUUID()
+      .optional({ checkFalsy: true, nullable: true })
+      .customSanitizer((value) => {
+        // Convert empty strings, null, or whitespace to undefined
+        if (!value || (typeof value === 'string' && value.trim() === '')) {
+          return undefined;
+        }
+        return value;
+      })
+      .custom((value) => {
+        // If value is undefined after sanitization, skip validation
+        if (value === undefined || value === null) {
+          return true;
+        }
+        // Check if it's a valid UUID format
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (!uuidRegex.test(value)) {
+          throw new Error('Invalid source stock area ID format');
+        }
+        return true;
+      })
       .withMessage('Invalid source stock area ID'),
     body('requestDate')
-      .optional()
+      .optional({ checkFalsy: true })
       .isISO8601()
       .withMessage('Invalid request date format'),
     body('requestorId')
-      .optional()
+      .optional({ checkFalsy: true })
       .isInt()
       .withMessage('Invalid requestor ID'),
     body('groupId')
-      .optional()
-      .isUUID()
+      .optional({ checkFalsy: true, nullable: true })
+      .customSanitizer((value) => {
+        // Convert empty strings, null, or whitespace to undefined
+        if (!value || (typeof value === 'string' && value.trim() === '')) {
+          return undefined;
+        }
+        return value;
+      })
+      .custom((value) => {
+        // If value is undefined after sanitization, skip validation
+        if (value === undefined || value === null) {
+          return true;
+        }
+        // Check if it's a valid UUID format
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (!uuidRegex.test(value)) {
+          throw new Error('Invalid group ID format');
+        }
+        return true;
+      })
       .withMessage('Invalid group ID'),
     body('teamId')
-      .optional()
-      .isUUID()
+      .optional({ checkFalsy: true, nullable: true })
+      .customSanitizer((value) => {
+        // Convert empty strings, null, or whitespace to undefined
+        if (!value || (typeof value === 'string' && value.trim() === '')) {
+          return undefined;
+        }
+        return value;
+      })
+      .custom((value) => {
+        // If value is undefined after sanitization, skip validation
+        if (value === undefined || value === null) {
+          return true;
+        }
+        // Check if it's a valid UUID format
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (!uuidRegex.test(value)) {
+          throw new Error('Invalid team ID format');
+        }
+        return true;
+      })
       .withMessage('Invalid team ID'),
     body('serviceArea')
-      .optional()
+      .optional({ checkFalsy: true })
       .trim()
       .isLength({ max: 100 })
       .withMessage('Service area must be 100 characters or less'),

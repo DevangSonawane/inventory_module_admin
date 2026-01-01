@@ -267,10 +267,34 @@ export const createTeam = async (req, res, next) => {
       console.warn('Could not check group_id column type:', checkError.message);
     }
 
+    // Check if 'name' column exists (legacy column)
+    let nameColumnExists = false;
+    try {
+      const [nameCol] = await sequelize.query(`
+        SELECT COLUMN_NAME 
+        FROM INFORMATION_SCHEMA.COLUMNS 
+        WHERE TABLE_SCHEMA = DATABASE() 
+        AND TABLE_NAME = 'teams'
+        AND COLUMN_NAME = 'name'
+      `, { type: sequelize.QueryTypes.SELECT });
+      nameColumnExists = Array.isArray(nameCol) && nameCol.length > 0;
+    } catch (checkError) {
+      console.warn('Could not check for name column:', checkError.message);
+    }
+
     // Insert using raw SQL to ensure correct data types
+    // Include 'name' column if it exists (legacy schema compatibility)
+    const insertColumns = nameColumnExists 
+      ? '(\`team_id\`, \`name\`, \`team_name\`, \`group_id\`, \`description\`, \`org_id\`, \`is_active\`, \`created_at\`, \`updated_at\`)'
+      : '(\`team_id\`, \`team_name\`, \`group_id\`, \`description\`, \`org_id\`, \`is_active\`, \`created_at\`, \`updated_at\`)';
+    
+    const insertValues = nameColumnExists
+      ? '(:teamId, :teamName, :teamName, :groupId, :description, :orgId, TRUE, NOW(), NOW())'
+      : '(:teamId, :teamName, :groupId, :description, :orgId, TRUE, NOW(), NOW())';
+
     await sequelize.query(`
-      INSERT INTO \`teams\` (\`team_id\`, \`team_name\`, \`group_id\`, \`description\`, \`org_id\`, \`is_active\`, \`created_at\`, \`updated_at\`)
-      VALUES (:teamId, :teamName, :groupId, :description, :orgId, TRUE, NOW(), NOW())
+      INSERT INTO \`teams\` ${insertColumns}
+      VALUES ${insertValues}
     `, {
       replacements: {
         teamId,

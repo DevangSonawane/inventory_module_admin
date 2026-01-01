@@ -41,13 +41,37 @@ export const errorHandler = (err, req, res, next) => {
   }
 
   // Sequelize foreign key constraint error
-  if (err.name === 'SequelizeForeignKeyConstraintError') {
-    return res.status(400).json({
-      success: false,
-      message: 'Cannot perform this operation due to related records',
-      code: 'FOREIGN_KEY_ERROR',
-      timestamp: new Date().toISOString()
-    });
+  if (err.name === 'SequelizeForeignKeyConstraintError' || err.name === 'SequelizeDatabaseError') {
+    // Check if it's a foreign key constraint error
+    if (err.message && (
+      err.message.includes('foreign key constraint') ||
+      err.message.includes('Cannot add or update a child row') ||
+      err.message.includes('a foreign key constraint fails')
+    )) {
+      // Extract more details from the error
+      let detailedMessage = 'Cannot perform this operation due to related records';
+      if (err.message.includes('created_by')) {
+        detailedMessage = 'Invalid user ID for created_by field. The user does not exist.';
+      } else if (err.message.includes('group_id')) {
+        detailedMessage = 'Invalid group ID. The group does not exist.';
+      } else if (err.message.includes('team_id')) {
+        detailedMessage = 'Invalid team ID. The team does not exist.';
+      } else if (err.message.includes('from_stock_area_id') || err.message.includes('stock_area')) {
+        detailedMessage = 'Invalid stock area ID. The stock area does not exist.';
+      } else if (err.message.includes('requestor_id')) {
+        detailedMessage = 'Invalid requestor ID. The requestor does not exist.';
+      }
+      
+      return res.status(400).json({
+        success: false,
+        message: detailedMessage,
+        code: 'FOREIGN_KEY_ERROR',
+        timestamp: new Date().toISOString(),
+        ...(process.env.NODE_ENV === 'development' && { 
+          originalError: err.message 
+        })
+      });
+    }
   }
 
   // JWT errors

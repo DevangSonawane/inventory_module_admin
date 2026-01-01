@@ -80,9 +80,12 @@ export const createStockTransfer = async (req, res, next) => {
       });
     }
 
-    if (normalizedFromStockAreaId === resolvedToStockAreaId) {
+    // Only validate stock area comparison if transferring to another warehouse (not to a person)
+    // When transferring to a person (toUserId is provided), to_stock_area_id may be the same
+    // as from_stock_area_id due to database constraints, but it's still a valid transfer
+    if (normalizedFromStockAreaId === resolvedToStockAreaId && !normalizedToUserId) {
       // For sentinel mapping it's expected; allow only when original sentinel used
-      if (!(normalizedToStockAreaId.toUpperCase() === 'PERSON' || normalizedToStockAreaId.toUpperCase() === 'VAN')) {
+      if (!(normalizedToStockAreaId && (normalizedToStockAreaId.toUpperCase() === 'PERSON' || normalizedToStockAreaId.toUpperCase() === 'VAN'))) {
         await transaction.rollback();
         return res.status(400).json({
           success: false,
@@ -90,6 +93,10 @@ export const createStockTransfer = async (req, res, next) => {
         });
       }
     }
+    
+    // If transferring to a person, the to_stock_area_id can be the same as from_stock_area_id
+    // This is allowed because the actual destination is the person (to_user_id), not the warehouse
+    // The to_stock_area_id field is just a database constraint requirement
 
     if (normalizedToUserId) {
       toUser = await User.findOne({
@@ -522,11 +529,17 @@ export const updateStockTransfer = async (req, res, next) => {
     }
 
     // Validate stock areas if provided
+    // Only validate if not transferring to a person (to_user_id takes precedence)
+    const toUserId = req.body.toUserId || req.body.to_user_id || transfer.to_user_id;
+    
     if (fromStockAreaId || toStockAreaId) {
       const finalFromId = fromStockAreaId || transfer.from_stock_area_id;
       const finalToId = toStockAreaId || transfer.to_stock_area_id;
 
-      if (finalFromId === finalToId) {
+      // Only check stock area comparison if NOT transferring to a person
+      // When transferring to a person, to_stock_area_id may be the same as from_stock_area_id
+      // but it's still valid because the actual destination is the person
+      if (finalFromId === finalToId && !toUserId) {
         await transaction.rollback();
         return res.status(400).json({
           success: false,

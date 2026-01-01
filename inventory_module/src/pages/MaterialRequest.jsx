@@ -48,6 +48,17 @@ const MaterialRequest = () => {
     return () => clearTimeout(timer)
   }, [searchTerm])
 
+  // Map frontend status values to backend status values (defined outside function for reuse)
+  const statusMapToBackend = {
+    'PENDING': 'SUBMITTED', // PENDING maps to SUBMITTED in backend
+    'REQUESTED': 'SUBMITTED', // REQUESTED maps to SUBMITTED in backend
+    'APPROVED': 'APPROVED',
+    'REJECTED': 'REJECTED',
+    'DRAFT': 'DRAFT',
+    'FULFILLED': 'FULFILLED',
+    'SUBMITTED': 'SUBMITTED', // Direct mapping for backend values
+  }
+
   const fetchMaterialRequests = async () => {
     try {
       setLoading(true)
@@ -63,8 +74,22 @@ const MaterialRequest = () => {
         page: currentPage,
         limit: itemsPerPage,
         search: searchTerm || undefined,
-        status: approvalStatusFilter || undefined,
         orgId,
+      }
+
+      // Apply status filter if user has selected one (don't override with tab)
+      if (approvalStatusFilter) {
+        // Map the frontend status to backend status
+        const mappedStatus = statusMapToBackend[approvalStatusFilter] || approvalStatusFilter
+        params.status = mappedStatus
+        console.log('🔍 Status filter applied:', { 
+          selected: approvalStatusFilter, 
+          mapped: mappedStatus,
+          params: params.status 
+        })
+      } else if (activeTab === 'approval-mr') {
+        // Only if no filter is selected, default to APPROVED for approval-mr tab
+        params.status = 'APPROVED'
       }
 
       // Filter by tab if needed
@@ -73,9 +98,6 @@ const MaterialRequest = () => {
         if (user?.id || user?.user_id) {
           params.requestedBy = user.id || user.user_id
         }
-      } else if (activeTab === 'approval-mr') {
-        // Only approved MRs for this tab
-        params.status = 'APPROVED'
       }
 
       const response = await materialRequestService.getAll(params)
@@ -106,21 +128,51 @@ const MaterialRequest = () => {
           APPROVED: 'Approved',
           REJECTED: 'Rejected',
           REQUESTED: 'Requested',
-          SUBMITTED: 'Requested',
-          DRAFT: 'Requested',
+          SUBMITTED: 'Submitted',
+          DRAFT: 'Draft',
+          FULFILLED: 'Fulfilled',
         }
 
-        // Filter per tab view client-side to ensure "Approved MR" only shows approved
+        // Filter per tab view client-side
+        // Apply both backend filter verification and tab-specific filtering
         const filteredByTab = dataSource.filter((request) => {
-          const statusRaw = request.status || request.request_status || 'REQUESTED'
-          if (activeTab === 'approval-mr') {
-            return statusRaw === 'APPROVED'
+          const statusRaw = (request.status || request.request_status || 'SUBMITTED').toUpperCase()
+          
+          // If user selected a status filter, verify it matches (safety check)
+          if (approvalStatusFilter) {
+            const expectedStatus = (statusMapToBackend[approvalStatusFilter] || approvalStatusFilter).toUpperCase()
+            const matches = statusRaw === expectedStatus
+            if (!matches) {
+              console.log('🚫 Filtered out request:', {
+                mrNumber: request.mr_number || request.mrNumber,
+                actualStatus: statusRaw,
+                expectedStatus: expectedStatus,
+                selectedFilter: approvalStatusFilter
+              })
+              return false // Filter out items that don't match the selected status
+            }
           }
+          
+          // Apply tab-specific filtering
+          if (activeTab === 'approval-mr') {
+            // For approval-mr tab, only show APPROVED if no filter is selected
+            if (!approvalStatusFilter) {
+              return statusRaw === 'APPROVED'
+            }
+            // If filter is selected, we already verified it above
+          }
+          
+          // For my-mr tab, verify requestedBy matches
           if (activeTab === 'my-mr') {
             const uid = user?.id || user?.user_id
-            return uid ? request.requested_by === uid : true
+            if (uid) {
+              const requestedBy = request.requested_by || request.requestedBy
+              // Handle both integer and string comparisons
+              return String(requestedBy) === String(uid)
+            }
           }
-          return true // all-mr
+          
+          return true // all-mr or passed all filters
         })
 
         const requestsData = filteredByTab.map((request, index) => {
@@ -205,17 +257,21 @@ const MaterialRequest = () => {
   const totalPages = Math.ceil(totalItems / itemsPerPage)
 
   const approvalStatusOptions = [
-    { value: '', label: 'Select Approval Status to Filter' },
-    { value: 'PENDING', label: 'Pending' },
+    { value: '', label: 'All Statuses' },
+    { value: 'SUBMITTED', label: 'Submitted/Pending' },
     { value: 'APPROVED', label: 'Approved' },
     { value: 'REJECTED', label: 'Rejected' },
-    { value: 'REQUESTED', label: 'Requested' },
+    { value: 'DRAFT', label: 'Draft' },
+    { value: 'FULFILLED', label: 'Fulfilled' },
   ]
 
   const getStatusVariant = (status) => {
-    if (status === 'Requested' || status === 'PENDING') return 'requested'
-    if (status === 'Approved' || status === 'APPROVED') return 'approved'
-    if (status === 'Rejected' || status === 'REJECTED') return 'danger'
+    const statusUpper = status?.toUpperCase() || ''
+    if (statusUpper === 'REQUESTED' || statusUpper === 'PENDING' || statusUpper === 'SUBMITTED' || status === 'Requested' || status === 'Submitted') return 'requested'
+    if (statusUpper === 'APPROVED' || status === 'Approved') return 'approved'
+    if (statusUpper === 'REJECTED' || status === 'Rejected') return 'danger'
+    if (statusUpper === 'FULFILLED' || status === 'Fulfilled') return 'success'
+    if (statusUpper === 'DRAFT' || status === 'Draft') return 'default'
     return 'default'
   }
 
@@ -438,7 +494,13 @@ const MaterialRequest = () => {
 
         <div className="flex border-b border-gray-200 mb-6">
           <button
-            onClick={() => setActiveTab('my-mr')}
+            onClick={() => {
+              setActiveTab('my-mr')
+              // Clear status filter when switching tabs to avoid confusion
+              if (approvalStatusFilter) {
+                setApprovalStatusFilter('')
+              }
+            }}
             className={`px-6 py-3 font-medium text-sm ${
               activeTab === 'my-mr'
                 ? 'border-b-2 border-blue-600 text-blue-600'
@@ -448,7 +510,13 @@ const MaterialRequest = () => {
             My MR
           </button>
           <button
-            onClick={() => setActiveTab('all-mr')}
+            onClick={() => {
+              setActiveTab('all-mr')
+              // Clear status filter when switching tabs to avoid confusion
+              if (approvalStatusFilter) {
+                setApprovalStatusFilter('')
+              }
+            }}
             className={`px-6 py-3 font-medium text-sm ${
               activeTab === 'all-mr'
                 ? 'border-b-2 border-blue-600 text-blue-600'
@@ -458,7 +526,13 @@ const MaterialRequest = () => {
             All MR
           </button>
           <button
-            onClick={() => setActiveTab('approval-mr')}
+            onClick={() => {
+              setActiveTab('approval-mr')
+              // Clear status filter when switching to approval-mr tab (it defaults to APPROVED)
+              if (approvalStatusFilter) {
+                setApprovalStatusFilter('')
+              }
+            }}
             className={`px-6 py-3 font-medium text-sm ${
               activeTab === 'approval-mr'
                 ? 'border-b-2 border-blue-600 text-blue-600'

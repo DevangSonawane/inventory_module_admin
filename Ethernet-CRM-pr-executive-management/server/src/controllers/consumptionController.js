@@ -146,34 +146,104 @@ export const createConsumption = async (req, res, next) => {
         }, { transaction });
       } else {
         // Bulk item: Find and mark quantity number of items as consumed
-        const whereClause = {
+        let availableItems = [];
+        
+        // Debug logging
+        console.log(`[Consumption] Processing bulk item: materialId=${materialId}, quantity=${itemQuantity}, fromUserId=${fromUserId}, stockAreaId=${stockAreaId}`);
+        
+        // Build base where clause
+        // Note: orgContext middleware is designed to show all records regardless of org_id
+        // So we don't filter by org_id here to ensure backward compatibility with null org_id records
+        const baseWhere = {
           material_id: materialId,
           serial_number: null, // Bulk items don't have serial numbers
-          status: { [Op.ne]: 'CONSUMED' }
+          status: { [Op.ne]: 'CONSUMED' },
+          is_active: true
+          // Intentionally NOT filtering by org_id to match orgContext middleware behavior
         };
-
-        // If consuming from person stock, validate it's in their stock
+        
+        // Strategy: Try person stock first (if fromUserId provided), then fall back to warehouse stock
         if (fromUserId) {
-          whereClause.current_location_type = 'PERSON';
-          whereClause.location_id = fromUserId.toString();
+          // First, try to consume from person stock
+          const personStockItems = await InventoryMaster.findAll({
+            where: {
+              ...baseWhere,
+              current_location_type: 'PERSON',
+              location_id: fromUserId.toString()
+            },
+            limit: itemQuantity,
+            transaction
+          });
+          
+          availableItems = personStockItems;
+          
+          // If insufficient in person stock, try warehouse stock (if stockAreaId provided)
+          if (availableItems.length < itemQuantity && stockAreaId) {
+            const warehouseItems = await InventoryMaster.findAll({
+              where: {
+                ...baseWhere,
+                current_location_type: 'WAREHOUSE',
+                location_id: stockAreaId
+              },
+              limit: itemQuantity - availableItems.length, // Only get what we still need
+              transaction
+            });
+            
+            availableItems = [...availableItems, ...warehouseItems];
+          }
+          
+          // If still insufficient and no stockAreaId, try any warehouse (fallback)
+          if (availableItems.length < itemQuantity && !stockAreaId) {
+            const anyWarehouseItems = await InventoryMaster.findAll({
+              where: {
+                ...baseWhere,
+                current_location_type: 'WAREHOUSE'
+              },
+              limit: itemQuantity - availableItems.length,
+              transaction
+            });
+            
+            availableItems = [...availableItems, ...anyWarehouseItems];
+          }
         } else if (stockAreaId) {
-          // Consuming from warehouse
-          whereClause.current_location_type = 'WAREHOUSE';
-          whereClause.location_id = stockAreaId;
+          // Consuming from warehouse only
+          availableItems = await InventoryMaster.findAll({
+            where: {
+              ...baseWhere,
+              current_location_type: 'WAREHOUSE',
+              location_id: stockAreaId
+            },
+            limit: itemQuantity,
+            transaction
+          });
+        } else {
+          // No specific location - try any warehouse
+          availableItems = await InventoryMaster.findAll({
+            where: {
+              ...baseWhere,
+              current_location_type: 'WAREHOUSE'
+            },
+            limit: itemQuantity,
+            transaction
+          });
         }
 
-        const availableItems = await InventoryMaster.findAll({
-          where: {
-            ...whereClause,
-            is_active: true,
-            ...(req.orgId ? { org_id: req.orgId } : {})
-          },
-          limit: itemQuantity,
-          transaction
-        });
-
+        // Debug logging
+        console.log(`[Consumption] Found ${availableItems.length} available items out of ${itemQuantity} requested`);
+        if (availableItems.length > 0) {
+          console.log(`[Consumption] First item details:`, {
+            id: availableItems[0].id,
+            material_id: availableItems[0].material_id,
+            status: availableItems[0].status,
+            current_location_type: availableItems[0].current_location_type,
+            location_id: availableItems[0].location_id,
+            org_id: availableItems[0].org_id
+          });
+        }
+        
         if (availableItems.length < itemQuantity) {
           await transaction.rollback();
+          console.error(`[Consumption] ERROR: Insufficient stock. Available: ${availableItems.length}, Requested: ${itemQuantity}`);
           return res.status(400).json({
             success: false,
             message: `Insufficient stock. Available: ${availableItems.length}, Requested: ${itemQuantity}`

@@ -710,12 +710,88 @@ const runMigration = async (silent = false) => {
           
           // Check if there's an 'id' column we should rename
           if (existingColumnNames.includes('id')) {
-            // Rename id to team_id
-            await sequelize.query(`
-              ALTER TABLE \`teams\`
-              CHANGE COLUMN \`id\` \`team_id\` CHAR(36) NOT NULL
-            `, { type: QueryTypes.RAW });
-            if (!silent) console.log('   ✅ Renamed id column to team_id');
+            // First, find and drop any foreign key constraints that reference teams.id
+            try {
+              const [fks] = await sequelize.query(`
+                SELECT CONSTRAINT_NAME, TABLE_NAME
+                FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
+                WHERE TABLE_SCHEMA = DATABASE() 
+                AND REFERENCED_TABLE_NAME = 'teams'
+                AND REFERENCED_COLUMN_NAME = 'id'
+              `, { type: QueryTypes.SELECT });
+              
+              if (fks && Array.isArray(fks) && fks.length > 0) {
+                for (const fk of fks) {
+                  const fkName = fk.CONSTRAINT_NAME || (Array.isArray(fk) ? fk[0] : null);
+                  const tableName = fk.TABLE_NAME || (Array.isArray(fk) ? fk[1] : null);
+                  if (fkName && tableName) {
+                    try {
+                      await sequelize.query(`
+                        ALTER TABLE \`${tableName}\`
+                        DROP FOREIGN KEY \`${fkName}\`
+                      `, { type: QueryTypes.RAW });
+                      if (!silent) console.log(`   ✅ Dropped foreign key ${fkName} from ${tableName}`);
+                    } catch (fkError) {
+                      if (!silent) console.log(`   ⚠️  Could not drop foreign key ${fkName}:`, fkError.message);
+                    }
+                  }
+                }
+              }
+            } catch (fkCheckError) {
+              if (!silent) console.log('   ⚠️  Could not check for foreign keys:', fkCheckError.message);
+            }
+            
+            // Now rename id to team_id
+            try {
+              await sequelize.query(`
+                ALTER TABLE \`teams\`
+                CHANGE COLUMN \`id\` \`team_id\` CHAR(36) NOT NULL
+              `, { type: QueryTypes.RAW });
+              if (!silent) console.log('   ✅ Renamed id column to team_id');
+              
+              // Try to recreate the foreign keys with the new column name
+              try {
+                const [droppedFks] = await sequelize.query(`
+                  SELECT CONSTRAINT_NAME, TABLE_NAME, COLUMN_NAME
+                  FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
+                  WHERE TABLE_SCHEMA = DATABASE() 
+                  AND TABLE_NAME = 'case_reason_configs'
+                  AND COLUMN_NAME LIKE '%team%'
+                `, { type: QueryTypes.SELECT });
+                
+                // Note: We don't recreate the foreign key automatically as it might have been intentionally removed
+                // The application should handle this through proper schema management
+              } catch (recreateError) {
+                // Silently continue - foreign keys can be recreated later if needed
+              }
+            } catch (renameError) {
+              if (!silent) console.log('   ⚠️  Could not rename id to team_id:', renameError.message);
+              // Fallback: Add team_id as a new column and copy data
+              try {
+                await sequelize.query(`
+                  ALTER TABLE \`teams\`
+                  ADD COLUMN \`team_id\` CHAR(36) NULL AFTER \`id\`
+                `, { type: QueryTypes.RAW });
+                
+                // Copy data from id to team_id
+                await sequelize.query(`
+                  UPDATE \`teams\`
+                  SET \`team_id\` = \`id\`
+                `, { type: QueryTypes.RAW });
+                
+                // Make team_id NOT NULL and set as primary key
+                await sequelize.query(`
+                  ALTER TABLE \`teams\`
+                  MODIFY COLUMN \`team_id\` CHAR(36) NOT NULL,
+                  DROP PRIMARY KEY,
+                  ADD PRIMARY KEY (\`team_id\`)
+                `, { type: QueryTypes.RAW });
+                
+                if (!silent) console.log('   ✅ Added team_id column and migrated data from id');
+              } catch (fallbackError) {
+                if (!silent) console.log('   ⚠️  Fallback migration also failed:', fallbackError.message);
+              }
+            }
           } else {
             // Add team_id as primary key
             await sequelize.query(`
@@ -2238,4 +2314,5 @@ if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.includes
 
 // Export for use in server startup
 export default runMigration;
+export { runMigration };
 

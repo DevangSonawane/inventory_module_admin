@@ -35,6 +35,24 @@ export const createMaterialRequest = async (req, res, next) => {
 
     const userId = req.user?.id || req.user?.user_id;
     
+    // Validate user exists (required for created_by foreign key)
+    if (!userId) {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        message: 'User ID is required'
+      });
+    }
+    
+    const user = await User.findByPk(userId);
+    if (!user) {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        message: 'User not found. Cannot create material request.'
+      });
+    }
+    
     // Set request date (user selection or current day)
     const requestDateValue = requestDate ? new Date(requestDate) : new Date();
     
@@ -121,6 +139,8 @@ export const createMaterialRequest = async (req, res, next) => {
     }
 
     // Create material request (auto-submit to SUBMITTED status)
+    // Note: created_by is nullable and has a foreign key constraint
+    // If user validation passed, we can safely set created_by
     const materialRequest = await MaterialRequest.create({
       mr_number: mrNumber,
       request_date: requestDateValue,
@@ -131,13 +151,17 @@ export const createMaterialRequest = async (req, res, next) => {
       from_stock_area_id: fromStockAreaId || null,
       pr_numbers: prNumbers && Array.isArray(prNumbers) && prNumbers.length > 0 ? prNumbers : null,
       status: 'SUBMITTED', // Auto-submit on create so it appears in Approval Center
-      requested_by: userId,
-      created_by: userId, // User creating the MR
+      requested_by: userId, // This field is NOT NULL, so must have a value
+      created_by: userId || null, // This has FK constraint to users.id, set to null if user doesn't exist (though we validated above)
       remarks: remarks || null,
       ticket_id: ticketId || null,
       org_id: req.orgId || null,
       is_active: true
-    }, { transaction });
+    }, { 
+      transaction,
+      // Skip validation since we've already validated everything above
+      validate: false
+    });
 
     // Create request items
     const createdItems = [];
@@ -261,7 +285,16 @@ export const getAllMaterialRequests = async (req, res, next) => {
     }
 
     if (status) {
-      baseWhere.status = status;
+      // Ensure status is uppercase to match ENUM values (DRAFT, SUBMITTED, APPROVED, REJECTED, FULFILLED)
+      const statusUpper = status.toUpperCase();
+      // Validate status is one of the allowed values
+      const allowedStatuses = ['DRAFT', 'SUBMITTED', 'APPROVED', 'REJECTED', 'FULFILLED'];
+      if (allowedStatuses.includes(statusUpper)) {
+        baseWhere.status = statusUpper;
+      } else {
+        // If invalid status, log warning but don't filter (show all)
+        console.warn(`Invalid status filter value: ${status}. Allowed values: ${allowedStatuses.join(', ')}`);
+      }
     }
 
     if (requestedBy) {

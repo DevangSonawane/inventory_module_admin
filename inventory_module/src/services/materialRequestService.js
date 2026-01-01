@@ -64,28 +64,31 @@ export const materialRequestService = {
       approved_quantity: item.approvedQuantity,
     }))
 
+    // Helper to convert empty strings to undefined for optional fields
+    const cleanOptionalField = (value) => (value === '' || value === null ? undefined : value)
+
     const payload = {
       // Meta
-      ticketId: requestData.ticketId,
-      ticket_id: requestData.ticketId,
-      fromStockAreaId: requestData.fromStockAreaId,
-      from_stock_area_id: requestData.fromStockAreaId,
+      ticketId: cleanOptionalField(requestData.ticketId),
+      ticket_id: cleanOptionalField(requestData.ticketId),
+      fromStockAreaId: cleanOptionalField(requestData.fromStockAreaId),
+      from_stock_area_id: cleanOptionalField(requestData.fromStockAreaId),
       requestDate: requestData.requestDate,
       request_date: requestData.requestDate,
-      requestorId: requestData.requestorId,
-      requestor_id: requestData.requestorId,
-      groupId: requestData.groupId,
-      group_id: requestData.groupId,
-      teamId: requestData.teamId,
-      team_id: requestData.teamId,
-      serviceArea: requestData.serviceArea,
-      service_area: requestData.serviceArea,
+      requestorId: cleanOptionalField(requestData.requestorId),
+      requestor_id: cleanOptionalField(requestData.requestorId),
+      groupId: cleanOptionalField(requestData.groupId),
+      group_id: cleanOptionalField(requestData.groupId),
+      teamId: cleanOptionalField(requestData.teamId),
+      team_id: cleanOptionalField(requestData.teamId),
+      serviceArea: cleanOptionalField(requestData.serviceArea),
+      service_area: cleanOptionalField(requestData.serviceArea),
       // PRs & items
       prNumbers,
       pr_numbers: prNumbers,
       items,
       // Optional fields
-      remarks: requestData.remarks,
+      remarks: cleanOptionalField(requestData.remarks),
       orgId: requestData.orgId,
       status: requestData.status,
     }
@@ -114,25 +117,28 @@ export const materialRequestService = {
       approved_quantity: item.approvedQuantity,
     }))
 
+    // Helper to convert empty strings to undefined for optional fields
+    const cleanOptionalField = (value) => (value === '' || value === null ? undefined : value)
+
     const payload = {
-      ticketId: requestData.ticketId,
-      ticket_id: requestData.ticketId,
-      fromStockAreaId: requestData.fromStockAreaId,
-      from_stock_area_id: requestData.fromStockAreaId,
+      ticketId: cleanOptionalField(requestData.ticketId),
+      ticket_id: cleanOptionalField(requestData.ticketId),
+      fromStockAreaId: cleanOptionalField(requestData.fromStockAreaId),
+      from_stock_area_id: cleanOptionalField(requestData.fromStockAreaId),
       requestDate: requestData.requestDate,
       request_date: requestData.requestDate,
-      requestorId: requestData.requestorId,
-      requestor_id: requestData.requestorId,
-      groupId: requestData.groupId,
-      group_id: requestData.groupId,
-      teamId: requestData.teamId,
-      team_id: requestData.teamId,
-      serviceArea: requestData.serviceArea,
-      service_area: requestData.serviceArea,
+      requestorId: cleanOptionalField(requestData.requestorId),
+      requestor_id: cleanOptionalField(requestData.requestorId),
+      groupId: cleanOptionalField(requestData.groupId),
+      group_id: cleanOptionalField(requestData.groupId),
+      teamId: cleanOptionalField(requestData.teamId),
+      team_id: cleanOptionalField(requestData.teamId),
+      serviceArea: cleanOptionalField(requestData.serviceArea),
+      service_area: cleanOptionalField(requestData.serviceArea),
       prNumbers,
       pr_numbers: prNumbers,
       items,
-      remarks: requestData.remarks,
+      remarks: cleanOptionalField(requestData.remarks),
       status: requestData.status,
       orgId: requestData.orgId,
     }

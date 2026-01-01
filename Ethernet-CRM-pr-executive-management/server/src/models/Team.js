@@ -6,6 +6,7 @@ const Team = sequelize.define('team', {
     type: DataTypes.UUID,
     defaultValue: DataTypes.UUIDV4,
     primaryKey: true,
+    field: 'team_id', // Explicitly map to team_id column
   },
   team_name: {
     type: DataTypes.STRING(255),
