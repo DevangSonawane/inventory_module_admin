@@ -207,12 +207,12 @@ export const createMaterialRequest = async (req, res, next) => {
         {
           model: Group,
           as: 'group',
-          attributes: ['group_id', 'group_name']
+          required: false
         },
         {
           model: Team,
           as: 'team',
-          attributes: ['team_id', 'team_name']
+          required: false
         },
         {
           model: StockArea,
@@ -253,65 +253,63 @@ export const getAllMaterialRequests = async (req, res, next) => {
     const limitNumber = Math.max(parseInt(limit, 10) || 50, 1);
     const offset = (pageNumber - 1) * limitNumber;
 
-    const whereClause = req.withOrg ? req.withOrg({}) : {};
-
+    // Build base where clause
+    const baseWhere = {};
+    
     if (!showInactive || showInactive === 'false') {
-      whereClause.is_active = true;
+      baseWhere.is_active = true;
     }
 
     if (status) {
-      whereClause.status = status;
+      baseWhere.status = status;
     }
 
     if (requestedBy) {
-      whereClause.requested_by = requestedBy;
+      baseWhere.requested_by = parseInt(requestedBy);
     }
+
+    // Apply org filtering
+    const whereClause = req.withOrg ? req.withOrg(baseWhere) : baseWhere;
 
     const { count, rows: requests } = await MaterialRequest.findAndCountAll({
       where: whereClause,
       limit: limitNumber,
       offset: offset,
       order: [['created_at', 'DESC']],
+      distinct: true,
       include: [
         {
           model: User,
           as: 'requester',
-          attributes: ['id', 'name', 'employeCode', 'email']
+          attributes: ['id', 'name', 'employeCode', 'email'],
+          required: false
         },
         {
           model: User,
           as: 'approver',
-          attributes: ['id', 'name', 'employeCode', 'email']
+          attributes: ['id', 'name', 'employeCode', 'email'],
+          required: false
         },
         {
           model: User,
           as: 'requestor',
           foreignKey: 'requestor_id',
-          attributes: ['id', 'name', 'employeCode', 'email']
+          attributes: ['id', 'name', 'employeCode', 'email'],
+          required: false
         },
         {
           model: User,
           as: 'creator',
           foreignKey: 'created_by',
-          attributes: ['id', 'name', 'employeCode', 'email']
-        },
-        {
-          model: Group,
-          as: 'group',
-          required: false,
-          attributes: ['group_id', 'group_name']
-        },
-        {
-          model: Team,
-          as: 'team',
-          required: false,
-          attributes: ['team_id', 'team_name']
+          attributes: ['id', 'name', 'employeCode', 'email'],
+          required: false
         },
         {
           model: StockArea,
           as: 'fromStockArea',
           foreignKey: 'from_stock_area_id',
-          attributes: ['area_id', 'area_name', 'location_code']
+          attributes: ['area_id', 'area_name', 'location_code'],
+          required: false
         }
       ],
     });
@@ -386,18 +384,6 @@ export const getMaterialRequestById = async (req, res, next) => {
           as: 'creator',
           foreignKey: 'created_by',
           attributes: ['id', 'name', 'employeCode', 'email']
-        },
-        {
-          model: Group,
-          as: 'group',
-          required: false,
-          attributes: ['group_id', 'group_name']
-        },
-        {
-          model: Team,
-          as: 'team',
-          required: false,
-          attributes: ['team_id', 'team_name']
         },
         {
           model: StockArea,
@@ -638,12 +624,12 @@ export const updateMaterialRequest = async (req, res, next) => {
         {
           model: Group,
           as: 'group',
-          attributes: ['group_id', 'group_name']
+          required: false
         },
         {
           model: Team,
           as: 'team',
-          attributes: ['team_id', 'team_name']
+          required: false
         },
         {
           model: StockArea,

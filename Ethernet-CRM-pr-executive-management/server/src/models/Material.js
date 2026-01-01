@@ -48,6 +48,11 @@ const Material = sequelize.define('material', {
     allowNull: true,
     comment: 'GST percentage for the material'
   },
+  sgst_percentage: {
+    type: DataTypes.DECIMAL(5, 2),
+    allowNull: true,
+    comment: 'SGST percentage for the material'
+  },
   price: {
     type: DataTypes.DECIMAL(10, 2),
     allowNull: true,

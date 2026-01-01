@@ -40,6 +40,13 @@ const StockAreaManagement = () => {
     storeKeeperId: '',
     description: '',
     pinCode: '',
+    companyName: '',
+    streetNumberName: '',
+    apartmentUnit: '',
+    localityDistrict: '',
+    city: '',
+    stateProvince: '',
+    country: '',
   })
   const [formErrors, setFormErrors] = useState({})
 
@@ -115,6 +122,13 @@ const StockAreaManagement = () => {
           storeKeeperId: area.store_keeper_id?.toString() || '',
           description: area.description || '',
           pinCode: area.pin_code || '',
+          companyName: area.company_name || '',
+          streetNumberName: area.street_number_name || '',
+          apartmentUnit: area.apartment_unit || '',
+          localityDistrict: area.locality_district || '',
+          city: area.city || '',
+          stateProvince: area.state_province || '',
+          country: area.country || '',
         })
       }
     } catch (error) {
@@ -132,6 +146,13 @@ const StockAreaManagement = () => {
       storeKeeperId: '',
       description: '',
       pinCode: '',
+      companyName: '',
+      streetNumberName: '',
+      apartmentUnit: '',
+      localityDistrict: '',
+      city: '',
+      stateProvince: '',
+      country: '',
     })
     setFormErrors({})
   }
@@ -153,6 +174,13 @@ const StockAreaManagement = () => {
         storeKeeperId: formData.storeKeeperId ? parseInt(formData.storeKeeperId) : undefined,
         description: formData.description.trim() || undefined,
         pinCode: formData.pinCode.trim() || undefined,
+        companyName: formData.companyName.trim() || undefined,
+        streetNumberName: formData.streetNumberName.trim() || undefined,
+        apartmentUnit: formData.apartmentUnit.trim() || undefined,
+        localityDistrict: formData.localityDistrict.trim() || undefined,
+        city: formData.city.trim() || undefined,
+        stateProvince: formData.stateProvince.trim() || undefined,
+        country: formData.country.trim() || undefined,
       }
 
       let response
@@ -370,7 +398,55 @@ const StockAreaManagement = () => {
               )}
             </div>
             <Input
-              label="Pin Code"
+              label="Company Name (if applicable)"
+              value={formData.companyName}
+              onChange={(e) => {
+                setFormData({ ...formData, companyName: e.target.value })
+              }}
+              placeholder="Enter company name"
+            />
+            <Input
+              label="Street Number & Name"
+              value={formData.streetNumberName}
+              onChange={(e) => {
+                setFormData({ ...formData, streetNumberName: e.target.value })
+              }}
+              placeholder="Enter street number and name"
+            />
+            <Input
+              label="Apartment/Unit"
+              value={formData.apartmentUnit}
+              onChange={(e) => {
+                setFormData({ ...formData, apartmentUnit: e.target.value })
+              }}
+              placeholder="Enter apartment/unit"
+            />
+            <Input
+              label="Locality/District (if needed)"
+              value={formData.localityDistrict}
+              onChange={(e) => {
+                setFormData({ ...formData, localityDistrict: e.target.value })
+              }}
+              placeholder="Enter locality/district"
+            />
+            <Input
+              label="City"
+              value={formData.city}
+              onChange={(e) => {
+                setFormData({ ...formData, city: e.target.value })
+              }}
+              placeholder="Enter city"
+            />
+            <Input
+              label="State/Province"
+              value={formData.stateProvince}
+              onChange={(e) => {
+                setFormData({ ...formData, stateProvince: e.target.value })
+              }}
+              placeholder="Enter state/province"
+            />
+            <Input
+              label="Postal Code"
               type="text"
               value={formData.pinCode}
               onChange={(e) => {
@@ -379,8 +455,16 @@ const StockAreaManagement = () => {
                 setFormErrors({ ...formErrors, pinCode: '' })
               }}
               error={formErrors.pinCode}
-              placeholder="Enter pin code"
+              placeholder="Enter postal code"
               maxLength={10}
+            />
+            <Input
+              label="Country (in all caps)"
+              value={formData.country}
+              onChange={(e) => {
+                setFormData({ ...formData, country: e.target.value.toUpperCase() })
+              }}
+              placeholder="Enter country"
             />
             <div className="flex justify-end gap-3 pt-4">
               <Button

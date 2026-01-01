@@ -99,6 +99,7 @@ export const createBusinessPartner = async (req, res, next) => {
       partnerType,
       gstNumber,
       panCard,
+      tanNumber,
       billingAddress,
       shippingAddress,
       sameAsBilling,
@@ -126,7 +127,7 @@ export const createBusinessPartner = async (req, res, next) => {
     // Auto-generate vendor code if not provided
     let finalVendorCode = vendorCode;
     if (!finalVendorCode) {
-      const prefix = partnerType === 'SUPPLIER' ? 'SUP' : partnerType === 'CUSTOMER' ? 'CUS' : 'BTH';
+      const prefix = partnerType === 'SUPPLIER' ? 'SUP' : partnerType === 'FRANCHISE' ? 'FRN' : 'BTH';
       const timestamp = Date.now().toString().slice(-6);
       finalVendorCode = `${prefix}-${timestamp}`;
       
@@ -143,6 +144,7 @@ export const createBusinessPartner = async (req, res, next) => {
       partner_type: partnerType || 'SUPPLIER',
       gst_number: gstNumber ? gstNumber.replace(/\s/g, '').toUpperCase() : null,
       pan_card: panCard ? panCard.replace(/\s/g, '').toUpperCase() : null,
+      tan_number: tanNumber ? tanNumber.replace(/\s/g, '').toUpperCase() : null,
       billing_address: billingAddress,
       shipping_address: sameAsBilling ? billingAddress : shippingAddress,
       same_as_billing: sameAsBilling || false,
@@ -192,6 +194,7 @@ export const updateBusinessPartner = async (req, res, next) => {
       partnerType,
       gstNumber,
       panCard,
+      tanNumber,
       billingAddress,
       shippingAddress,
       sameAsBilling,
@@ -249,6 +252,7 @@ export const updateBusinessPartner = async (req, res, next) => {
       partner_type: partnerType !== undefined ? partnerType : businessPartner.partner_type,
       gst_number: gstNumber !== undefined ? gstNumber.replace(/\s/g, '').toUpperCase() : businessPartner.gst_number,
       pan_card: panCard !== undefined ? panCard.replace(/\s/g, '').toUpperCase() : businessPartner.pan_card,
+      tan_number: tanNumber !== undefined ? (tanNumber ? tanNumber.replace(/\s/g, '').toUpperCase() : null) : businessPartner.tan_number,
       billing_address: billingAddress !== undefined ? billingAddress : businessPartner.billing_address,
       shipping_address: sameAsBilling ? (billingAddress !== undefined ? billingAddress : businessPartner.billing_address) : (shippingAddress !== undefined ? shippingAddress : businessPartner.shipping_address),
       same_as_billing: sameAsBilling !== undefined ? sameAsBilling : businessPartner.same_as_billing,

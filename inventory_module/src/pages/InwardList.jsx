@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Search, RefreshCw, Eye, Edit, Trash2, Loader2, Download, Printer } from 'lucide-react'
+import { Plus, Search, RefreshCw, Eye, Loader2, Download, Printer } from 'lucide-react'
 import { toast } from 'react-toastify'
 import Button from '../components/common/Button'
 import Table from '../components/common/Table'
@@ -362,20 +362,6 @@ const InwardList = () => {
                           title="View"
                         >
                           <Eye className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleEdit(item.id)}
-                          className="text-blue-600 hover:text-blue-700 transition-colors"
-                          title="Edit"
-                        >
-                          <Edit className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(item.id)}
-                          className="text-red-600 hover:text-red-700 transition-colors"
-                          title="Delete"
-                        >
-                          <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
                     </td>

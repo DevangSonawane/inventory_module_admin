@@ -18,6 +18,7 @@ const StockTransfer = () => {
   const { id } = useParams()
   const navigate = useNavigate()
   const isEditMode = id && id !== 'new'
+  const [transferStatus, setTransferStatus] = useState(null)
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage, setItemsPerPage] = useState(10)
   const [activeTab, setActiveTab] = useState('requested-items') // 'requested-items' or 'allocate-items'
@@ -240,6 +241,9 @@ const StockTransfer = () => {
           response.data
 
         if (transfer) {
+          // Track transfer status
+          setTransferStatus(transfer.status || 'DRAFT')
+          
           // Determine transfer type: material-request if material_request_id exists, else reconciliation
           const transferType = transfer.material_request_id || transfer.materialRequestId ? 'material-request' : 'reconciliation'
           
@@ -371,20 +375,21 @@ const StockTransfer = () => {
         remarks: basicDetails.description || undefined,
       }
 
-      let response
+        // Editing is not allowed - only create new transfers
       if (isEditMode) {
-        response = await stockTransferService.update(id, transferData)
-      } else {
-        response = await stockTransferService.create(transferData)
+        toast.error('Editing stock transfers is not allowed')
+        return
       }
+      
+      const response = await stockTransferService.create(transferData)
 
       if (response.success) {
-        toast.success(`Stock transfer ${isEditMode ? 'updated' : 'created'} successfully!`)
+        toast.success('Stock transfer created successfully!')
         navigate('/stock-transfer')
       }
     } catch (error) {
       console.error('Error saving stock transfer:', error)
-      toast.error(error.message || `Failed to ${isEditMode ? 'update' : 'create'} stock transfer`)
+      toast.error(error.message || 'Failed to create stock transfer')
     } finally {
       setLoading(false)
     }
@@ -456,7 +461,8 @@ const StockTransfer = () => {
               type="date"
               value={basicDetails.date}
               onChange={(e) => setBasicDetails({ ...basicDetails, date: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              disabled={isEditMode || transferStatus === 'COMPLETED'}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
             />
           </div>
           
@@ -466,6 +472,7 @@ const StockTransfer = () => {
             value={basicDetails.slipNo}
             onChange={(e) => setBasicDetails({ ...basicDetails, slipNo: e.target.value })}
             placeholder="ST-MONTH-YEAR-NUMBER"
+            disabled={isEditMode || transferStatus === 'COMPLETED'}
           />
           
           <Dropdown
@@ -474,6 +481,7 @@ const StockTransfer = () => {
             options={transferTypeOptions}
             value={basicDetails.transferType}
             onChange={(e) => handleTransferTypeChange(e.target.value)}
+            disabled={isEditMode || transferStatus === 'COMPLETED'}
           />
 
           {/* Conditional fields based on transfer type */}
@@ -485,6 +493,7 @@ const StockTransfer = () => {
                 options={materialRequests}
                 value={basicDetails.materialRequestNo}
                 onChange={(e) => setBasicDetails({ ...basicDetails, materialRequestNo: e.target.value })}
+                disabled={isEditMode || transferStatus === 'COMPLETED'}
               />
             </>
           )}
@@ -495,6 +504,7 @@ const StockTransfer = () => {
             options={stockAreas}
             value={basicDetails.fromStockArea}
             onChange={(e) => setBasicDetails({ ...basicDetails, fromStockArea: e.target.value })}
+            disabled={isEditMode || transferStatus === 'COMPLETED'}
           />
 
           {/* To Person or Warehouse - one must be selected, other grayed */}
@@ -506,7 +516,7 @@ const StockTransfer = () => {
                 options={userOptions}
                 value={basicDetails.toPerson}
                 onChange={(e) => handleToPersonChange(e.target.value)}
-                disabled={!!basicDetails.toWarehouse}
+                disabled={isEditMode || !!basicDetails.toWarehouse || transferStatus === 'COMPLETED'}
               />
               
               <Dropdown
@@ -515,7 +525,7 @@ const StockTransfer = () => {
                 options={warehouseOptions}
                 value={basicDetails.toWarehouse}
                 onChange={(e) => handleToWarehouseChange(e.target.value)}
-                disabled={!!basicDetails.toPerson}
+                disabled={isEditMode || !!basicDetails.toPerson || transferStatus === 'COMPLETED'}
               />
             </>
           )}
@@ -587,10 +597,12 @@ const StockTransfer = () => {
               <div>
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-semibold text-gray-900">Allocate Items</h3>
-                  <Button variant="primary" onClick={() => setIsAddItemModalOpen(true)}>
-                    <PlusIcon className="w-4 h-4 mr-2 inline" />
-                    Add Item
-                  </Button>
+                  {!isEditMode && transferStatus !== 'COMPLETED' && (
+                    <Button variant="primary" onClick={() => setIsAddItemModalOpen(true)}>
+                      <PlusIcon className="w-4 h-4 mr-2 inline" />
+                      Add Item
+                    </Button>
+                  )}
                 </div>
                 <Table
                   headers={['SELECT', 'ITEM NAME', 'PROPERTIES', 'GRN NO.', 'ASSET ID', 'QUANTITY', 'REMARKS']}
@@ -607,7 +619,8 @@ const StockTransfer = () => {
                                 i.id === item.id ? { ...i, selected: e.target.checked } : i
                               ))
                             }}
-                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                            disabled={isEditMode || transferStatus === 'COMPLETED'}
+                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 disabled:bg-gray-100"
                           />
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.itemName}</td>
@@ -646,10 +659,12 @@ const StockTransfer = () => {
           <div className="border-t border-gray-200 pt-6 mt-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-gray-900">Items</h3>
-              <Button variant="primary" onClick={() => setIsAddItemModalOpen(true)}>
-                <PlusIcon className="w-4 h-4 mr-2 inline" />
-                Add Item
-              </Button>
+              {!isEditMode && transferStatus !== 'COMPLETED' && (
+                <Button variant="primary" onClick={() => setIsAddItemModalOpen(true)}>
+                  <PlusIcon className="w-4 h-4 mr-2 inline" />
+                  Add Item
+                </Button>
+              )}
             </div>
             <Table
               headers={['SELECT', 'ITEM NAME', 'PROPERTIES', 'GRN NO.', 'ASSET ID', 'QUANTITY', 'REMARKS']}
@@ -666,7 +681,8 @@ const StockTransfer = () => {
                             i.id === item.id ? { ...i, selected: e.target.checked } : i
                           ))
                         }}
-                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                        disabled={isEditMode || transferStatus === 'COMPLETED'}
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 disabled:bg-gray-100"
                       />
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.itemName}</td>
@@ -705,27 +721,35 @@ const StockTransfer = () => {
             placeholder="Enter Description"
             value={basicDetails.description}
             onChange={(e) => setBasicDetails({ ...basicDetails, description: e.target.value })}
+            disabled={isEditMode || transferStatus === 'COMPLETED'}
           />
         </div>
 
         <div className="flex gap-4 justify-end mt-6 pt-6 border-t border-gray-200">
           <Button variant="gray" onClick={() => navigate('/stock-transfer')}>
-            Cancel
+            {isEditMode || transferStatus === 'COMPLETED' ? 'Back' : 'Cancel'}
           </Button>
-          <Button 
-            variant="success"
-            onClick={handleSave}
-            disabled={loading}
-          >
-            {loading ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 inline animate-spin" />
-                Saving...
-              </>
-            ) : (
-              'Save'
-            )}
-          </Button>
+          {!isEditMode && transferStatus !== 'COMPLETED' && (
+            <Button 
+              variant="success"
+              onClick={handleSave}
+              disabled={loading}
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 inline animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                'Save'
+              )}
+            </Button>
+          )}
+          {(isEditMode || transferStatus === 'COMPLETED') && (
+            <div className="px-3 py-2 text-sm text-gray-600 bg-gray-50 rounded-md border border-gray-200">
+              {isEditMode ? 'Editing stock transfers is not allowed' : 'Transfer is completed and cannot be edited'}
+            </div>
+          )}
         </div>
       </div>
 

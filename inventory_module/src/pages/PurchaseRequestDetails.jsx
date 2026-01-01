@@ -11,6 +11,7 @@ import { purchaseRequestService } from '../services/purchaseRequestService.js'
 import { materialService } from '../services/materialService.js'
 import { businessPartnerService } from '../services/businessPartnerService.js'
 import { stockAreaService } from '../services/stockAreaService.js'
+import { materialTypeService } from '../services/materialTypeService.js'
 
 // UUID validation regex
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -23,6 +24,7 @@ const PurchaseRequestDetails = () => {
   const [materials, setMaterials] = useState([])
   const [businessPartners, setBusinessPartners] = useState([])
   const [stockAreas, setStockAreas] = useState([])
+  const [materialTypes, setMaterialTypes] = useState([])
   const [isAddItemModalOpen, setIsAddItemModalOpen] = useState(false)
 
   const [formData, setFormData] = useState({
@@ -40,25 +42,22 @@ const PurchaseRequestDetails = () => {
     businessPartnerId: '',
     warehouseId: '',
     shippingAddress: '',
+    billingAddress: '',
     description: '',
     materialId: '',
     requestedQuantity: '',
     remarks: '',
+    unitPrice: '',
+    gstPercentage: '',
+    sgstPercentage: '',
+    uom: '',
   })
-
-  const materialTypeOptions = [
-    { value: '', label: 'Select Material Type' },
-    { value: 'components', label: 'Components' },
-    { value: 'raw material', label: 'Raw Material' },
-    { value: 'finish product', label: 'Finish Product' },
-    { value: 'supportive material', label: 'Supportive Material' },
-    { value: 'cable', label: 'Cable' },
-  ]
 
   useEffect(() => {
     fetchMaterials()
     fetchBusinessPartners()
     fetchStockAreas()
+    fetchMaterialTypes()
     if (isEditMode) {
       fetchPurchaseRequest()
     } else {
@@ -66,6 +65,28 @@ const PurchaseRequestDetails = () => {
       handleDateChange(new Date().toISOString().split('T')[0])
     }
   }, [id])
+
+  const fetchMaterialTypes = async () => {
+    try {
+      const response = await materialTypeService.getAll({ limit: 1000 })
+      if (response.success) {
+        const types = response.data?.materialTypes || response.data?.data || []
+        setMaterialTypes(types)
+      }
+    } catch (error) {
+      console.error('Error fetching material types:', error)
+      toast.error('Failed to load material types')
+      setMaterialTypes([])
+    }
+  }
+
+  const materialTypeOptions = [
+    { value: '', label: 'Select Material Type' },
+    ...materialTypes.map(type => ({
+      value: type.type_name,
+      label: type.type_name.charAt(0).toUpperCase() + type.type_name.slice(1).replace(/_/g, ' ')
+    }))
+  ]
 
   const handleDateChange = async (date) => {
     // Update date immediately for live update
@@ -155,22 +176,43 @@ const PurchaseRequestDetails = () => {
           })
           
           if (pr.items && Array.isArray(pr.items)) {
-            setRequestedItems(pr.items.map((item, index) => ({
-              id: item.item_id || index,
-              prName: item.pr_name || '',
-              materialType: item.material_type || '',
-              businessPartnerId: item.business_partner_id || '',
-              businessPartnerName: item.businessPartner?.partner_name || '',
-              warehouseId: '',
-              shippingAddress: item.shipping_address || '',
-              description: item.description || '',
-              materialId: item.material_id || '',
-              itemName: item.material?.material_name || '-',
-              productCode: item.material?.product_code || '-',
-              requestedQuantity: item.requested_quantity || 1,
-              uom: item.material?.uom || 'PIECE(S)',
-              remarks: item.remarks || '',
-            })))
+            setRequestedItems(pr.items.map((item, index) => {
+              const quantity = item.requested_quantity || 1
+              const material = item.material
+              const unitPrice = material?.price ? parseFloat(material.price) : 0
+              const gstPercentage = material?.gst_percentage ? parseFloat(material.gst_percentage) : 0
+              const sgstPercentage = material?.sgst_percentage ? parseFloat(material.sgst_percentage) : 0
+              
+              const subtotal = quantity * unitPrice
+              const gstAmount = subtotal * (gstPercentage / 100)
+              const sgstAmount = subtotal * (sgstPercentage / 100)
+              const itemTotal = subtotal + gstAmount + sgstAmount
+              
+              return {
+                id: item.item_id || index,
+                prName: item.pr_name || '',
+                materialType: item.material_type || '',
+                businessPartnerId: item.business_partner_id || '',
+                businessPartnerName: item.businessPartner?.partner_name || '',
+                warehouseId: '',
+                shippingAddress: item.shipping_address || '',
+                billingAddress: item.billing_address || '',
+                description: item.description || '',
+                materialId: item.material_id || '',
+                itemName: material?.material_name || '-',
+                productCode: material?.product_code || '-',
+                requestedQuantity: quantity,
+                uom: material?.uom || 'PIECE(S)',
+                unitPrice: unitPrice,
+                gstPercentage: gstPercentage,
+                sgstPercentage: sgstPercentage,
+                subtotal: subtotal,
+                gstAmount: gstAmount,
+                sgstAmount: sgstAmount,
+                itemTotal: itemTotal,
+                remarks: item.remarks || '',
+              }
+            }))
           }
         }
       }
@@ -207,24 +249,92 @@ const PurchaseRequestDetails = () => {
     }))
   ]
 
+  const handleMaterialChange = (materialId) => {
+    const selectedMaterial = materials.find(m => m.material_id === materialId)
+    if (selectedMaterial) {
+      setItemForm({
+        ...itemForm,
+        materialId: materialId,
+        materialType: selectedMaterial.material_type || itemForm.materialType,
+        unitPrice: selectedMaterial.price ? parseFloat(selectedMaterial.price).toFixed(2) : '',
+        gstPercentage: selectedMaterial.gst_percentage ? parseFloat(selectedMaterial.gst_percentage).toFixed(2) : '',
+        sgstPercentage: selectedMaterial.sgst_percentage ? parseFloat(selectedMaterial.sgst_percentage).toFixed(2) : '',
+        uom: selectedMaterial.uom || 'PIECE(S)',
+      })
+    } else {
+      setItemForm({
+        ...itemForm,
+        materialId: materialId,
+        unitPrice: '',
+        gstPercentage: '',
+        sgstPercentage: '',
+        uom: '',
+      })
+    }
+  }
+
   const handleWarehouseChange = (warehouseId) => {
     const selectedWarehouse = stockAreas.find(area => area.area_id === warehouseId)
+    
+    if (!selectedWarehouse) {
+      setItemForm({
+        ...itemForm,
+        warehouseId: warehouseId,
+        shippingAddress: '',
+        billingAddress: ''
+      })
+      return
+    }
+    
+    // Get address from address field, or construct from individual fields
+    let address = selectedWarehouse.address || ''
+    
+    // If address field is empty, try to construct from individual fields
+    if (!address || address.trim() === '') {
+      const addressParts = []
+      if (selectedWarehouse.street_number_name) addressParts.push(selectedWarehouse.street_number_name)
+      if (selectedWarehouse.apartment_unit) addressParts.push(selectedWarehouse.apartment_unit)
+      if (selectedWarehouse.locality_district) addressParts.push(selectedWarehouse.locality_district)
+      if (selectedWarehouse.city) addressParts.push(selectedWarehouse.city)
+      if (selectedWarehouse.state_province) addressParts.push(selectedWarehouse.state_province)
+      if (selectedWarehouse.country) addressParts.push(selectedWarehouse.country)
+      if (selectedWarehouse.pin_code) addressParts.push(selectedWarehouse.pin_code)
+      
+      address = addressParts.length > 0 ? addressParts.join(', ') : ''
+    }
+    
     setItemForm({
       ...itemForm,
       warehouseId: warehouseId,
-      shippingAddress: selectedWarehouse?.address || ''
+      shippingAddress: address,
+      billingAddress: address
     })
   }
 
   const handleAddItem = () => {
-    if (!itemForm.prName || !itemForm.materialType) {
-      toast.error('Please fill PR Name and Material Type (required fields)')
+    if (!itemForm.prName || !itemForm.prName.trim()) {
+      toast.error('PR Name is required')
+      return
+    }
+    if (!itemForm.materialType || !itemForm.materialType.trim()) {
+      toast.error('Material Type is required')
       return
     }
 
     const selectedBusinessPartner = businessPartners.find(bp => bp.partner_id === itemForm.businessPartnerId)
     const selectedWarehouse = stockAreas.find(area => area.area_id === itemForm.warehouseId)
     const selectedMaterial = materials.find(m => m.material_id === itemForm.materialId)
+
+    // Calculate prices and taxes
+    const quantity = itemForm.requestedQuantity ? parseFloat(itemForm.requestedQuantity) : 1
+    const unitPrice = itemForm.unitPrice ? parseFloat(itemForm.unitPrice) : (selectedMaterial?.price ? parseFloat(selectedMaterial.price) : 0)
+    const gstPercentage = itemForm.gstPercentage ? parseFloat(itemForm.gstPercentage) : (selectedMaterial?.gst_percentage ? parseFloat(selectedMaterial.gst_percentage) : 0)
+    const sgstPercentage = itemForm.sgstPercentage ? parseFloat(itemForm.sgstPercentage) : (selectedMaterial?.sgst_percentage ? parseFloat(selectedMaterial.sgst_percentage) : 0)
+    
+    const subtotal = quantity * unitPrice
+    const gstAmount = subtotal * (gstPercentage / 100)
+    const sgstAmount = subtotal * (sgstPercentage / 100)
+    const itemTotal = subtotal + gstAmount + sgstAmount
 
     const newItem = {
       id: Date.now(),
@@ -234,12 +344,20 @@ const PurchaseRequestDetails = () => {
       businessPartnerName: selectedBusinessPartner?.partner_name || '',
       warehouseId: itemForm.warehouseId || null,
       shippingAddress: itemForm.shippingAddress || '',
+      billingAddress: itemForm.billingAddress || '',
       description: itemForm.description || '',
       materialId: itemForm.materialId || null,
       itemName: selectedMaterial?.material_name || '-',
       productCode: selectedMaterial?.product_code || '-',
-      requestedQuantity: itemForm.requestedQuantity ? parseInt(itemForm.requestedQuantity) : 1,
-      uom: selectedMaterial?.uom || 'PIECE(S)',
+      requestedQuantity: quantity,
+      uom: itemForm.uom || selectedMaterial?.uom || 'PIECE(S)',
+      unitPrice: unitPrice,
+      gstPercentage: gstPercentage,
+      sgstPercentage: sgstPercentage,
+      subtotal: subtotal,
+      gstAmount: gstAmount,
+      sgstAmount: sgstAmount,
+      itemTotal: itemTotal,
       remarks: itemForm.remarks || '',
     }
     
@@ -250,10 +368,15 @@ const PurchaseRequestDetails = () => {
       businessPartnerId: '',
       warehouseId: '',
       shippingAddress: '',
+      billingAddress: '',
       description: '',
       materialId: '',
       requestedQuantity: '',
       remarks: '',
+      unitPrice: '',
+      gstPercentage: '',
+      sgstPercentage: '',
+      uom: '',
     })
     setIsAddItemModalOpen(false)
     toast.success('Item added successfully')
@@ -292,9 +415,10 @@ const PurchaseRequestDetails = () => {
         requestedDate: formData.requestedDate,
         items: requestedItems.map(item => ({
           prName: item.prName,
-          materialType: item.materialType,
+          materialType: item.materialType && item.materialType.trim() ? item.materialType.trim() : undefined,
           businessPartnerId: item.businessPartnerId || undefined,
           shippingAddress: item.shippingAddress || undefined,
+          billingAddress: item.billingAddress || undefined,
           description: item.description || undefined,
           materialId: item.materialId || undefined,
           requestedQuantity: item.requestedQuantity || 1,
@@ -394,32 +518,62 @@ const PurchaseRequestDetails = () => {
     }
   }
 
+  // Calculate grand totals
+  const grandTotals = requestedItems.reduce((totals, item) => {
+    totals.subtotal += item.subtotal || 0
+    totals.gst += item.gstAmount || 0
+    totals.sgst += item.sgstAmount || 0
+    totals.total += item.itemTotal || 0
+    return totals
+  }, { subtotal: 0, gst: 0, sgst: 0, total: 0 })
+
   const itemColumns = [
     { key: 'prName', label: 'PR Name' },
     { key: 'materialType', label: 'Material Type' },
-    { key: 'businessPartnerName', label: 'Business Partner' },
-    { key: 'shippingAddress', label: 'Shipping Address', render: (row) => (
-      <span className="max-w-xs truncate block" title={row.shippingAddress}>
-        {row.shippingAddress || '-'}
-      </span>
-    )},
-    { key: 'description', label: 'Description', render: (row) => (
-      <span className="max-w-xs truncate block" title={row.description}>
-        {row.description || '-'}
-      </span>
-    )},
     { key: 'itemName', label: 'Material' },
-    { key: 'requestedQuantity', label: 'Quantity' },
+    { key: 'businessPartnerName', label: 'Business Partner' },
+    { 
+      key: 'requestedQuantity', 
+      label: 'Qty',
+      render: (row) => `${row.requestedQuantity || 0} ${row.uom || ''}`
+    },
+    { 
+      key: 'unitPrice', 
+      label: 'Unit Price',
+      render: (row) => `₹${(row.unitPrice || 0).toFixed(2)}`
+    },
+    { 
+      key: 'subtotal', 
+      label: 'Subtotal',
+      render: (row) => `₹${(row.subtotal || 0).toFixed(2)}`
+    },
+    { 
+      key: 'gst', 
+      label: `GST`,
+      render: (row) => row.gstPercentage ? `₹${(row.gstAmount || 0).toFixed(2)} (${row.gstPercentage.toFixed(2)}%)` : '-'
+    },
+    { 
+      key: 'sgst', 
+      label: `SGST`,
+      render: (row) => row.sgstPercentage ? `₹${(row.sgstAmount || 0).toFixed(2)} (${row.sgstPercentage.toFixed(2)}%)` : '-'
+    },
+    { 
+      key: 'itemTotal', 
+      label: 'Total',
+      render: (row) => <span className="font-semibold">₹{(row.itemTotal || 0).toFixed(2)}</span>
+    },
     {
       key: 'actions',
       label: 'Actions',
       render: (row) => (
-        <button
-          onClick={() => handleDeleteItem(row.id)}
-          className="p-1 text-red-600 hover:bg-red-50 rounded"
-        >
-          <Trash2 className="w-4 h-4" />
-        </button>
+        (prStatus === 'DRAFT' || !isEditMode) && (
+          <button
+            onClick={() => handleDeleteItem(row.id)}
+            className="p-1 text-red-600 hover:bg-red-50 rounded"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        )
       ),
     },
   ]
@@ -448,7 +602,7 @@ const PurchaseRequestDetails = () => {
                 }
               }}
               placeholder={generatingPRNumber ? "Generating..." : "Auto-generated based on date"}
-              disabled={isEditMode || generatingPRNumber}
+              disabled={isEditMode || generatingPRNumber || prStatus !== 'DRAFT'}
               icon={generatingPRNumber ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
             />
             <p className="text-xs text-gray-500 mt-1">
@@ -463,7 +617,7 @@ const PurchaseRequestDetails = () => {
               type="date"
               value={formData.requestedDate}
               onChange={(e) => handleDateChange(e.target.value)}
-              disabled={generatingPRNumber}
+              disabled={generatingPRNumber || (isEditMode && prStatus !== 'DRAFT')}
             />
             {generatingPRNumber && (
               <p className="text-xs text-blue-500 mt-1">Generating PR number...</p>
@@ -474,22 +628,50 @@ const PurchaseRequestDetails = () => {
         <div className="border-t pt-4">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-semibold">Requested Items</h2>
-            <Button onClick={() => setIsAddItemModalOpen(true)} icon={<Plus className="w-4 h-4" />}>
-              Add Item
-            </Button>
+            {(prStatus === 'DRAFT' || !isEditMode) && (
+              <Button onClick={() => setIsAddItemModalOpen(true)} icon={<Plus className="w-4 h-4" />}>
+                Add Item
+              </Button>
+            )}
           </div>
 
           {requestedItems.length === 0 ? (
             <p className="text-gray-500 text-center py-8">No items added yet</p>
           ) : (
-            <Table data={requestedItems} columns={itemColumns} />
+            <>
+              <Table data={requestedItems} columns={itemColumns} />
+              <div className="mt-4 pt-4 border-t">
+                <div className="flex justify-end">
+                  <div className="w-full max-w-md space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Subtotal:</span>
+                      <span className="font-medium">₹{grandTotals.subtotal.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">GST:</span>
+                      <span className="font-medium">₹{grandTotals.gst.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">SGST:</span>
+                      <span className="font-medium">₹{grandTotals.sgst.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-lg font-bold border-t border-gray-300 pt-2">
+                      <span>Grand Total:</span>
+                      <span>₹{grandTotals.total.toFixed(2)}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </>
           )}
         </div>
 
         <div className="flex gap-4 pt-4 border-t">
-          <Button onClick={handleSave} disabled={loading} icon={loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}>
-            {isEditMode ? (prStatus === 'DRAFT' ? 'Save Draft' : 'Update') : 'Save Draft'}
-          </Button>
+          {(prStatus === 'DRAFT' || !isEditMode) && (
+            <Button onClick={handleSave} disabled={loading} icon={loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}>
+              {isEditMode ? 'Save Draft' : 'Save Draft'}
+            </Button>
+          )}
           {isEditMode && prStatus === 'DRAFT' && (
             <Button onClick={handleSubmit} disabled={loading} variant="primary">
               Submit for Approval
@@ -497,11 +679,11 @@ const PurchaseRequestDetails = () => {
           )}
           {isEditMode && prStatus !== 'DRAFT' && (
             <div className="px-3 py-2 text-sm text-gray-600 bg-gray-50 rounded-md border border-gray-200">
-              Status: <span className="font-medium">{prStatus}</span>
+              Status: <span className="font-medium">{prStatus}</span> - Purchase Request cannot be edited after submission
             </div>
           )}
           <Button onClick={() => navigate('/purchase-request')} variant="outline">
-            Cancel
+            {isEditMode && prStatus !== 'DRAFT' ? 'Back' : 'Cancel'}
           </Button>
         </div>
       </div>
@@ -532,7 +714,7 @@ const PurchaseRequestDetails = () => {
               label="Material (Optional)"
               options={materialOptions}
               value={itemForm.materialId}
-              onChange={(e) => setItemForm({ ...itemForm, materialId: e.target.value })}
+              onChange={(e) => handleMaterialChange(e.target.value)}
             />
           </div>
           <Dropdown
@@ -542,17 +724,24 @@ const PurchaseRequestDetails = () => {
             onChange={(e) => setItemForm({ ...itemForm, businessPartnerId: e.target.value })}
           />
           <Dropdown
-            label="Warehouse (Shipping Address)"
+            label="Warehouse"
             options={warehouseOptions}
             value={itemForm.warehouseId}
             onChange={(e) => handleWarehouseChange(e.target.value)}
           />
           <Input
+            label="Billing Address"
+            value={itemForm.billingAddress}
+            disabled={true}
+            className="bg-gray-100 text-gray-600"
+            placeholder="Auto-populated from warehouse"
+          />
+          <Input
             label="Shipping Address"
             value={itemForm.shippingAddress}
-            onChange={(e) => setItemForm({ ...itemForm, shippingAddress: e.target.value })}
-            placeholder="Auto-filled from warehouse, can be edited"
-            disabled={!itemForm.warehouseId}
+            disabled={true}
+            className="bg-gray-100 text-gray-600"
+            placeholder="Auto-populated from warehouse"
           />
           <div className="grid grid-cols-2 gap-3">
             <Input
@@ -564,12 +753,78 @@ const PurchaseRequestDetails = () => {
               placeholder="Optional"
             />
             <Input
-              label="Description"
-              value={itemForm.description}
-              onChange={(e) => setItemForm({ ...itemForm, description: e.target.value })}
-              placeholder="Optional description"
+              label="UOM"
+              value={itemForm.uom}
+              disabled={true}
+              className="bg-gray-100 text-gray-600"
+              placeholder="Auto-populated from material"
             />
           </div>
+          <div className="grid grid-cols-3 gap-3">
+            <Input
+              label="Unit Price"
+              type="number"
+              step="0.01"
+              value={itemForm.unitPrice}
+              onChange={(e) => setItemForm({ ...itemForm, unitPrice: e.target.value })}
+              placeholder="Auto-populated from material"
+            />
+            <Input
+              label="GST %"
+              type="number"
+              step="0.01"
+              value={itemForm.gstPercentage}
+              onChange={(e) => setItemForm({ ...itemForm, gstPercentage: e.target.value })}
+              placeholder="Auto-populated from material"
+            />
+            <Input
+              label="SGST %"
+              type="number"
+              step="0.01"
+              value={itemForm.sgstPercentage}
+              onChange={(e) => setItemForm({ ...itemForm, sgstPercentage: e.target.value })}
+              placeholder="Auto-populated from material"
+            />
+          </div>
+          {itemForm.requestedQuantity && itemForm.unitPrice && (
+            <div className="bg-gray-50 p-3 rounded-md border border-gray-200">
+              <div className="text-sm font-medium text-gray-700 mb-2">Price Calculation:</div>
+              <div className="space-y-1 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Subtotal:</span>
+                  <span className="font-medium">₹{((parseFloat(itemForm.requestedQuantity) || 0) * (parseFloat(itemForm.unitPrice) || 0)).toFixed(2)}</span>
+                </div>
+                {itemForm.gstPercentage && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">GST ({itemForm.gstPercentage}%):</span>
+                    <span className="font-medium">₹{(((parseFloat(itemForm.requestedQuantity) || 0) * (parseFloat(itemForm.unitPrice) || 0)) * (parseFloat(itemForm.gstPercentage) || 0) / 100).toFixed(2)}</span>
+                  </div>
+                )}
+                {itemForm.sgstPercentage && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">SGST ({itemForm.sgstPercentage}%):</span>
+                    <span className="font-medium">₹{(((parseFloat(itemForm.requestedQuantity) || 0) * (parseFloat(itemForm.unitPrice) || 0)) * (parseFloat(itemForm.sgstPercentage) || 0) / 100).toFixed(2)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between border-t border-gray-300 pt-1 mt-1">
+                  <span className="font-medium text-gray-900">Total:</span>
+                  <span className="font-bold text-gray-900">
+                    ₹{(
+                      ((parseFloat(itemForm.requestedQuantity) || 0) * (parseFloat(itemForm.unitPrice) || 0)) +
+                      (((parseFloat(itemForm.requestedQuantity) || 0) * (parseFloat(itemForm.unitPrice) || 0)) * (parseFloat(itemForm.gstPercentage) || 0) / 100) +
+                      (((parseFloat(itemForm.requestedQuantity) || 0) * (parseFloat(itemForm.unitPrice) || 0)) * (parseFloat(itemForm.sgstPercentage) || 0) / 100)
+                    ).toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+          <Input
+            label="Description"
+            value={itemForm.description}
+            onChange={(e) => setItemForm({ ...itemForm, description: e.target.value })}
+            placeholder="Optional description"
+          />
           <Input
             label="Remarks"
             value={itemForm.remarks}

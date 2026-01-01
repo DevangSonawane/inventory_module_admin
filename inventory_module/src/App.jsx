@@ -18,6 +18,8 @@ import StockTransfer from './pages/StockTransfer'
 import RecordConsumptionList from './pages/RecordConsumptionList'
 import RecordConsumption from './pages/RecordConsumption'
 import MaterialManagement from './pages/MaterialManagement'
+import MaterialTypeManagement from './pages/MaterialTypeManagement'
+import HSNCodeManagement from './pages/HSNCodeManagement'
 import StockAreaManagement from './pages/StockAreaManagement'
 import StockLevels from './pages/StockLevels'
 import Reports from './pages/Reports'
@@ -107,6 +109,13 @@ function App() {
                     <Route path="/material-management" element={<PagePermissionGuard><MaterialManagement /></PagePermissionGuard>} />
                     <Route path="/material-management/:id" element={<PagePermissionGuard><MaterialManagement /></PagePermissionGuard>} />
                     <Route path="/material-management/new" element={<PagePermissionGuard><MaterialManagement /></PagePermissionGuard>} />
+                    <Route path="/material-type-management" element={<PagePermissionGuard><MaterialTypeManagement /></PagePermissionGuard>} />
+                    <Route path="/material-type-management/:id" element={<PagePermissionGuard><MaterialTypeManagement /></PagePermissionGuard>} />
+                    <Route path="/material-type-management/new" element={<PagePermissionGuard><MaterialTypeManagement /></PagePermissionGuard>} />
+                    {/* HSN Code Management Routes */}
+                    <Route path="/admin/hsn-code-management" element={<PagePermissionGuard><HSNCodeManagement /></PagePermissionGuard>} />
+                    <Route path="/admin/hsn-code-management/:id" element={<PagePermissionGuard><HSNCodeManagement /></PagePermissionGuard>} />
+                    <Route path="/admin/hsn-code-management/new" element={<PagePermissionGuard><HSNCodeManagement /></PagePermissionGuard>} />
                     <Route path="/stock-area-management" element={<PagePermissionGuard><StockAreaManagement /></PagePermissionGuard>} />
                     <Route path="/stock-area-management/:id" element={<PagePermissionGuard><StockAreaManagement /></PagePermissionGuard>} />
                     <Route path="/stock-area-management/new" element={<PagePermissionGuard><StockAreaManagement /></PagePermissionGuard>} />

@@ -110,7 +110,7 @@ const MaterialRequest = () => {
           DRAFT: 'Requested',
         }
 
-        // Filter per tab view client-side to ensure "Approval MR" only shows pending
+        // Filter per tab view client-side to ensure "Approved MR" only shows approved
         const filteredByTab = dataSource.filter((request) => {
           const statusRaw = request.status || request.request_status || 'REQUESTED'
           if (activeTab === 'approval-mr') {
@@ -465,7 +465,7 @@ const MaterialRequest = () => {
                 : 'text-gray-600 hover:text-gray-900'
             }`}
           >
-            Approval MR
+            Approved MR
           </button>
         </div>
 

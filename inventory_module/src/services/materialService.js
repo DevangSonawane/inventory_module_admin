@@ -39,6 +39,9 @@ export const materialService = {
       if (materialData.gstPercentage !== undefined && materialData.gstPercentage !== null && materialData.gstPercentage !== '') {
         formData.append('gstPercentage', materialData.gstPercentage);
       }
+      if (materialData.sgstPercentage !== undefined && materialData.sgstPercentage !== null && materialData.sgstPercentage !== '') {
+        formData.append('sgstPercentage', materialData.sgstPercentage);
+      }
       if (materialData.price !== undefined && materialData.price !== null && materialData.price !== '') {
         formData.append('price', materialData.price);
       }
@@ -69,6 +72,7 @@ export const materialService = {
         description: materialData.description,
         hsn: materialData.hsn,
         gstPercentage: materialData.gstPercentage,
+        sgstPercentage: materialData.sgstPercentage,
         price: materialData.price,
         assetId: materialData.assetId,
         materialProperty: materialData.materialProperty,
@@ -93,6 +97,9 @@ export const materialService = {
       if (materialData.hsn !== undefined) formData.append('hsn', materialData.hsn || '');
       if (materialData.gstPercentage !== undefined && materialData.gstPercentage !== null && materialData.gstPercentage !== '') {
         formData.append('gstPercentage', materialData.gstPercentage);
+      }
+      if (materialData.sgstPercentage !== undefined && materialData.sgstPercentage !== null && materialData.sgstPercentage !== '') {
+        formData.append('sgstPercentage', materialData.sgstPercentage);
       }
       if (materialData.price !== undefined && materialData.price !== null && materialData.price !== '') {
         formData.append('price', materialData.price);
@@ -123,6 +130,7 @@ export const materialService = {
         description: materialData.description,
         hsn: materialData.hsn,
         gstPercentage: materialData.gstPercentage,
+        sgstPercentage: materialData.sgstPercentage,
         price: materialData.price,
         assetId: materialData.assetId,
         materialProperty: materialData.materialProperty,

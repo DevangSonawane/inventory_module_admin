@@ -26,6 +26,14 @@ export const API_ENDPOINTS = {
   MATERIALS: '/inventory/materials',
   MATERIAL_BY_ID: (id) => `/inventory/materials/${id}`,
   
+  // Material Types
+  MATERIAL_TYPES: '/inventory/material-types',
+  MATERIAL_TYPE_BY_ID: (id) => `/inventory/material-types/${id}`,
+  
+  // HSN Codes
+  HSN_CODES: '/inventory/hsn-codes',
+  HSN_CODE_BY_ID: (id) => `/inventory/hsn-codes/${id}`,
+  
   // Stock Areas
   STOCK_AREAS: '/inventory/stock-areas',
   STOCK_AREA_BY_ID: (id) => `/inventory/stock-areas/${id}`,

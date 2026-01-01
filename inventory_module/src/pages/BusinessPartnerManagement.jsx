@@ -91,6 +91,7 @@ const BusinessPartnerManagement = () => {
     partnerType: 'SUPPLIER',
     gstNumber: '',
     panCard: '',
+    tanNumber: '',
     billingAddress: '',
     shippingAddress: '',
     sameAsBilling: false,
@@ -163,6 +164,7 @@ const BusinessPartnerManagement = () => {
             partnerType: partner.partner_type || 'SUPPLIER',
             gstNumber: partner.gst_number || '',
             panCard: partner.pan_card || '',
+            tanNumber: partner.tan_number || '',
             billingAddress: partner.billing_address || '',
             shippingAddress: partner.shipping_address || '',
             sameAsBilling: partner.same_as_billing || false,
@@ -198,6 +200,7 @@ const BusinessPartnerManagement = () => {
       partnerType: 'SUPPLIER',
       gstNumber: '',
       panCard: '',
+      tanNumber: '',
       billingAddress: '',
       shippingAddress: '',
       sameAsBilling: false,
@@ -372,13 +375,13 @@ const BusinessPartnerManagement = () => {
   const partnerTypeOptions = [
     { value: '', label: 'All Types' },
     { value: 'SUPPLIER', label: 'Supplier' },
-    { value: 'CUSTOMER', label: 'Customer' },
+    { value: 'FRANCHISE', label: 'Franchise' },
     { value: 'BOTH', label: 'Both' },
   ]
 
   const formTypeOptions = [
     { value: 'SUPPLIER', label: 'Supplier' },
-    { value: 'CUSTOMER', label: 'Customer' },
+    { value: 'FRANCHISE', label: 'Franchise' },
     { value: 'BOTH', label: 'Both' },
   ]
 
@@ -464,6 +467,13 @@ const BusinessPartnerManagement = () => {
             maxLength={10}
             required
             placeholder="ABCDE1234F"
+          />
+          <Input
+            label="TAN Number / Card"
+            value={formData.tanNumber}
+            onChange={(e) => setFormData({ ...formData, tanNumber: e.target.value.toUpperCase() })}
+            error={formErrors.tanNumber}
+            placeholder="Optional - Enter TAN number"
           />
           <Input
             label="Vendor Code (Auto-generated if left empty)"

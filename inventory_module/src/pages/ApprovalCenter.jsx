@@ -175,14 +175,40 @@ const ApprovalCenter = () => {
   }
 
   const canApproveOrReject = (status) => {
-    // Admins can approve/reject any status, regular users can only approve/reject SUBMITTED
+    const normalized = (status || '').toUpperCase()
+    
+    // Don't show buttons if already approved or rejected
+    if (normalized === 'APPROVED' || normalized === 'REJECTED') {
+      return false
+    }
+    
+    // Admins can approve/reject any status except APPROVED/REJECTED, regular users can only approve/reject SUBMITTED
     if (isAdmin) {
-      const normalized = (status || '').toUpperCase()
-      // Allow action on any status except maybe prevent re-approving already approved (optional)
       return true
     }
-    const normalized = (status || '').toUpperCase()
+    
     return normalized === 'SUBMITTED'
+  }
+
+  // Calculate total with GST/SGST for a purchase request
+  const calculatePRTotal = (pr) => {
+    const items = pr.items || pr.purchase_request_items || []
+    if (items.length === 0) return 0
+    
+    return items.reduce((total, item) => {
+      const quantity = parseInt(item.requested_quantity) || 0
+      const material = item.material || {}
+      const unitPrice = parseFloat(material.price) || 0
+      const gstPercentage = parseFloat(material.gst_percentage) || 0
+      const sgstPercentage = parseFloat(material.sgst_percentage) || 0
+      
+      const subtotal = quantity * unitPrice
+      const gstAmount = subtotal * (gstPercentage / 100)
+      const sgstAmount = subtotal * (sgstPercentage / 100)
+      const itemTotal = subtotal + gstAmount + sgstAmount
+      
+      return total + itemTotal
+    }, 0)
   }
 
   const renderPurchaseRequestTable = () => (
@@ -190,7 +216,9 @@ const ApprovalCenter = () => {
       headers={['PR NUMBER', 'DATE', 'REQUESTED BY', 'ITEMS', 'TOTAL AMOUNT', 'STATUS', 'ACTIONS']}
     >
       {data.length > 0 ? (
-        data.map((pr) => (
+        data.map((pr) => {
+          const calculatedTotal = calculatePRTotal(pr)
+          return (
           <tr key={pr.id || pr.pr_id} className="hover:bg-gray-50">
             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
               {pr.pr_number || pr.prNumber || `PR-${pr.id}`}
@@ -202,10 +230,10 @@ const ApprovalCenter = () => {
               {pr.requester?.name || pr.requested_by || pr.requestedBy || '-'}
             </td>
             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-              {pr.items?.length || pr.purchase_request_items?.length || pr.itemCount || 0} items
+              {pr.itemCount || pr.items?.length || pr.purchase_request_items?.length || 0} items
             </td>
-            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-              ₹{pr.total_amount || pr.totalAmount || 0}
+            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-semibold">
+              ₹{calculatedTotal.toFixed(2)}
             </td>
             <td className="px-6 py-4 whitespace-nowrap text-sm">
               {renderStatusBadge(pr.status)}
@@ -245,7 +273,8 @@ const ApprovalCenter = () => {
               )}
             </td>
           </tr>
-        ))
+          )
+        })
       ) : (
         <tr>
           <td colSpan={7} className="px-6 py-12 text-center text-gray-500">

@@ -42,6 +42,41 @@ const StockArea = sequelize.define('stock_area', {
     allowNull: true,
     comment: 'Pin code of the warehouse location'
   },
+  company_name: {
+    type: DataTypes.STRING(255),
+    allowNull: true,
+    comment: 'Company name (if applicable)'
+  },
+  street_number_name: {
+    type: DataTypes.STRING(255),
+    allowNull: true,
+    comment: 'Street number and name'
+  },
+  apartment_unit: {
+    type: DataTypes.STRING(100),
+    allowNull: true,
+    comment: 'Apartment/Unit number'
+  },
+  locality_district: {
+    type: DataTypes.STRING(255),
+    allowNull: true,
+    comment: 'Locality/District (if needed)'
+  },
+  city: {
+    type: DataTypes.STRING(100),
+    allowNull: true,
+    comment: 'City'
+  },
+  state_province: {
+    type: DataTypes.STRING(100),
+    allowNull: true,
+    comment: 'State/Province'
+  },
+  country: {
+    type: DataTypes.STRING(100),
+    allowNull: true,
+    comment: 'Country (in all caps)'
+  },
   org_id: {
     type: DataTypes.UUID,
     allowNull: true,

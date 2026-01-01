@@ -6,6 +6,7 @@ import BusinessPartner from '../models/BusinessPartner.js';
 // validationResult removed - using validate middleware in routes instead
 import { Op } from 'sequelize';
 import sequelize from '../config/database.js';
+import { isValidMaterialType } from '../utils/materialTypeValidator.js';
 
 /**
  * Generate PR number in format: PR-MONTH-YEAR-order
@@ -132,14 +133,50 @@ export const getAllPurchaseRequests = async (req, res, next) => {
           as: 'approver',
           attributes: ['id', 'name', 'email'],
           required: false
+        },
+        {
+          model: PurchaseRequestItem,
+          as: 'items',
+          required: false,
+          include: [
+            {
+              model: Material,
+              as: 'material',
+              attributes: ['material_id', 'material_name', 'price', 'gst_percentage', 'sgst_percentage'],
+              required: false
+            }
+          ]
         }
       ]
+    });
+
+    // Calculate item count and total amount for each purchase request
+    const purchaseRequestsWithTotals = rows.map(pr => {
+      const items = pr.items || [];
+      const itemCount = items.length;
+      
+      // Calculate total amount from items (quantity * material price)
+      const totalAmount = items.reduce((sum, item) => {
+        const quantity = parseInt(item.requested_quantity) || 0;
+        const price = parseFloat(item.material?.price) || 0;
+        return sum + (quantity * price);
+      }, 0);
+
+      // Convert to plain object and add calculated fields
+      const prData = pr.toJSON();
+      return {
+        ...prData,
+        itemCount,
+        total_amount: totalAmount,
+        totalAmount: totalAmount,
+        items: items.map(item => item.toJSON())
+      };
     });
 
     return res.status(200).json({
       success: true,
       data: {
-        purchaseRequests: rows,
+        purchaseRequests: purchaseRequestsWithTotals,
         pagination: {
           totalItems: count,
           totalPages: Math.ceil(count / parseInt(limit)),
@@ -173,7 +210,7 @@ export const getPurchaseRequestById = async (req, res, next) => {
             {
               model: Material,
               as: 'material',
-              attributes: ['material_id', 'material_name', 'product_code', 'material_type', 'uom'],
+              attributes: ['material_id', 'material_name', 'product_code', 'material_type', 'uom', 'price', 'gst_percentage', 'sgst_percentage'],
               required: false
             },
             {
@@ -285,6 +322,7 @@ export const createPurchaseRequest = async (req, res, next) => {
         businessPartnerId,
         materialType,
         shippingAddress,
+        billingAddress,
         description
       } = item;
 
@@ -298,7 +336,7 @@ export const createPurchaseRequest = async (req, res, next) => {
         });
       }
 
-      if (!materialType) {
+      if (!materialType || (typeof materialType === 'string' && materialType.trim() === '')) {
         await transaction.rollback();
         return res.status(400).json({
           success: false,
@@ -307,13 +345,27 @@ export const createPurchaseRequest = async (req, res, next) => {
         });
       }
 
-      // Validate material type enum
-      const validMaterialTypes = ['components', 'raw material', 'finish product', 'supportive material', 'cable'];
-      if (!validMaterialTypes.includes(materialType)) {
+      // Validate material type dynamically against database
+      const trimmedMaterialType = typeof materialType === 'string' ? materialType.trim() : materialType;
+      const isValid = await isValidMaterialType(trimmedMaterialType, {
+        orgId: orgId,
+        withOrg: req.withOrg
+      });
+      
+      if (!isValid) {
+        // Get valid types for error message
+        const { getValidMaterialTypes } = await import('../utils/materialTypeValidator.js');
+        const validTypes = await getValidMaterialTypes({
+          orgId: orgId,
+          withOrg: req.withOrg
+        });
+        
         await transaction.rollback();
         return res.status(400).json({
           success: false,
-          message: `Invalid material type. Must be one of: ${validMaterialTypes.join(', ')}`,
+          message: validTypes.length > 0 
+            ? `Invalid material type. Must be one of: ${validTypes.join(', ')}`
+            : 'Invalid material type. Please ensure material types are configured in the system.',
           code: 'VALIDATION_ERROR'
         });
       }
@@ -360,6 +412,7 @@ export const createPurchaseRequest = async (req, res, next) => {
         business_partner_id: businessPartnerId || null,
         material_type: materialType,
         shipping_address: shippingAddress || null,
+        billing_address: billingAddress || null,
         description: description || null
       }, { transaction });
 
@@ -378,7 +431,8 @@ export const createPurchaseRequest = async (req, res, next) => {
           include: [
             {
               model: Material,
-              as: 'material'
+              as: 'material',
+              attributes: ['material_id', 'material_name', 'product_code', 'material_type', 'uom', 'price', 'gst_percentage', 'sgst_percentage']
             }
           ]
         }
@@ -463,6 +517,7 @@ export const updatePurchaseRequest = async (req, res, next) => {
           businessPartnerId,
           materialType,
           shippingAddress,
+          billingAddress,
           description
         } = item;
 
@@ -476,7 +531,7 @@ export const updatePurchaseRequest = async (req, res, next) => {
           });
         }
 
-        if (!materialType) {
+        if (!materialType || (typeof materialType === 'string' && materialType.trim() === '')) {
           await transaction.rollback();
           return res.status(400).json({
             success: false,
@@ -485,13 +540,27 @@ export const updatePurchaseRequest = async (req, res, next) => {
           });
         }
 
-        // Validate material type enum
-        const validMaterialTypes = ['components', 'raw material', 'finish product', 'supportive material', 'cable'];
-        if (!validMaterialTypes.includes(materialType)) {
+        // Validate material type dynamically against database
+        const trimmedMaterialType = typeof materialType === 'string' ? materialType.trim() : materialType;
+        const isValid = await isValidMaterialType(trimmedMaterialType, {
+          orgId: req.orgId,
+          withOrg: req.withOrg
+        });
+        
+        if (!isValid) {
+          // Get valid types for error message
+          const { getValidMaterialTypes } = await import('../utils/materialTypeValidator.js');
+          const validTypes = await getValidMaterialTypes({
+            orgId: req.orgId,
+            withOrg: req.withOrg
+          });
+          
           await transaction.rollback();
           return res.status(400).json({
             success: false,
-            message: `Invalid material type. Must be one of: ${validMaterialTypes.join(', ')}`,
+            message: validTypes.length > 0 
+              ? `Invalid material type. Must be one of: ${validTypes.join(', ')}`
+              : 'Invalid material type. Please ensure material types are configured in the system.',
             code: 'VALIDATION_ERROR'
           });
         }
@@ -555,7 +624,8 @@ export const updatePurchaseRequest = async (req, res, next) => {
           include: [
             {
               model: Material,
-              as: 'material'
+              as: 'material',
+              attributes: ['material_id', 'material_name', 'product_code', 'material_type', 'uom', 'price', 'gst_percentage', 'sgst_percentage']
             }
           ]
         }

@@ -13,7 +13,7 @@ const BusinessPartner = sequelize.define('business_partner', {
     comment: 'Business partner name'
   },
   partner_type: {
-    type: DataTypes.ENUM('SUPPLIER', 'CUSTOMER', 'BOTH'),
+    type: DataTypes.ENUM('SUPPLIER', 'FRANCHISE', 'BOTH'),
     allowNull: false,
     defaultValue: 'SUPPLIER',
     comment: 'Type of business partner'
@@ -27,6 +27,11 @@ const BusinessPartner = sequelize.define('business_partner', {
     type: DataTypes.STRING(10),
     allowNull: false,
     comment: 'PAN card number'
+  },
+  tan_number: {
+    type: DataTypes.STRING(20),
+    allowNull: true,
+    comment: 'TAN Number / Card (optional)'
   },
   billing_address: {
     type: DataTypes.TEXT,

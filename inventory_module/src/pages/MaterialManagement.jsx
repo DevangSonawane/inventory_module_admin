@@ -14,6 +14,8 @@ import { materialService } from '../services/materialService.js'
 import { validationService } from '../services/validationService.js'
 import { exportService } from '../services/exportService.js'
 import { bulkService } from '../services/bulkService.js'
+import { hsnCodeService } from '../services/hsnCodeService.js'
+import { materialTypeService } from '../services/materialTypeService.js'
 
 const MaterialManagement = () => {
   const navigate = useNavigate()
@@ -23,6 +25,7 @@ const MaterialManagement = () => {
   const isCreateMode = location.pathname.endsWith('/material-management/new')
   
   const [materials, setMaterials] = useState([])
+  const [materialTypes, setMaterialTypes] = useState([])
   const [loading, setLoading] = useState(true)
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage, setItemsPerPage] = useState(10)
@@ -46,6 +49,7 @@ const MaterialManagement = () => {
     description: '',
     hsn: '',
     gstPercentage: '',
+    sgstPercentage: '',
     price: '',
     assetId: '',
     materialProperty: '',
@@ -53,6 +57,8 @@ const MaterialManagement = () => {
   const [formErrors, setFormErrors] = useState({})
   const [productCodeValidating, setProductCodeValidating] = useState(false)
   const [selectedFiles, setSelectedFiles] = useState([])
+  const [hsnCodes, setHsnCodes] = useState([])
+  const [loadingHsnCodes, setLoadingHsnCodes] = useState(false)
 
   useEffect(() => {
     if (isEditMode) {
@@ -74,6 +80,11 @@ const MaterialManagement = () => {
   useEffect(() => {
     fetchMaterials()
   }, [currentPage, itemsPerPage, searchTerm, typeFilter])
+
+  useEffect(() => {
+    fetchHsnCodes()
+    fetchMaterialTypes()
+  }, [])
 
   const fetchMaterials = async () => {
     try {
@@ -97,6 +108,35 @@ const MaterialManagement = () => {
     }
   }
 
+  const fetchHsnCodes = async () => {
+    try {
+      setLoadingHsnCodes(true)
+      const response = await hsnCodeService.getAll({ limit: 1000 })
+      if (response.success) {
+        setHsnCodes(response.data.hsnCodes || [])
+      }
+    } catch (error) {
+      console.error('Error fetching HSN codes:', error)
+      // Don't show error toast, just log it
+    } finally {
+      setLoadingHsnCodes(false)
+    }
+  }
+
+  const fetchMaterialTypes = async () => {
+    try {
+      const response = await materialTypeService.getAll({ limit: 1000 })
+      if (response.success) {
+        const types = response.data?.materialTypes || response.data?.data || []
+        setMaterialTypes(types)
+      }
+    } catch (error) {
+      console.error('Error fetching material types:', error)
+      toast.error('Failed to load material types')
+      setMaterialTypes([])
+    }
+  }
+
   const fetchMaterial = async () => {
     try {
       setLoading(true)
@@ -112,6 +152,7 @@ const MaterialManagement = () => {
           description: material.description || '',
           hsn: material.hsn || '',
           gstPercentage: material.gst_percentage !== null && material.gst_percentage !== undefined ? material.gst_percentage.toString() : '',
+          sgstPercentage: material.sgst_percentage !== null && material.sgst_percentage !== undefined ? material.sgst_percentage.toString() : '',
           price: material.price !== null && material.price !== undefined ? material.price.toString() : '',
           assetId: material.asset_id || '',
           materialProperty: material.material_property || '',
@@ -138,6 +179,7 @@ const MaterialManagement = () => {
       description: '',
       hsn: '',
       gstPercentage: '',
+      sgstPercentage: '',
       price: '',
       assetId: '',
       materialProperty: '',
@@ -209,6 +251,7 @@ const MaterialManagement = () => {
         properties: formData.properties.trim() ? JSON.parse(formData.properties) : undefined,
         hsn: formData.hsn.trim() || undefined,
         gstPercentage: formData.gstPercentage.trim() || undefined,
+        sgstPercentage: formData.sgstPercentage.trim() || undefined,
         price: formData.price.trim() || undefined,
         assetId: formData.assetId.trim() || undefined,
         materialProperty: formData.materialProperty.trim() || undefined,
@@ -310,11 +353,10 @@ const MaterialManagement = () => {
 
   const materialTypeOptions = [
     { value: '', label: 'All Types' },
-    { value: 'CABLE', label: 'Cable' },
-    { value: 'COMPONENT', label: 'Component' },
-    { value: 'FINISH_PRODUCT', label: 'Finish Product' },
-    { value: 'RAW_MATERIAL', label: 'Raw Material' },
-    { value: 'SUPPORTING_MATERIAL', label: 'Supporting Material' },
+    ...materialTypes.map(type => ({
+      value: type.type_name,
+      label: type.type_name.charAt(0).toUpperCase() + type.type_name.slice(1).replace(/_/g, ' ')
+    }))
   ]
 
   const uomOptions = [
@@ -332,7 +374,16 @@ const MaterialManagement = () => {
     <div className="space-y-6">
       <div className="bg-white rounded-lg shadow p-6">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-semibold text-gray-900">Material Management</h2>
+          <div className="flex items-center gap-4">
+            <h2 className="text-xl font-semibold text-gray-900">Material Management</h2>
+            <Button 
+              variant="secondary" 
+              onClick={() => navigate('/material-type-management')}
+              className="text-sm"
+            >
+              Manage Material Types
+            </Button>
+          </div>
           <div className="flex gap-3">
             <Button variant="secondary" onClick={async () => {
               try {
@@ -487,11 +538,10 @@ const MaterialManagement = () => {
               required
               options={[
                 { value: '', label: 'Select Material Type' },
-                { value: 'CABLE', label: 'Cable' },
-                { value: 'COMPONENT', label: 'Component' },
-                { value: 'FINISH_PRODUCT', label: 'Finish Product' },
-                { value: 'RAW_MATERIAL', label: 'Raw Material' },
-                { value: 'SUPPORTING_MATERIAL', label: 'Supporting Material' },
+                ...materialTypes.map(type => ({
+                  value: type.type_name,
+                  label: type.type_name.charAt(0).toUpperCase() + type.type_name.slice(1).replace(/_/g, ' ')
+                }))
               ]}
               value={formData.materialType}
               onChange={(e) => {
@@ -508,11 +558,18 @@ const MaterialManagement = () => {
               value={formData.uom}
               onChange={(e) => setFormData({ ...formData, uom: e.target.value })}
             />
-            <Input
-              label="HSN"
+            <Dropdown
+              label="HSN Code"
+              options={[
+                { value: '', label: 'Select HSN Code' },
+                ...hsnCodes.map(code => ({
+                  value: code.hsn_code,
+                  label: `${code.hsn_code}${code.description ? ` - ${code.description}` : ''}`
+                }))
+              ]}
               value={formData.hsn}
               onChange={(e) => setFormData({ ...formData, hsn: e.target.value })}
-              placeholder="Enter HSN code"
+              disabled={loadingHsnCodes}
             />
             <Input
               label="GST %"
@@ -523,6 +580,16 @@ const MaterialManagement = () => {
               value={formData.gstPercentage}
               onChange={(e) => setFormData({ ...formData, gstPercentage: e.target.value })}
               placeholder="Enter GST percentage"
+            />
+            <Input
+              label="SGST %"
+              type="number"
+              step="0.01"
+              min="0"
+              max="100"
+              value={formData.sgstPercentage}
+              onChange={(e) => setFormData({ ...formData, sgstPercentage: e.target.value })}
+              placeholder="Enter SGST percentage"
             />
             <Input
               label="Price"

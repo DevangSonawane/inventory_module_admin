@@ -420,6 +420,7 @@ const runMigration = async (silent = false) => {
       const newColumns = [
         { name: 'gst_number', definition: 'VARCHAR(15) NULL' },
         { name: 'pan_card', definition: 'VARCHAR(10) NULL' },
+        { name: 'tan_number', definition: 'VARCHAR(20) NULL COMMENT \'TAN Number / Card (optional)\'' },
         { name: 'billing_address', definition: 'TEXT NULL' },
         { name: 'shipping_address', definition: 'TEXT NULL' },
         { name: 'same_as_billing', definition: 'BOOLEAN NOT NULL DEFAULT FALSE' },
@@ -452,13 +453,13 @@ const runMigration = async (silent = false) => {
         }
       }
 
-      // Update partner_type ENUM if needed
+      // Update partner_type ENUM if needed (change CUSTOMER to FRANCHISE)
       try {
         await sequelize.query(`
           ALTER TABLE \`business_partners\` 
-          MODIFY COLUMN \`partner_type\` ENUM('SUPPLIER', 'CUSTOMER', 'BOTH', 'VENDOR') NOT NULL DEFAULT 'SUPPLIER'
+          MODIFY COLUMN \`partner_type\` ENUM('SUPPLIER', 'FRANCHISE', 'BOTH', 'VENDOR') NOT NULL DEFAULT 'SUPPLIER'
         `, { type: QueryTypes.RAW });
-        if (!silent) console.log('   ✅ Updated partner_type ENUM');
+        if (!silent) console.log('   ✅ Updated partner_type ENUM (CUSTOMER -> FRANCHISE)');
       } catch (error) {
         // Ignore if already updated
         if (!silent && !error.message.includes('Duplicate')) {
@@ -978,7 +979,7 @@ const runMigration = async (silent = false) => {
           \`remarks\` TEXT NULL,
           \`pr_name\` VARCHAR(255) NOT NULL COMMENT 'Name of the product requested',
           \`business_partner_id\` ${bpIdType} NULL COMMENT 'Reference to business partner (supplier)',
-          \`material_type\` ENUM('components', 'raw material', 'finish product', 'supportive material', 'cable') NOT NULL DEFAULT 'components' COMMENT 'Type of material',
+          \`material_type\` VARCHAR(100) NOT NULL COMMENT 'Type of material (references material_types table)',
           \`shipping_address\` TEXT NULL COMMENT 'Shipping address (warehouse address)',
           \`description\` TEXT NULL COMMENT 'Description of the item',
           \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -1020,9 +1021,10 @@ const runMigration = async (silent = false) => {
       const columnsToAdd = [
         { name: 'pr_name', definition: 'VARCHAR(255) NOT NULL DEFAULT \'\' COMMENT \'Name of the product requested\' AFTER `remarks`' },
         { name: 'business_partner_id', definition: `${bpIdType} NULL COMMENT 'Reference to business partner (supplier)' AFTER \`pr_name\`` },
-        { name: 'material_type', definition: `ENUM('components', 'raw material', 'finish product', 'supportive material', 'cable') NOT NULL DEFAULT 'components' COMMENT 'Type of material' AFTER \`business_partner_id\`` },
+        { name: 'material_type', definition: `VARCHAR(100) NOT NULL COMMENT 'Type of material (references material_types table)' AFTER \`business_partner_id\`` },
         { name: 'shipping_address', definition: 'TEXT NULL COMMENT \'Shipping address (warehouse address)\' AFTER `material_type`' },
-        { name: 'description', definition: 'TEXT NULL COMMENT \'Description of the item\' AFTER `shipping_address`' },
+        { name: 'billing_address', definition: 'TEXT NULL COMMENT \'Billing address (auto-populated from warehouse)\' AFTER `shipping_address`' },
+        { name: 'description', definition: 'TEXT NULL COMMENT \'Description of the item\' AFTER `billing_address`' },
       ];
 
       for (const column of columnsToAdd) {
@@ -1056,6 +1058,34 @@ const runMigration = async (silent = false) => {
           if (!silent) console.log('   ✅ Added material_type index');
         } catch (error) {
           // Index might already exist
+        }
+        
+        // Migrate material_type from ENUM to VARCHAR(100) to support dynamic material types
+        try {
+          // Check if column is still ENUM type
+          const columnInfo = await sequelize.query(`
+            SELECT COLUMN_TYPE 
+            FROM INFORMATION_SCHEMA.COLUMNS 
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'purchase_request_items'
+              AND COLUMN_NAME = 'material_type'
+          `, { type: QueryTypes.SELECT });
+          
+          if (Array.isArray(columnInfo) && columnInfo.length > 0) {
+            const columnType = columnInfo[0].COLUMN_TYPE || '';
+            // Check if it's an ENUM type
+            if (columnType.toUpperCase().startsWith('ENUM')) {
+              // Change ENUM to VARCHAR(100)
+              await sequelize.query(`
+                ALTER TABLE \`purchase_request_items\`
+                MODIFY COLUMN \`material_type\` VARCHAR(100) NOT NULL COMMENT 'Type of material (references material_types table)'
+              `, { type: QueryTypes.RAW });
+              if (!silent) console.log('   ✅ Migrated material_type from ENUM to VARCHAR(100)');
+            }
+          }
+        } catch (error) {
+          if (!silent) console.log(`   ⚠️  Could not migrate material_type column: ${error.message}`);
+          // Continue - column might already be VARCHAR or migration might have failed
         }
       }
     }
@@ -1258,6 +1288,31 @@ const runMigration = async (silent = false) => {
       if (!silent) console.log('   ℹ️  pin_code already exists in stock_areas');
     }
 
+    // Add new address fields to stock_areas
+    const stockAreaAddressColumns = [
+      { name: 'company_name', definition: 'VARCHAR(255) NULL COMMENT \'Company name (if applicable)\' AFTER `pin_code`' },
+      { name: 'street_number_name', definition: 'VARCHAR(255) NULL COMMENT \'Street number and name\' AFTER `company_name`' },
+      { name: 'apartment_unit', definition: 'VARCHAR(100) NULL COMMENT \'Apartment/Unit number\' AFTER `street_number_name`' },
+      { name: 'locality_district', definition: 'VARCHAR(255) NULL COMMENT \'Locality/District (if needed)\' AFTER `apartment_unit`' },
+      { name: 'city', definition: 'VARCHAR(100) NULL COMMENT \'City\' AFTER `locality_district`' },
+      { name: 'state_province', definition: 'VARCHAR(100) NULL COMMENT \'State/Province\' AFTER `city`' },
+      { name: 'country', definition: 'VARCHAR(100) NULL COMMENT \'Country (in all caps)\' AFTER `state_province`' },
+    ];
+
+    for (const column of stockAreaAddressColumns) {
+      if (!(await columnExists('stock_areas', column.name))) {
+        try {
+          await sequelize.query(`
+            ALTER TABLE \`stock_areas\` 
+            ADD COLUMN \`${column.name}\` ${column.definition}
+          `, { type: QueryTypes.RAW });
+          if (!silent) console.log(`   ✅ Added ${column.name} to stock_areas`);
+        } catch (error) {
+          if (!silent) console.log(`   ⚠️  Error adding ${column.name} to stock_areas: ${error.message}`);
+        }
+      }
+    }
+
     // Add missing columns to Materials table
     if (!(await columnExists('materials', 'hsn'))) {
       if (!silent) console.log('   Adding new columns to materials table...');
@@ -1266,7 +1321,8 @@ const runMigration = async (silent = false) => {
           ALTER TABLE \`materials\`
           ADD COLUMN \`hsn\` VARCHAR(50) NULL COMMENT 'HSN (Harmonized System of Nomenclature) code - international standard code' AFTER \`description\`,
           ADD COLUMN \`gst_percentage\` DECIMAL(5, 2) NULL COMMENT 'GST percentage for the material' AFTER \`hsn\`,
-          ADD COLUMN \`price\` DECIMAL(10, 2) NULL COMMENT 'Price of the material' AFTER \`gst_percentage\`,
+          ADD COLUMN \`sgst_percentage\` DECIMAL(5, 2) NULL COMMENT 'SGST percentage for the material' AFTER \`gst_percentage\`,
+          ADD COLUMN \`price\` DECIMAL(10, 2) NULL COMMENT 'Price of the material' AFTER \`sgst_percentage\`,
           ADD COLUMN \`asset_id\` VARCHAR(100) NULL COMMENT 'Asset ID for the material' AFTER \`price\`,
           ADD COLUMN \`material_property\` TEXT NULL COMMENT 'Material property information' AFTER \`asset_id\`,
           ADD COLUMN \`documents\` JSON NULL COMMENT 'Array of document file paths/URLs' AFTER \`material_property\`;
@@ -1284,7 +1340,8 @@ const runMigration = async (silent = false) => {
       const columnsToAdd = [
         { name: 'hsn', sql: 'ADD COLUMN `hsn` VARCHAR(50) NULL COMMENT \'HSN (Harmonized System of Nomenclature) code - international standard code\' AFTER `description`' },
         { name: 'gst_percentage', sql: 'ADD COLUMN `gst_percentage` DECIMAL(5, 2) NULL COMMENT \'GST percentage for the material\' AFTER `hsn`' },
-        { name: 'price', sql: 'ADD COLUMN `price` DECIMAL(10, 2) NULL COMMENT \'Price of the material\' AFTER `gst_percentage`' },
+        { name: 'sgst_percentage', sql: 'ADD COLUMN `sgst_percentage` DECIMAL(5, 2) NULL COMMENT \'SGST percentage for the material\' AFTER `gst_percentage`' },
+        { name: 'price', sql: 'ADD COLUMN `price` DECIMAL(10, 2) NULL COMMENT \'Price of the material\' AFTER `sgst_percentage`' },
         { name: 'asset_id', sql: 'ADD COLUMN `asset_id` VARCHAR(100) NULL COMMENT \'Asset ID for the material\' AFTER `price`' },
         { name: 'material_property', sql: 'ADD COLUMN `material_property` TEXT NULL COMMENT \'Material property information\' AFTER `asset_id`' },
         { name: 'documents', sql: 'ADD COLUMN `documents` JSON NULL COMMENT \'Array of document file paths/URLs\' AFTER `material_property`' },
@@ -2077,12 +2134,74 @@ const runMigration = async (silent = false) => {
       if (!silent) console.log('   ℹ️  user_page_permissions table already exists');
     }
 
+    // 17. HSN CODE MASTER TABLE
+    if (!(await tableExists('hsn_codes'))) {
+      if (!silent) console.log('   Creating hsn_codes table...');
+      try {
+        await sequelize.query(`
+          CREATE TABLE \`hsn_codes\` (
+            \`hsn_code_id\` CHAR(36) NOT NULL PRIMARY KEY,
+            \`hsn_code\` VARCHAR(50) NOT NULL UNIQUE COMMENT 'HSN (Harmonized System of Nomenclature) code',
+            \`description\` TEXT NULL COMMENT 'Description of the HSN code',
+            \`gst_rate\` DECIMAL(5, 2) NULL COMMENT 'Associated GST rate for this HSN code',
+            \`org_id\` CHAR(36) NULL COMMENT 'Organization ID for multi-tenant support',
+            \`is_active\` BOOLEAN NOT NULL DEFAULT TRUE,
+            \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX \`idx_hsn_code\` (\`hsn_code\`),
+            INDEX \`idx_org_id\` (\`org_id\`),
+            INDEX \`idx_is_active\` (\`is_active\`)
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        `, { type: QueryTypes.RAW });
+        if (!silent) console.log('   ✅ hsn_codes table created');
+      } catch (e) {
+        if (e.message && (e.message.includes('already exists') || e.message.includes('Duplicate'))) {
+          if (!silent) console.log('   ℹ️  hsn_codes table already exists');
+        } else {
+          throw e;
+        }
+      }
+    } else {
+      if (!silent) console.log('   ℹ️  hsn_codes table already exists');
+    }
+
+    // 18. MATERIAL TYPE MASTER TABLE
+    if (!(await tableExists('material_types'))) {
+      if (!silent) console.log('   Creating material_types table...');
+      try {
+        await sequelize.query(`
+          CREATE TABLE \`material_types\` (
+            \`type_id\` CHAR(36) NOT NULL PRIMARY KEY,
+            \`type_name\` VARCHAR(100) NOT NULL COMMENT 'Name of the material type (e.g., CABLE, COMPONENT, EQUIPMENT)',
+            \`type_code\` VARCHAR(50) NULL COMMENT 'Short code for the material type',
+            \`description\` TEXT NULL COMMENT 'Description of the material type',
+            \`org_id\` CHAR(36) NULL COMMENT 'Organization ID for multi-tenant support',
+            \`is_active\` BOOLEAN NOT NULL DEFAULT TRUE,
+            \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX \`idx_type_name\` (\`type_name\`),
+            INDEX \`idx_org_id\` (\`org_id\`),
+            UNIQUE KEY \`unique_type_name_org\` (\`type_name\`, \`org_id\`)
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        `, { type: QueryTypes.RAW });
+        if (!silent) console.log('   ✅ material_types table created');
+      } catch (e) {
+        if (e.message && (e.message.includes('already exists') || e.message.includes('Duplicate'))) {
+          if (!silent) console.log('   ℹ️  material_types table already exists');
+        } else {
+          throw e;
+        }
+      }
+    } else {
+      if (!silent) console.log('   ℹ️  material_types table already exists');
+    }
+
     if (!silent) {
       console.log('\n' + '='.repeat(60));
       console.log('✅ MIGRATION COMPLETED SUCCESSFULLY!');
       console.log('='.repeat(60));
       console.log('\n📊 Summary:');
-      console.log('   ✅ Created 16 new tables');
+      console.log('   ✅ Created 18 new tables');
       console.log('   ✅ Added missing columns to existing tables');
       console.log('   ✅ All foreign keys and indexes created');
       console.log('   ✅ Added search-performance indexes');

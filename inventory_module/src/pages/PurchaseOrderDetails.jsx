@@ -44,6 +44,9 @@ const PurchaseOrderDetails = () => {
     materialId: '',
     quantity: '',
     unitPrice: '',
+    gstPercentage: '',
+    sgstPercentage: '',
+    uom: '',
     remarks: '',
   })
 
@@ -169,22 +172,41 @@ const PurchaseOrderDetails = () => {
           const prNumber = pr.pr_number || ''
           const poNumber = prNumber ? `PO-${prNumber.replace('PR-', '')}` : ''
           
-          // Fetch PR items and populate order items
-          const items = (pr.items || []).map((item, index) => ({
-            id: Date.now() + index,
-            materialId: item.material_id,
-            itemName: item.material?.material_name || item.pr_name || '-',
-            productCode: item.material?.product_code || '-',
-            quantity: item.requested_quantity || 1,
-            unitPrice: '',
-            uom: item.material?.uom || 'PIECE(S)',
-            remarks: item.remarks || '',
-            prName: item.pr_name || '',
-            materialType: item.material_type || '',
-            businessPartnerId: item.business_partner_id || '',
-            shippingAddress: item.shipping_address || '',
-            description: item.description || '',
-          }))
+          // Fetch PR items and populate order items with calculations
+          const items = (pr.items || []).map((item, index) => {
+            const quantity = item.requested_quantity || 1
+            const material = item.material
+            const unitPrice = material?.price ? parseFloat(material.price) : 0
+            const gstPercentage = material?.gst_percentage ? parseFloat(material.gst_percentage) : 0
+            const sgstPercentage = material?.sgst_percentage ? parseFloat(material.sgst_percentage) : 0
+            
+            const subtotal = quantity * unitPrice
+            const gstAmount = subtotal * (gstPercentage / 100)
+            const sgstAmount = subtotal * (sgstPercentage / 100)
+            const itemTotal = subtotal + gstAmount + sgstAmount
+
+            return {
+              id: Date.now() + index,
+              materialId: item.material_id,
+              itemName: material?.material_name || item.pr_name || '-',
+              productCode: material?.product_code || '-',
+              quantity: quantity,
+              unitPrice: unitPrice,
+              gstPercentage: gstPercentage,
+              sgstPercentage: sgstPercentage,
+              subtotal: subtotal,
+              gstAmount: gstAmount,
+              sgstAmount: sgstAmount,
+              itemTotal: itemTotal,
+              uom: material?.uom || 'PIECE(S)',
+              remarks: item.remarks || '',
+              prName: item.pr_name || '',
+              materialType: item.material_type || '',
+              businessPartnerId: item.business_partner_id || '',
+              shippingAddress: item.shipping_address || '',
+              description: item.description || '',
+            }
+          })
 
           setOrderItems(items)
           
@@ -260,16 +282,35 @@ const PurchaseOrderDetails = () => {
           
           // Load items from PO (don't load PR if items already exist)
           if (po.items && Array.isArray(po.items) && po.items.length > 0) {
-            setOrderItems(po.items.map((item, index) => ({
-              id: item.item_id || index,
-              materialId: item.material_id,
-              itemName: item.material?.material_name || '-',
-              productCode: item.material?.product_code || '-',
-              quantity: item.quantity,
-              unitPrice: item.unit_price || '',
-              uom: item.material?.uom || 'PIECE(S)',
-              remarks: item.remarks || '',
-            })))
+            setOrderItems(po.items.map((item, index) => {
+              const quantity = item.quantity || 1
+              const material = item.material
+              const unitPrice = item.unit_price ? parseFloat(item.unit_price) : (material?.price ? parseFloat(material.price) : 0)
+              const gstPercentage = material?.gst_percentage ? parseFloat(material.gst_percentage) : 0
+              const sgstPercentage = material?.sgst_percentage ? parseFloat(material.sgst_percentage) : 0
+              
+              const subtotal = quantity * unitPrice
+              const gstAmount = subtotal * (gstPercentage / 100)
+              const sgstAmount = subtotal * (sgstPercentage / 100)
+              const itemTotal = subtotal + gstAmount + sgstAmount
+
+              return {
+                id: item.item_id || index,
+                materialId: item.material_id,
+                itemName: material?.material_name || '-',
+                productCode: material?.product_code || '-',
+                quantity: quantity,
+                unitPrice: unitPrice,
+                gstPercentage: gstPercentage,
+                sgstPercentage: sgstPercentage,
+                subtotal: subtotal,
+                gstAmount: gstAmount,
+                sgstAmount: sgstAmount,
+                itemTotal: itemTotal,
+                uom: material?.uom || 'PIECE(S)',
+                remarks: item.remarks || '',
+              }
+            }))
           } else if (po.pr_id) {
             // Only load PR if no items exist
             await handlePRSelection(po.pr_id)
@@ -305,6 +346,29 @@ const PurchaseOrderDetails = () => {
     })
   ]
 
+  const handleMaterialChange = (materialId) => {
+    const selectedMaterial = materials.find(m => m.material_id === materialId)
+    if (selectedMaterial) {
+      setItemForm({
+        ...itemForm,
+        materialId: materialId,
+        unitPrice: selectedMaterial.price ? parseFloat(selectedMaterial.price).toFixed(2) : '',
+        gstPercentage: selectedMaterial.gst_percentage ? parseFloat(selectedMaterial.gst_percentage).toFixed(2) : '',
+        sgstPercentage: selectedMaterial.sgst_percentage ? parseFloat(selectedMaterial.sgst_percentage).toFixed(2) : '',
+        uom: selectedMaterial.uom || 'PIECE(S)',
+      })
+    } else {
+      setItemForm({
+        ...itemForm,
+        materialId: materialId,
+        unitPrice: '',
+        gstPercentage: '',
+        sgstPercentage: '',
+        uom: '',
+      })
+    }
+  }
+
   const prOptions = [
     { value: '', label: 'Select Purchase Request' },
     ...purchaseRequests.map(pr => {
@@ -335,14 +399,31 @@ const PurchaseOrderDetails = () => {
       return
     }
 
+    // Calculate prices and taxes
+    const quantity = parseInt(itemForm.quantity)
+    const unitPrice = itemForm.unitPrice ? parseFloat(itemForm.unitPrice) : (selectedMaterial.price ? parseFloat(selectedMaterial.price) : 0)
+    const gstPercentage = itemForm.gstPercentage ? parseFloat(itemForm.gstPercentage) : (selectedMaterial.gst_percentage ? parseFloat(selectedMaterial.gst_percentage) : 0)
+    const sgstPercentage = itemForm.sgstPercentage ? parseFloat(itemForm.sgstPercentage) : (selectedMaterial.sgst_percentage ? parseFloat(selectedMaterial.sgst_percentage) : 0)
+    
+    const subtotal = quantity * unitPrice
+    const gstAmount = subtotal * (gstPercentage / 100)
+    const sgstAmount = subtotal * (sgstPercentage / 100)
+    const itemTotal = subtotal + gstAmount + sgstAmount
+
     const newItem = {
       id: Date.now(),
       materialId: selectedMaterial.material_id,
       itemName: selectedMaterial.material_name,
       productCode: selectedMaterial.product_code || '-',
-      quantity: parseInt(itemForm.quantity),
-      unitPrice: parseFloat(itemForm.unitPrice) || 0,
-      uom: selectedMaterial.uom || 'PIECE(S)',
+      quantity: quantity,
+      unitPrice: unitPrice,
+      gstPercentage: gstPercentage,
+      sgstPercentage: sgstPercentage,
+      subtotal: subtotal,
+      gstAmount: gstAmount,
+      sgstAmount: sgstAmount,
+      itemTotal: itemTotal,
+      uom: itemForm.uom || selectedMaterial.uom || 'PIECE(S)',
       remarks: itemForm.remarks || '',
     }
     
@@ -351,6 +432,9 @@ const PurchaseOrderDetails = () => {
       materialId: '',
       quantity: '',
       unitPrice: '',
+      gstPercentage: '',
+      sgstPercentage: '',
+      uom: '',
       remarks: '',
     })
     setIsAddItemModalOpen(false)
@@ -362,7 +446,10 @@ const PurchaseOrderDetails = () => {
     setItemForm({
       materialId: item.materialId,
       quantity: item.quantity.toString(),
-      unitPrice: item.unitPrice.toString(),
+      unitPrice: (item.unitPrice || 0).toString(),
+      gstPercentage: (item.gstPercentage || 0).toString(),
+      sgstPercentage: (item.sgstPercentage || 0).toString(),
+      uom: item.uom || '',
       remarks: item.remarks || '',
     })
     setIsEditItemModalOpen(true)
@@ -380,6 +467,17 @@ const PurchaseOrderDetails = () => {
       return
     }
 
+    // Calculate prices and taxes
+    const quantity = parseInt(itemForm.quantity)
+    const unitPrice = itemForm.unitPrice ? parseFloat(itemForm.unitPrice) : (selectedMaterial.price ? parseFloat(selectedMaterial.price) : 0)
+    const gstPercentage = itemForm.gstPercentage ? parseFloat(itemForm.gstPercentage) : (selectedMaterial.gst_percentage ? parseFloat(selectedMaterial.gst_percentage) : 0)
+    const sgstPercentage = itemForm.sgstPercentage ? parseFloat(itemForm.sgstPercentage) : (selectedMaterial.sgst_percentage ? parseFloat(selectedMaterial.sgst_percentage) : 0)
+    
+    const subtotal = quantity * unitPrice
+    const gstAmount = subtotal * (gstPercentage / 100)
+    const sgstAmount = subtotal * (sgstPercentage / 100)
+    const itemTotal = subtotal + gstAmount + sgstAmount
+
     const updatedItems = orderItems.map(item => 
       item.id === editingItem.id
         ? {
@@ -387,9 +485,15 @@ const PurchaseOrderDetails = () => {
             materialId: selectedMaterial.material_id,
             itemName: selectedMaterial.material_name,
             productCode: selectedMaterial.product_code || '-',
-            quantity: parseInt(itemForm.quantity),
-            unitPrice: parseFloat(itemForm.unitPrice) || 0,
-            uom: selectedMaterial.uom || 'PIECE(S)',
+            quantity: quantity,
+            unitPrice: unitPrice,
+            gstPercentage: gstPercentage,
+            sgstPercentage: sgstPercentage,
+            subtotal: subtotal,
+            gstAmount: gstAmount,
+            sgstAmount: sgstAmount,
+            itemTotal: itemTotal,
+            uom: itemForm.uom || selectedMaterial.uom || 'PIECE(S)',
             remarks: itemForm.remarks || '',
           }
         : item
@@ -400,6 +504,9 @@ const PurchaseOrderDetails = () => {
       materialId: '',
       quantity: '',
       unitPrice: '',
+      gstPercentage: '',
+      sgstPercentage: '',
+      uom: '',
       remarks: '',
     })
     setEditingItem(null)
@@ -638,40 +745,171 @@ const PurchaseOrderDetails = () => {
     }
   }
 
+  const handleSendInvoice = async () => {
+    if (!formData.vendorId) {
+      toast.error('Please select a vendor')
+      return
+    }
+    if (orderItems.length === 0) {
+      toast.error('Please add at least one item')
+      return
+    }
+
+    try {
+      setSubmitting(true)
+      let poId = id
+
+      // First save the PO if it's new
+      if (!isEditMode || !poId) {
+        const orderData = {
+          poNumber: formData.poNumber || undefined,
+          poDate: formData.poDate,
+          vendorId: formData.vendorId,
+          prId: formData.prId || undefined,
+          remarks: formData.remarks || undefined,
+          orgId: getOrgId() || undefined,
+          items: orderItems.map(item => ({
+            materialId: item.materialId,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice || undefined,
+            remarks: item.remarks || undefined,
+          })),
+        }
+
+        let createResponse
+        if (formData.prId) {
+          createResponse = await purchaseOrderService.createFromPR(formData.prId, orderData)
+        } else {
+          createResponse = await purchaseOrderService.create(orderData)
+        }
+
+        if (!createResponse.success) {
+          if (createResponse.errors && Array.isArray(createResponse.errors)) {
+            const errorMessages = createResponse.errors.map(err => err.message || err.msg).join(', ')
+            toast.error(errorMessages || createResponse.message || 'Failed to save purchase order')
+          } else {
+            toast.error(createResponse.message || 'Failed to save purchase order')
+          }
+          setSubmitting(false)
+          return
+        }
+
+        poId = createResponse.data?.purchaseOrder?.po_id || createResponse.data?.data?.po_id
+
+        // Upload documents if any
+        if (uploadedFiles.length > 0 && poId) {
+          try {
+            await fileService.addToPurchaseOrder(poId, uploadedFiles)
+            setUploadedFiles([])
+          } catch (error) {
+            console.error('Error uploading documents:', error)
+            toast.warning('PO saved but documents upload failed')
+          }
+        }
+      }
+
+      if (!poId) {
+        toast.error('Failed to get purchase order ID')
+        return
+      }
+
+      // Send invoice email to vendor
+      const response = await purchaseOrderService.submit(poId, {})
+
+      if (response.success) {
+        toast.success('Invoice sent to vendor successfully!')
+        if (!isEditMode) {
+          navigate(`/purchase-order/${poId}`)
+        } else {
+          await fetchPurchaseOrder()
+        }
+      } else {
+        if (response.errors && Array.isArray(response.errors)) {
+          const errorMessages = response.errors.map(err => err.message || err.msg).join(', ')
+          toast.error(errorMessages || response.message || 'Failed to send invoice')
+        } else {
+          toast.error(response.message || 'Failed to send invoice')
+        }
+      }
+    } catch (error) {
+      console.error('Error sending invoice:', error)
+      if (error.errors && Array.isArray(error.errors)) {
+        const errorMessages = error.errors.map(err => err.message || err.msg || err).join(', ')
+        toast.error(errorMessages || error.message || 'Failed to send invoice')
+      } else if (error.message) {
+        toast.error(error.message || 'Failed to send invoice')
+      } else {
+        toast.error('Failed to send invoice')
+      }
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  // Calculate grand totals
+  const grandTotals = orderItems.reduce((totals, item) => {
+    totals.subtotal += item.subtotal || 0
+    totals.gst += item.gstAmount || 0
+    totals.sgst += item.sgstAmount || 0
+    totals.total += item.itemTotal || 0
+    return totals
+  }, { subtotal: 0, gst: 0, sgst: 0, total: 0 })
+
   const itemColumns = [
     { key: 'itemName', label: 'Material Name' },
     { key: 'productCode', label: 'Product Code' },
-    { key: 'quantity', label: 'Quantity' },
-    { key: 'unitPrice', label: 'Unit Price', render: (row) => `₹${parseFloat(row.unitPrice || 0).toFixed(2)}` },
-    { key: 'uom', label: 'UOM' },
+    { 
+      key: 'quantity', 
+      label: 'Qty',
+      render: (row) => `${row.quantity || 0} ${row.uom || ''}`
+    },
+    { key: 'unitPrice', label: 'Unit Price', render: (row) => `₹${(row.unitPrice || 0).toFixed(2)}` },
+    { 
+      key: 'subtotal', 
+      label: 'Subtotal',
+      render: (row) => `₹${(row.subtotal || 0).toFixed(2)}`
+    },
+    { 
+      key: 'gst', 
+      label: `GST`,
+      render: (row) => row.gstPercentage ? `₹${(row.gstAmount || 0).toFixed(2)} (${row.gstPercentage.toFixed(2)}%)` : '-'
+    },
+    { 
+      key: 'sgst', 
+      label: `SGST`,
+      render: (row) => row.sgstPercentage ? `₹${(row.sgstAmount || 0).toFixed(2)} (${row.sgstPercentage.toFixed(2)}%)` : '-'
+    },
+    { 
+      key: 'itemTotal', 
+      label: 'Total',
+      render: (row) => <span className="font-semibold">₹{(row.itemTotal || 0).toFixed(2)}</span>
+    },
     { key: 'remarks', label: 'Remarks' },
     {
       key: 'actions',
       label: 'Actions',
       render: (row) => (
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => handleEditItem(row)}
-            className="p-1 text-blue-600 hover:bg-blue-50 rounded"
-            title="Edit"
-          >
-            <Edit2 className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => handleDeleteItem(row.id)}
-            className="p-1 text-red-600 hover:bg-red-50 rounded"
-            title="Delete"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
-        </div>
+        !isEditMode && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => handleEditItem(row)}
+              className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+              title="Edit"
+            >
+              <Edit2 className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => handleDeleteItem(row.id)}
+              className="p-1 text-red-600 hover:bg-red-50 rounded"
+              title="Delete"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
+        )
       ),
     },
   ]
-
-  const totalAmount = orderItems.reduce((sum, item) => {
-    return sum + (parseFloat(item.unitPrice) || 0) * (parseInt(item.quantity) || 0)
-  }, 0)
 
   return (
     <div className="p-6">
@@ -680,7 +918,7 @@ const PurchaseOrderDetails = () => {
           Back
         </Button>
         <h1 className="text-2xl font-bold text-gray-800">
-          {isEditMode ? 'Edit Purchase Order' : 'Create Purchase Order'}
+          {isEditMode ? 'View Purchase Order' : 'Create Purchase Order'}
         </h1>
       </div>
 
@@ -711,13 +949,14 @@ const PurchaseOrderDetails = () => {
             value={formData.poNumber}
             onChange={(e) => setFormData({ ...formData, poNumber: e.target.value })}
             placeholder="Auto-generated from PR"
-            disabled={!formData.prId}
+            disabled={isEditMode || !formData.prId}
           />
           <Input
             label="PO Date"
             type="date"
             value={formData.poDate}
             onChange={(e) => setFormData({ ...formData, poDate: e.target.value })}
+            disabled={isEditMode}
           />
           <Dropdown
             label="Vendor"
@@ -725,12 +964,27 @@ const PurchaseOrderDetails = () => {
             value={formData.vendorId}
             onChange={(e) => setFormData({ ...formData, vendorId: e.target.value })}
             required
+            disabled={isEditMode}
           />
+          {formData.vendorId && !isEditMode && (
+            <div className="col-span-2">
+              <Button
+                onClick={handleSendInvoice}
+                disabled={loading || submitting || orderItems.length === 0}
+                variant="secondary"
+                icon={submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              >
+                {submitting ? 'Sending Invoice...' : 'Send Invoice to Vendor'}
+              </Button>
+              <p className="text-xs text-gray-500 mt-1">Send invoice email to selected vendor</p>
+            </div>
+          )}
           <Input
             label="Remarks"
             value={formData.remarks}
             onChange={(e) => setFormData({ ...formData, remarks: e.target.value })}
             placeholder="Optional remarks"
+            disabled={isEditMode}
           />
         </div>
 
@@ -738,9 +992,11 @@ const PurchaseOrderDetails = () => {
         <div className="border-t pt-4">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-semibold">Order Items</h2>
-            <Button onClick={() => setIsAddItemModalOpen(true)} icon={<Plus className="w-4 h-4" />}>
-              Add Item
-            </Button>
+            {!isEditMode && (
+              <Button onClick={() => setIsAddItemModalOpen(true)} icon={<Plus className="w-4 h-4" />}>
+                Add Item
+              </Button>
+            )}
           </div>
 
           {orderItems.length === 0 ? (
@@ -748,8 +1004,27 @@ const PurchaseOrderDetails = () => {
           ) : (
             <>
               <Table data={orderItems} columns={itemColumns} />
-              <div className="mt-4 text-right">
-                <p className="text-lg font-semibold">Total Amount: ₹{totalAmount.toFixed(2)}</p>
+              <div className="mt-4 pt-4 border-t">
+                <div className="flex justify-end">
+                  <div className="w-full max-w-md space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Subtotal:</span>
+                      <span className="font-medium">₹{grandTotals.subtotal.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">GST:</span>
+                      <span className="font-medium">₹{grandTotals.gst.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">SGST:</span>
+                      <span className="font-medium">₹{grandTotals.sgst.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-lg font-bold border-t border-gray-300 pt-2">
+                      <span>Grand Total:</span>
+                      <span>₹{grandTotals.total.toFixed(2)}</span>
+                    </div>
+                  </div>
+                </div>
               </div>
             </>
           )}
@@ -833,23 +1108,23 @@ const PurchaseOrderDetails = () => {
 
         {/* Action Buttons */}
         <div className="flex gap-4 pt-4 border-t">
-          <Button 
-            onClick={handleSave} 
-            disabled={loading} 
-            icon={loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-          >
-            {isEditMode ? 'Update' : 'Save Draft'}
-          </Button>
-          <Button 
-            onClick={handleSubmit} 
-            disabled={loading || submitting} 
-            variant="primary"
-            icon={submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-          >
-            {submitting ? 'Submitting...' : 'Submit to Vendor'}
-          </Button>
+          {!isEditMode && (
+            <Button 
+              onClick={handleSubmit} 
+              disabled={loading || submitting} 
+              variant="primary"
+              icon={submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+            >
+              {submitting ? 'Submitting...' : 'Submit for Approval'}
+            </Button>
+          )}
+          {isEditMode && (
+            <div className="px-3 py-2 text-sm text-gray-600 bg-gray-50 rounded-md border border-gray-200">
+              Purchase Order is read-only. Use delete option to remove.
+            </div>
+          )}
           <Button onClick={() => navigate('/purchase-order')} variant="outline">
-            Cancel
+            {isEditMode ? 'Back' : 'Cancel'}
           </Button>
         </div>
       </div>
@@ -866,25 +1141,86 @@ const PurchaseOrderDetails = () => {
             label="Material"
             options={materialOptions}
             value={itemForm.materialId}
-            onChange={(e) => setItemForm({ ...itemForm, materialId: e.target.value })}
+            onChange={(e) => handleMaterialChange(e.target.value)}
             required
           />
-          <Input
-            label="Quantity"
-            type="number"
-            value={itemForm.quantity}
-            onChange={(e) => setItemForm({ ...itemForm, quantity: e.target.value })}
-            min="1"
-            required
-          />
-          <Input
-            label="Unit Price"
-            type="number"
-            step="0.01"
-            value={itemForm.unitPrice}
-            onChange={(e) => setItemForm({ ...itemForm, unitPrice: e.target.value })}
-            min="0"
-          />
+          <div className="grid grid-cols-2 gap-3">
+            <Input
+              label="Quantity"
+              type="number"
+              value={itemForm.quantity}
+              onChange={(e) => setItemForm({ ...itemForm, quantity: e.target.value })}
+              min="1"
+              required
+            />
+            <Input
+              label="UOM"
+              value={itemForm.uom}
+              disabled={true}
+              className="bg-gray-100 text-gray-600"
+              placeholder="Auto-populated from material"
+            />
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <Input
+              label="Unit Price"
+              type="number"
+              step="0.01"
+              value={itemForm.unitPrice}
+              onChange={(e) => setItemForm({ ...itemForm, unitPrice: e.target.value })}
+              placeholder="Auto-populated from material"
+              min="0"
+            />
+            <Input
+              label="GST %"
+              type="number"
+              step="0.01"
+              value={itemForm.gstPercentage}
+              onChange={(e) => setItemForm({ ...itemForm, gstPercentage: e.target.value })}
+              placeholder="Auto-populated from material"
+            />
+            <Input
+              label="SGST %"
+              type="number"
+              step="0.01"
+              value={itemForm.sgstPercentage}
+              onChange={(e) => setItemForm({ ...itemForm, sgstPercentage: e.target.value })}
+              placeholder="Auto-populated from material"
+            />
+          </div>
+          {itemForm.quantity && itemForm.unitPrice && (
+            <div className="bg-gray-50 p-3 rounded-md border border-gray-200">
+              <div className="text-sm font-medium text-gray-700 mb-2">Price Calculation:</div>
+              <div className="space-y-1 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Subtotal:</span>
+                  <span className="font-medium">₹{((parseFloat(itemForm.quantity) || 0) * (parseFloat(itemForm.unitPrice) || 0)).toFixed(2)}</span>
+                </div>
+                {itemForm.gstPercentage && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">GST ({itemForm.gstPercentage}%):</span>
+                    <span className="font-medium">₹{(((parseFloat(itemForm.quantity) || 0) * (parseFloat(itemForm.unitPrice) || 0)) * (parseFloat(itemForm.gstPercentage) || 0) / 100).toFixed(2)}</span>
+                  </div>
+                )}
+                {itemForm.sgstPercentage && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">SGST ({itemForm.sgstPercentage}%):</span>
+                    <span className="font-medium">₹{(((parseFloat(itemForm.quantity) || 0) * (parseFloat(itemForm.unitPrice) || 0)) * (parseFloat(itemForm.sgstPercentage) || 0) / 100).toFixed(2)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between border-t border-gray-300 pt-1 mt-1">
+                  <span className="font-medium text-gray-900">Total:</span>
+                  <span className="font-bold text-gray-900">
+                    ₹{(
+                      ((parseFloat(itemForm.quantity) || 0) * (parseFloat(itemForm.unitPrice) || 0)) +
+                      (((parseFloat(itemForm.quantity) || 0) * (parseFloat(itemForm.unitPrice) || 0)) * (parseFloat(itemForm.gstPercentage) || 0) / 100) +
+                      (((parseFloat(itemForm.quantity) || 0) * (parseFloat(itemForm.unitPrice) || 0)) * (parseFloat(itemForm.sgstPercentage) || 0) / 100)
+                    ).toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
           <Input
             label="Remarks"
             value={itemForm.remarks}
@@ -917,25 +1253,86 @@ const PurchaseOrderDetails = () => {
             label="Material"
             options={materialOptions}
             value={itemForm.materialId}
-            onChange={(e) => setItemForm({ ...itemForm, materialId: e.target.value })}
+            onChange={(e) => handleMaterialChange(e.target.value)}
             required
           />
-          <Input
-            label="Quantity"
-            type="number"
-            value={itemForm.quantity}
-            onChange={(e) => setItemForm({ ...itemForm, quantity: e.target.value })}
-            min="1"
-            required
-          />
-          <Input
-            label="Unit Price"
-            type="number"
-            step="0.01"
-            value={itemForm.unitPrice}
-            onChange={(e) => setItemForm({ ...itemForm, unitPrice: e.target.value })}
-            min="0"
-          />
+          <div className="grid grid-cols-2 gap-3">
+            <Input
+              label="Quantity"
+              type="number"
+              value={itemForm.quantity}
+              onChange={(e) => setItemForm({ ...itemForm, quantity: e.target.value })}
+              min="1"
+              required
+            />
+            <Input
+              label="UOM"
+              value={itemForm.uom}
+              disabled={true}
+              className="bg-gray-100 text-gray-600"
+              placeholder="Auto-populated from material"
+            />
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <Input
+              label="Unit Price"
+              type="number"
+              step="0.01"
+              value={itemForm.unitPrice}
+              onChange={(e) => setItemForm({ ...itemForm, unitPrice: e.target.value })}
+              placeholder="Auto-populated from material"
+              min="0"
+            />
+            <Input
+              label="GST %"
+              type="number"
+              step="0.01"
+              value={itemForm.gstPercentage}
+              onChange={(e) => setItemForm({ ...itemForm, gstPercentage: e.target.value })}
+              placeholder="Auto-populated from material"
+            />
+            <Input
+              label="SGST %"
+              type="number"
+              step="0.01"
+              value={itemForm.sgstPercentage}
+              onChange={(e) => setItemForm({ ...itemForm, sgstPercentage: e.target.value })}
+              placeholder="Auto-populated from material"
+            />
+          </div>
+          {itemForm.quantity && itemForm.unitPrice && (
+            <div className="bg-gray-50 p-3 rounded-md border border-gray-200">
+              <div className="text-sm font-medium text-gray-700 mb-2">Price Calculation:</div>
+              <div className="space-y-1 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Subtotal:</span>
+                  <span className="font-medium">₹{((parseFloat(itemForm.quantity) || 0) * (parseFloat(itemForm.unitPrice) || 0)).toFixed(2)}</span>
+                </div>
+                {itemForm.gstPercentage && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">GST ({itemForm.gstPercentage}%):</span>
+                    <span className="font-medium">₹{(((parseFloat(itemForm.quantity) || 0) * (parseFloat(itemForm.unitPrice) || 0)) * (parseFloat(itemForm.gstPercentage) || 0) / 100).toFixed(2)}</span>
+                  </div>
+                )}
+                {itemForm.sgstPercentage && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">SGST ({itemForm.sgstPercentage}%):</span>
+                    <span className="font-medium">₹{(((parseFloat(itemForm.quantity) || 0) * (parseFloat(itemForm.unitPrice) || 0)) * (parseFloat(itemForm.sgstPercentage) || 0) / 100).toFixed(2)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between border-t border-gray-300 pt-1 mt-1">
+                  <span className="font-medium text-gray-900">Total:</span>
+                  <span className="font-bold text-gray-900">
+                    ₹{(
+                      ((parseFloat(itemForm.quantity) || 0) * (parseFloat(itemForm.unitPrice) || 0)) +
+                      (((parseFloat(itemForm.quantity) || 0) * (parseFloat(itemForm.unitPrice) || 0)) * (parseFloat(itemForm.gstPercentage) || 0) / 100) +
+                      (((parseFloat(itemForm.quantity) || 0) * (parseFloat(itemForm.unitPrice) || 0)) * (parseFloat(itemForm.sgstPercentage) || 0) / 100)
+                    ).toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
           <Input
             label="Remarks"
             value={itemForm.remarks}

@@ -6,6 +6,7 @@ import { rateLimit } from '../middleware/rateLimit.js';
 import { requestLogger } from '../middleware/requestLogger.js';
 import { orgContext } from '../middleware/orgContext.js';
 import { roleGuard } from '../middleware/roleGuard.js';
+import { validateMaterialType } from '../utils/materialTypeValidator.js';
 import {
   addStock,
   getAllAssets,
@@ -26,6 +27,20 @@ import {
   updateMaterial,
   deleteMaterial
 } from '../controllers/materialController.js';
+import {
+  getAllMaterialTypes,
+  getMaterialTypeById,
+  createMaterialType,
+  updateMaterialType,
+  deleteMaterialType
+} from '../controllers/materialTypeController.js';
+import {
+  getAllHSNCodes,
+  getHSNCodeById,
+  createHSNCode,
+  updateHSNCode,
+  deleteHSNCode
+} from '../controllers/hsnCodeController.js';
 import {
   getAllStockAreas,
   getStockAreaById,
@@ -508,6 +523,193 @@ router.delete(
   validate,
   roleGuard('admin'),
   deleteMaterial
+);
+
+// ==================== MATERIAL TYPE ROUTES ====================
+
+/**
+ * @route   GET /api/inventory/material-types
+ * @desc    Get all material types with filtering and pagination
+ * @access  Private
+ */
+router.get('/material-types', getAllMaterialTypes);
+
+/**
+ * @route   GET /api/inventory/material-types/:id
+ * @desc    Get single material type by ID
+ * @access  Private
+ */
+router.get(
+  '/material-types/:id',
+  [
+    param('id')
+      .isUUID()
+      .withMessage('Invalid material type ID')
+  ],
+  validate,
+  getMaterialTypeById
+);
+
+/**
+ * @route   POST /api/inventory/material-types
+ * @desc    Create new material type
+ * @access  Private
+ */
+router.post(
+  '/material-types',
+  [
+    body('typeName')
+      .trim()
+      .notEmpty()
+      .withMessage('Type name is required'),
+  ],
+  validate,
+  createMaterialType
+);
+
+/**
+ * @route   PUT /api/inventory/material-types/:id
+ * @desc    Update material type
+ * @access  Private
+ */
+router.put(
+  '/material-types/:id',
+  [
+    param('id')
+      .isUUID()
+      .withMessage('Invalid material type ID'),
+    body('typeName')
+      .optional()
+      .trim()
+      .notEmpty()
+      .withMessage('Type name cannot be empty'),
+  ],
+  validate,
+  updateMaterialType
+);
+
+/**
+ * @route   DELETE /api/inventory/material-types/:id
+ * @desc    Delete material type (soft delete)
+ * @access  Private
+ */
+router.delete(
+  '/material-types/:id',
+  [
+    param('id')
+      .isUUID()
+      .withMessage('Invalid material type ID')
+  ],
+  validate,
+  deleteMaterialType
+);
+
+// ==================== HSN CODE ROUTES ====================
+
+/**
+ * @route   GET /api/inventory/hsn-codes
+ * @desc    Get all HSN codes
+ * @access  Private
+ */
+router.get('/hsn-codes', getAllHSNCodes);
+
+/**
+ * @route   GET /api/inventory/hsn-codes/:id
+ * @desc    Get single HSN code by ID
+ * @access  Private
+ */
+router.get(
+  '/hsn-codes/:id',
+  [
+    param('id')
+      .isUUID()
+      .withMessage('Invalid HSN code ID')
+  ],
+  validate,
+  getHSNCodeById
+);
+
+/**
+ * @route   POST /api/inventory/hsn-codes
+ * @desc    Create new HSN code
+ * @access  Private (Admin only)
+ */
+router.post(
+  '/hsn-codes',
+  [
+    body('hsnCode')
+      .trim()
+      .notEmpty()
+      .withMessage('HSN code is required')
+      .isLength({ min: 1, max: 50 })
+      .withMessage('HSN code must be between 1 and 50 characters'),
+    body('description')
+      .optional()
+      .trim()
+      .isLength({ max: 500 })
+      .withMessage('Description cannot exceed 500 characters'),
+    body('gstRate')
+      .optional()
+      .isFloat({ min: 0, max: 100 })
+      .withMessage('GST rate must be between 0 and 100'),
+  ],
+  validate,
+  roleGuard('admin'),
+  createHSNCode
+);
+
+/**
+ * @route   PUT /api/inventory/hsn-codes/:id
+ * @desc    Update HSN code
+ * @access  Private (Admin only)
+ */
+router.put(
+  '/hsn-codes/:id',
+  [
+    param('id')
+      .isUUID()
+      .withMessage('Invalid HSN code ID'),
+    body('hsnCode')
+      .optional()
+      .trim()
+      .notEmpty()
+      .withMessage('HSN code cannot be empty')
+      .isLength({ min: 1, max: 50 })
+      .withMessage('HSN code must be between 1 and 50 characters'),
+    body('description')
+      .optional()
+      .trim()
+      .isLength({ max: 500 })
+      .withMessage('Description cannot exceed 500 characters'),
+    body('gstRate')
+      .optional()
+      .isFloat({ min: 0, max: 100 })
+      .withMessage('GST rate must be between 0 and 100'),
+    body('isActive')
+      .optional()
+      .isBoolean()
+      .withMessage('isActive must be a boolean'),
+  ],
+  validate,
+  roleGuard('admin'),
+  updateHSNCode
+);
+
+/**
+ * @route   DELETE /api/inventory/hsn-codes/:id
+ * @desc    Delete HSN code (soft delete)
+ * @access  Private (Admin only)
+ */
+router.delete(
+  '/hsn-codes/:id',
+  [
+    param('id')
+      .isUUID()
+      .withMessage('Invalid HSN code ID')
+  ],
+  validate,
+  roleGuard('admin'),
+  deleteHSNCode
 );
 
 // ==================== STOCK AREA ROUTES ====================
@@ -1645,8 +1847,8 @@ router.post(
       .withMessage('Partner name is required'),
     body('partnerType')
       .notEmpty()
-      .isIn(['SUPPLIER', 'CUSTOMER', 'BOTH'])
-      .withMessage('Partner type is required and must be SUPPLIER, CUSTOMER, or BOTH'),
+      .isIn(['SUPPLIER', 'FRANCHISE', 'BOTH'])
+      .withMessage('Partner type is required and must be SUPPLIER, FRANCHISE, or BOTH'),
     body('gstNumber')
       .notEmpty()
       .trim()
@@ -1882,9 +2084,7 @@ router.post(
       .trim()
       .withMessage('PR name is required for each item'),
     body('items.*.materialType')
-      .notEmpty()
-      .isIn(['components', 'raw material', 'finish product', 'supportive material', 'cable'])
-      .withMessage('Material type is required and must be one of: components, raw material, finish product, supportive material, cable'),
+      .custom(validateMaterialType()),
     body('items.*.materialId')
       .optional()
       .isUUID()
@@ -1939,8 +2139,13 @@ router.put(
       .withMessage('PR name cannot be empty'),
     body('items.*.materialType')
       .optional()
-      .isIn(['components', 'raw material', 'finish product', 'supportive material', 'cable'])
-      .withMessage('Invalid material type'),
+      .custom((value, { req }) => {
+        // If provided, validate it; if empty/undefined, skip validation (it's optional)
+        if (value !== undefined && value !== null && value !== '' && (typeof value !== 'string' || value.trim() !== '')) {
+          return validateMaterialType()(value, { req });
+        }
+        return true;
+      }),
     body('items.*.materialId')
       .optional()
       .isUUID()

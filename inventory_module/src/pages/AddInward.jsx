@@ -15,6 +15,7 @@ import { inwardService } from '../services/inwardService.js'
 import { fileService } from '../services/fileService.js'
 import { purchaseOrderService } from '../services/purchaseOrderService.js'
 import { businessPartnerService } from '../services/businessPartnerService.js'
+import { materialTypeService } from '../services/materialTypeService.js'
 import { API_BASE_URL } from '../utils/constants.js'
 
 const AddInward = () => {
@@ -25,6 +26,7 @@ const AddInward = () => {
   const [loading, setLoading] = useState(false)
   const [fetchingData, setFetchingData] = useState(false)
   const [materials, setMaterials] = useState([])
+  const [materialTypes, setMaterialTypes] = useState([])
   const [stockAreas, setStockAreas] = useState([{ value: '', label: 'Select Input Stock Area' }])
   const [partyNameOptions, setPartyNameOptions] = useState([{ value: '', label: 'Party Name' }])
   const [purchaseOrderOptions, setPurchaseOrderOptions] = useState([{ value: '', label: 'Select Purchase Order' }])
@@ -89,6 +91,7 @@ const AddInward = () => {
   // Fetch materials and stock areas on mount and when location changes (navigation back to page)
   useEffect(() => {
     fetchMaterials()
+    fetchMaterialTypes()
     fetchStockAreas()
     fetchPartyNames()
     fetchPurchaseOrders()
@@ -204,6 +207,20 @@ const AddInward = () => {
       setMaterials([])
     } finally {
       setMaterialsLoading(false)
+    }
+  }
+
+  const fetchMaterialTypes = async () => {
+    try {
+      const response = await materialTypeService.getAll({ limit: 1000 })
+      if (response.success) {
+        const types = response.data?.materialTypes || response.data?.data || []
+        setMaterialTypes(types)
+      }
+    } catch (error) {
+      console.error('Error fetching material types:', error)
+      toast.error('Failed to load material types')
+      setMaterialTypes([])
     }
   }
 
@@ -518,8 +535,10 @@ const AddInward = () => {
 
   const materialTypeOptions = [
     { value: '', label: 'Select Material Type' },
-    { value: 'COMPONENT', label: 'COMPONENT' },
-    { value: 'RAW_MATERIAL', label: 'RAW MATERIAL' },
+    ...materialTypes.map(type => ({
+      value: type.type_name,
+      label: type.type_name.charAt(0).toUpperCase() + type.type_name.slice(1).replace(/_/g, ' ')
+    }))
   ]
 
   // Material name options - computed from materials state
@@ -925,6 +944,7 @@ const AddInward = () => {
             placeholder="Enter Vehicle Number"
             value={basicDetails.vehicleNumber}
             onChange={(e) => setBasicDetails({ ...basicDetails, vehicleNumber: e.target.value })}
+            disabled={isEditMode}
           />
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">GRN Number</label>
@@ -941,6 +961,7 @@ const AddInward = () => {
             placeholder="Enter Invoice Number"
             value={basicDetails.invoiceNumber}
             onChange={(e) => setBasicDetails({ ...basicDetails, invoiceNumber: e.target.value })}
+            disabled={isEditMode}
           />
           <Dropdown
             label="Party Name"
@@ -948,9 +969,9 @@ const AddInward = () => {
             options={partyNameOptions}
             value={basicDetails.partyName}
             onChange={(e) => setBasicDetails({ ...basicDetails, partyName: e.target.value })}
-            showAdd
-            showRefresh
-            disabled={loadingParties}
+            showAdd={!isEditMode}
+            showRefresh={!isEditMode}
+            disabled={loadingParties || isEditMode}
             loading={loadingParties}
             onAdd={() => {
               // Store current page location to refresh when returning
@@ -967,9 +988,9 @@ const AddInward = () => {
             options={purchaseOrderOptions}
             value={basicDetails.purchaseOrder}
             onChange={(e) => handlePurchaseOrderChange(e.target.value)}
-            showAdd
-            showRefresh
-            disabled={loadingPOs || loading}
+            showAdd={!isEditMode}
+            showRefresh={!isEditMode}
+            disabled={loadingPOs || loading || isEditMode}
             loading={loadingPOs || loading}
             onAdd={() => {
               // Store current page location to refresh when returning
@@ -987,34 +1008,38 @@ const AddInward = () => {
             options={stockAreas}
             value={basicDetails.stockArea}
             onChange={(e) => setBasicDetails({ ...basicDetails, stockArea: e.target.value })}
+            disabled={isEditMode}
           />
           <Input
             label="Remark"
             placeholder="Enter Remark"
             value={basicDetails.remark}
             onChange={(e) => setBasicDetails({ ...basicDetails, remark: e.target.value })}
+            disabled={isEditMode}
           />
         </div>
 
         <div className="border-t border-gray-200 pt-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold text-gray-900">Inward Details</h2>
-            <div className="flex gap-4">
-              <Button
-                variant="primary"
-                onClick={() => setIsAddMaterialModalOpen(true)}
-              >
-                <Plus className="w-4 h-4 mr-2 inline" />
-                Add
-              </Button>
-              <Button
-                variant="success"
-                onClick={() => setIsUploadExcelModalOpen(true)}
-              >
-                <FileSpreadsheet className="w-4 h-4 mr-2 inline" />
-                Upload Excel
-              </Button>
-            </div>
+            {!isEditMode && (
+              <div className="flex gap-4">
+                <Button
+                  variant="primary"
+                  onClick={() => setIsAddMaterialModalOpen(true)}
+                >
+                  <Plus className="w-4 h-4 mr-2 inline" />
+                  Add
+                </Button>
+                <Button
+                  variant="success"
+                  onClick={() => setIsUploadExcelModalOpen(true)}
+                >
+                  <FileSpreadsheet className="w-4 h-4 mr-2 inline" />
+                  Upload Excel
+                </Button>
+              </div>
+            )}
           </div>
 
           <Table
@@ -1071,20 +1096,22 @@ const AddInward = () => {
                         </button>
                       </div>
                     ) : (
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => handleEditItem(item)}
-                          className="text-blue-600 hover:text-blue-700 font-medium"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => handleDeleteItem(item.id)}
-                          className="text-red-600 hover:text-red-700 font-medium"
-                        >
-                          Delete
-                        </button>
-                      </div>
+                      !isEditMode && (
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleEditItem(item)}
+                            className="text-blue-600 hover:text-blue-700 font-medium"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDeleteItem(item.id)}
+                            className="text-red-600 hover:text-red-700 font-medium"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      )
                     )}
                   </td>
                 </tr>
@@ -1132,10 +1159,12 @@ const AddInward = () => {
               />
             </div>
             <div className="flex items-end gap-2">
-              <Button variant="primary" onClick={handleAddFile}>
-                <Plus className="w-4 h-4 mr-2 inline" />
-                Add
-              </Button>
+              {!isEditMode && (
+                <Button variant="primary" onClick={handleAddFile}>
+                  <Plus className="w-4 h-4 mr-2 inline" />
+                  Add
+                </Button>
+              )}
               {isEditMode && uploadedFiles.some(f => !f.isExisting && f.file) && (
                 <Button variant="secondary" onClick={handleAddDocumentsToExisting} disabled={loading}>
                   {loading ? (
@@ -1177,12 +1206,14 @@ const AddInward = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{file.remark}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      <button
-                        onClick={() => handleDeleteFile(file)}
-                        className="text-red-600 hover:text-red-700"
-                      >
-                        Delete
-                      </button>
+                      {!isEditMode && (
+                        <button
+                          onClick={() => handleDeleteFile(file)}
+                          className="text-red-600 hover:text-red-700"
+                        >
+                          Delete
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -1214,7 +1245,8 @@ const AddInward = () => {
           <Button variant="gray" onClick={() => navigate('/inward-list')} disabled={loading}>
             Cancel
           </Button>
-          <Button variant="primary" onClick={() => handleSave(false)} disabled={loading}>
+          {!isEditMode && (
+            <Button variant="primary" onClick={() => handleSave(false)} disabled={loading}>
             {loading ? (
               <>
                 <Loader2 className="w-4 h-4 mr-2 inline animate-spin" />
@@ -1224,16 +1256,19 @@ const AddInward = () => {
               'Save as Draft'
             )}
           </Button>
-          <Button variant="success" onClick={handleSaveAndExit} disabled={loading}>
-            {loading ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 inline animate-spin" />
-                Saving...
-              </>
-            ) : (
-              'Save & Exit'
-            )}
-          </Button>
+          )}
+          {!isEditMode && (
+            <Button variant="success" onClick={handleSaveAndExit} disabled={loading}>
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 inline animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                'Save & Exit'
+              )}
+            </Button>
+          )}
           {isEditMode && (
             <Button variant="success" onClick={handleCompleteInward} disabled={loading}>
               {loading ? (
@@ -1274,6 +1309,7 @@ const AddInward = () => {
                 setMaterialForm({ 
                   ...materialForm, 
                   materialName: e.target.value,
+                  materialType: selectedMaterial?.material_type || materialForm.materialType,
                   productCode: selectedMaterial?.product_code || ''
                 })
               }}

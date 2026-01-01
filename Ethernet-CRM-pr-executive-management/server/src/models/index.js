@@ -5,6 +5,7 @@ import Asset from './Asset.js';
 import AssetType from './AssetType.js';
 import Company from './Company.js';
 import Material from './Material.js';
+import MaterialType from './MaterialType.js';
 import StockArea from './StockArea.js';
 import InwardEntry from './InwardEntry.js';
 import InwardItem from './InwardItem.js';
@@ -109,8 +110,8 @@ MaterialRequest.belongsTo(User, { foreignKey: 'requested_by', as: 'requester' })
 MaterialRequest.belongsTo(User, { foreignKey: 'approved_by', as: 'approver' });
 MaterialRequest.belongsTo(User, { foreignKey: 'requestor_id', as: 'requestor' });
 MaterialRequest.belongsTo(User, { foreignKey: 'created_by', as: 'creator' });
-MaterialRequest.belongsTo(Group, { foreignKey: 'group_id', as: 'group' });
-MaterialRequest.belongsTo(Team, { foreignKey: 'team_id', as: 'team' });
+MaterialRequest.belongsTo(Group, { foreignKey: 'group_id', targetKey: 'group_id', as: 'group', constraints: false });
+MaterialRequest.belongsTo(Team, { foreignKey: 'team_id', targetKey: 'team_id', as: 'team', constraints: false });
 MaterialRequest.belongsTo(StockArea, { foreignKey: 'from_stock_area_id', as: 'fromStockArea' });
 
 User.hasMany(StockTransfer, { foreignKey: 'created_by', as: 'createdTransfers' });
@@ -236,6 +237,7 @@ const models = {
   AssetType,
   Company,
   Material,
+  MaterialType,
   StockArea,
   InwardEntry,
   InwardItem,

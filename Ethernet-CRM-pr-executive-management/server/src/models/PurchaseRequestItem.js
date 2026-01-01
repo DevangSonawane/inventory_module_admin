@@ -45,14 +45,19 @@ const PurchaseRequestItem = sequelize.define('purchase_request_item', {
     comment: 'Reference to business partner (supplier)'
   },
   material_type: {
-    type: DataTypes.ENUM('components', 'raw material', 'finish product', 'supportive material', 'cable'),
+    type: DataTypes.STRING(100),
     allowNull: false,
-    comment: 'Type of material'
+    comment: 'Type of material (references material_types table)'
   },
   shipping_address: {
     type: DataTypes.TEXT,
     allowNull: true,
     comment: 'Shipping address (warehouse address)'
+  },
+  billing_address: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    comment: 'Billing address (auto-populated from warehouse)'
   },
   description: {
     type: DataTypes.TEXT,

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Search, RefreshCw, Eye, Loader2, Download, Printer } from 'lucide-react'
+import { Plus, Search, RefreshCw, Loader2, Download, Printer } from 'lucide-react'
 import { toast } from 'react-toastify'
 import Button from '../components/common/Button'
 import Table from '../components/common/Table'
@@ -72,6 +72,7 @@ const StockTransferList = () => {
             transferType: transferType,
             fromStockArea: transfer.fromStockArea?.area_name || '-',
             destination: destination,
+            status: transfer.status || 'DRAFT',
           }
         })
         
@@ -193,7 +194,7 @@ const StockTransferList = () => {
         ) : (
           <>
             <Table
-              headers={['SR. NO.', 'DATE', 'SLIP NO.', 'TRANSFER TYPE', 'FROM STOCK AREA', 'DESTINATION', 'ACTIONS']}
+              headers={['SR. NO.', 'DATE', 'SLIP NO.', 'TRANSFER TYPE', 'FROM STOCK AREA', 'DESTINATION']}
             >
               {stockTransfers.length > 0 ? (
                 stockTransfers.map((item) => (
@@ -204,19 +205,11 @@ const StockTransferList = () => {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.transferType}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.fromStockArea}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.destination}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      <button
-                        onClick={() => navigate(`/stock-transfer/${item.id}`)}
-                        className="text-blue-600 hover:text-blue-700"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </button>
-                    </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
+                  <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
                     No stock transfers found
                   </td>
                 </tr>

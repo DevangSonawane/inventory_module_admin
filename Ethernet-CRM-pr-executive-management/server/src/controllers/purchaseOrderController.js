@@ -113,7 +113,7 @@ export const getPurchaseOrderById = async (req, res, next) => {
             {
               model: Material,
               as: 'material',
-              attributes: ['material_id', 'material_name', 'product_code', 'material_type', 'uom']
+              attributes: ['material_id', 'material_name', 'product_code', 'material_type', 'uom', 'price', 'gst_percentage', 'sgst_percentage']
             }
           ]
         },
@@ -320,7 +320,8 @@ export const createPOFromPR = async (req, res, next) => {
           include: [
             {
               model: Material,
-              as: 'material'
+              as: 'material',
+              attributes: ['material_id', 'material_name', 'product_code', 'material_type', 'uom', 'price', 'gst_percentage', 'sgst_percentage']
             }
           ]
         },
@@ -486,23 +487,24 @@ export const createPurchaseOrder = async (req, res, next) => {
     // Fetch created PO
     const createdPO = await PurchaseOrder.findOne({
       where: { po_id: purchaseOrder.po_id },
-      include: [
-        {
-          model: PurchaseOrderItem,
-          as: 'items',
           include: [
             {
-              model: Material,
-              as: 'material'
+              model: PurchaseOrderItem,
+              as: 'items',
+              include: [
+                {
+                  model: Material,
+                  as: 'material',
+                  attributes: ['material_id', 'material_name', 'product_code', 'material_type', 'uom', 'price', 'gst_percentage', 'sgst_percentage']
+                }
+              ]
+            },
+            {
+              model: BusinessPartner,
+              as: 'vendor'
             }
           ]
-        },
-        {
-          model: BusinessPartner,
-          as: 'vendor'
-        }
-      ]
-    });
+        });
 
     return res.status(201).json({
       success: true,
@@ -634,23 +636,24 @@ export const updatePurchaseOrder = async (req, res, next) => {
     // Fetch updated PO
     const updatedPO = await PurchaseOrder.findOne({
       where: { po_id: id },
-      include: [
-        {
-          model: PurchaseOrderItem,
-          as: 'items',
           include: [
             {
-              model: Material,
-              as: 'material'
+              model: PurchaseOrderItem,
+              as: 'items',
+              include: [
+                {
+                  model: Material,
+                  as: 'material',
+                  attributes: ['material_id', 'material_name', 'product_code', 'material_type', 'uom', 'price', 'gst_percentage', 'sgst_percentage']
+                }
+              ]
+            },
+            {
+              model: BusinessPartner,
+              as: 'vendor'
             }
           ]
-        },
-        {
-          model: BusinessPartner,
-          as: 'vendor'
-        }
-      ]
-    });
+        });
 
     return res.status(200).json({
       success: true,

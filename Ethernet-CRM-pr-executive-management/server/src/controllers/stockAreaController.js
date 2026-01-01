@@ -126,7 +126,22 @@ export const createStockArea = async (req, res, next) => {
   try {
     // Validation is handled by validate middleware in route
 
-    const { areaName, locationCode, address, capacity, storeKeeperId, description, pinCode } = req.body;
+    const { 
+      areaName, 
+      locationCode, 
+      address, 
+      capacity, 
+      storeKeeperId, 
+      description, 
+      pinCode,
+      companyName,
+      streetNumberName,
+      apartmentUnit,
+      localityDistrict,
+      city,
+      stateProvince,
+      country
+    } = req.body;
 
     const stockArea = await StockArea.create({
       area_name: areaName,
@@ -136,6 +151,13 @@ export const createStockArea = async (req, res, next) => {
       store_keeper_id: storeKeeperId || null,
       description: description || null,
       pin_code: pinCode || null,
+      company_name: companyName || null,
+      street_number_name: streetNumberName || null,
+      apartment_unit: apartmentUnit || null,
+      locality_district: localityDistrict || null,
+      city: city || null,
+      state_province: stateProvince || null,
+      country: country ? country.toUpperCase() : null,
       org_id: req.orgId || null,
       is_active: true
     });
@@ -159,7 +181,22 @@ export const updateStockArea = async (req, res, next) => {
     // Validation is handled by validate middleware in route
 
     const { id } = req.params;
-    const { areaName, locationCode, address, capacity, storeKeeperId, description, pinCode } = req.body;
+    const { 
+      areaName, 
+      locationCode, 
+      address, 
+      capacity, 
+      storeKeeperId, 
+      description, 
+      pinCode,
+      companyName,
+      streetNumberName,
+      apartmentUnit,
+      localityDistrict,
+      city,
+      stateProvince,
+      country
+    } = req.body;
 
     const stockArea = await StockArea.findOne({
       where: req.withOrg
@@ -188,7 +225,14 @@ export const updateStockArea = async (req, res, next) => {
       capacity: capacity !== undefined ? capacity : stockArea.capacity,
       store_keeper_id: storeKeeperId !== undefined ? storeKeeperId : stockArea.store_keeper_id,
       description: description !== undefined ? description : stockArea.description,
-      pin_code: pinCode !== undefined ? pinCode : stockArea.pin_code
+      pin_code: pinCode !== undefined ? pinCode : stockArea.pin_code,
+      company_name: companyName !== undefined ? companyName : stockArea.company_name,
+      street_number_name: streetNumberName !== undefined ? streetNumberName : stockArea.street_number_name,
+      apartment_unit: apartmentUnit !== undefined ? apartmentUnit : stockArea.apartment_unit,
+      locality_district: localityDistrict !== undefined ? localityDistrict : stockArea.locality_district,
+      city: city !== undefined ? city : stockArea.city,
+      state_province: stateProvince !== undefined ? stateProvince : stockArea.state_province,
+      country: country !== undefined ? (country ? country.toUpperCase() : null) : stockArea.country,
     });
 
     return res.status(200).json({
